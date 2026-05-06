@@ -1,0 +1,24 @@
+{
+  "name": "pro-chat-secure",
+  "version": "1.0.0",
+  "description": "A secure, encrypted chat application with real-time messaging and voice calls",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "ngrok": "ngrok http 3000",
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "keywords": ["chat", "encrypted", "real-time", "socket.io", "webcrypto"],
+  "author": "Jamshed Rajputt",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "express": "^5.2.1",
+    "socket.io": "^4.8.3"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

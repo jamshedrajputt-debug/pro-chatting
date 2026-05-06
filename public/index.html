@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Pro Chat</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="auth" class="card auth-card">
+    <h2>Pro Chat Secure</h2>
+    <p class="subtitle">Create a profile or login to start private encrypted messaging and voice chat.</p>
+
+    <input id="user" placeholder="Username">
+    <input id="pass" type="password" placeholder="Password">
+    <input id="secret" type="password" placeholder="Secret Code">
+    <input id="avatarUrl" placeholder="Avatar image URL (optional)">
+    <input id="avatarFile" type="file" accept="image/*" class="file-input">
+
+    <div class="button-group">
+        <button onclick="register()">Register</button>
+        <button onclick="login()">Login</button>
+    </div>
+    <p class="developer">Developed by Jamshed Rajputt</p>
+</div>
+
+<div id="chat" class="chat-container" style="display:none">
+    <div class="chat-header">
+        <div class="header-left">
+            <img src="https://i.pravatar.cc/40" class="avatar" id="headerAvatar">
+            <div class="header-text">
+                <h3 id="welcome"></h3>
+                <p id="currentChat">Select a user to start private chat</p>
+            </div>
+        </div>
+        <div class="header-actions">
+            <div class="header-chip"><span id="onlineCount">0</span> online</div>
+            <button onclick="clearChat()" class="clear-btn">Clear Chat</button>
+            <button onclick="showProfile()" class="profile-btn">Profile</button>
+            <button onclick="logout()" class="logout-btn">Logout</button>
+        </div>
+    </div>
+
+    <div class="chat-body">
+        <aside class="sidebar">
+            <h4>Online Users</h4>
+            <ul id="onlineUsersList"></ul>
+            <input id="targetUser" placeholder="Enter username to chat or call">
+            <div class="sidebar-actions">
+                <button onclick="setRecipient()">Start Private Chat</button>
+                <button onclick="startAudioCall()" class="call-btn small">Start Voice Call</button>
+            </div>
+        </aside>
+
+        <main class="chat-main">
+            <div class="messages" id="messages"></div>
+            <div class="typing" id="typingIndicator" style="display:none">Someone is typing...</div>
+            <div class="input-area">
+                <div class="input-row">
+                <button type="button" id="emojiBtn" onclick="toggleEmojiPicker()" class="emoji-btn">😊</button>
+                <input id="msg" placeholder="Type your message..." onkeypress="handleKeyPress(event)">
+                <button onclick="sendMsg()" class="send-btn">Send</button>
+                <button type="button" id="recordBtn" class="record-btn" onmousedown="startRecordingHold(event)" onmouseup="stopRecordingHold(event)" onmouseleave="cancelRecordingHold()" ontouchstart="startRecordingHold(event)" ontouchend="stopRecordingHold(event)" ontouchcancel="cancelRecordingHold()">Hold to Record</button>
+                <button onclick="startAudioCall()" class="call-btn">Call</button>
+            </div>
+            <div id="emojiPicker" class="emoji-picker" style="display:none">
+                <span onclick="insertEmoji('😀')">😀</span>
+                <span onclick="insertEmoji('😂')">😂</span>
+                <span onclick="insertEmoji('😍')">😍</span>
+                <span onclick="insertEmoji('😉')">😉</span>
+                <span onclick="insertEmoji('🙌')">🙌</span>
+                <span onclick="insertEmoji('👍')">👍</span>
+                <span onclick="insertEmoji('🎉')">🎉</span>
+                <span onclick="insertEmoji('🎶')">🎶</span>
+                <span onclick="insertEmoji('🔥')">🔥</span>
+                <span onclick="insertEmoji('💬')">💬</span>
+            </div>
+            <div class="audio-preview" id="audioPreviewContainer" style="display:none">
+                <p id="audioStatus">Recorded clip ready</p>
+                <audio id="audioPreview" controls></audio>
+                <button onclick="clearRecording()" class="secondary-btn">Clear</button>
+            </div>
+        </main>
+    </div>
+</div>
+
+<div id="profileModal" class="modal" style="display:none">
+    <div class="modal-content">
+        <h2>Edit Profile</h2>
+        <input id="oldPass" type="password" placeholder="Current Password">
+        <input id="newUser" placeholder="New Username (optional)">
+        <input id="newPass" type="password" placeholder="New Password (optional)">
+        <input id="newAvatarUrl" placeholder="New avatar URL (optional)">
+        <input id="newAvatarFile" type="file" accept="image/*" class="file-input">
+        <div class="profile-actions">
+            <button onclick="updateProfile()">Update</button>
+            <button onclick="deleteAccount()" class="delete-account-btn">Delete Account</button>
+            <button onclick="closeProfile()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<div id="callModal" class="modal" style="display:none">
+    <div class="modal-content call-modal-content">
+        <h2>Voice Call</h2>
+        <div id="callStatus">Waiting...</div>
+        <audio id="remoteAudio" autoplay></audio>
+        <div class="call-actions" id="callActions">
+            <button id="acceptCallBtn" onclick="acceptCall()" class="accept-btn">Accept</button>
+            <button id="declineCallBtn" onclick="declineCall()" class="decline-btn">Decline</button>
+            <button id="endCallBtn" onclick="endCall()" class="end-btn">End Call</button>
+        </div>
+    </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="script.js"></script>
+
+</body>
+</html>
