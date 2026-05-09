@@ -2,7 +2,10 @@
 <html>
 <head>
     <title>Pro Chat</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="advanced-styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
 
@@ -24,73 +27,104 @@
 </div>
 
 <div id="chat" class="chat-container" style="display:none">
-    <div class="chat-header">
-        <div class="header-left">
-            <img src="https://i.pravatar.cc/40" class="avatar" id="headerAvatar">
-            <div class="header-text">
-                <h3 id="welcome"></h3>
-                <p id="currentChat">Select a user to start private chat</p>
+    <div class="chat-sidebar">
+        <div class="sidebar-header">
+            <h3>Chats</h3>
+            <div class="sidebar-buttons">
+                <button class="new-chat-btn" onclick="showNewChatModal()" title="New Chat"><i class="fas fa-edit"></i></button>
+                <button class="new-chat-btn" onclick="showUsersModal()" title="All Users"><i class="fas fa-users"></i></button>
             </div>
         </div>
-        <div class="header-actions">
-            <div class="header-chip"><span id="onlineCount">0</span> online</div>
-            <button onclick="clearChat()" class="clear-btn">Clear Chat</button>
-            <button onclick="showProfile()" class="profile-btn">Profile</button>
-            <button onclick="logout()" class="logout-btn">Logout</button>
+        <div class="search-container">
+            <input type="text" id="searchChats" placeholder="Search chats..." oninput="filterChats()">
+        </div>
+        <div id="chatsList" class="chats-list">
+            <!-- Chat items will be populated here -->
         </div>
     </div>
 
-    <div class="chat-body">
-        <aside class="sidebar">
-            <h4>Online Users</h4>
-            <ul id="onlineUsersList"></ul>
-            <input id="targetUser" placeholder="Enter username to chat or call">
-            <div class="sidebar-actions">
-                <button onclick="setRecipient()">Start Private Chat</button>
-                <button onclick="startAudioCall()" class="call-btn small">Start Voice Call</button>
+    <div class="chat-main">
+        <div class="chat-header">
+            <div class="header-left">
+                <img src="https://i.pravatar.cc/40" class="avatar" id="headerAvatar">
+                <div class="header-text">
+                    <h3 id="chatTitle">Select a chat</h3>
+                    <p id="chatSubtitle" class="online-status">Tap to start chatting</p>
+                </div>
             </div>
-        </aside>
+            <div class="header-actions">
+                <button onclick="showProfile()" class="header-btn" title="Settings"><i class="fas fa-cog"></i></button>
+                <button onclick="toggleZoomMenu()" class="header-btn" title="Zoom"><i class="fas fa-search"></i></button>
+                <button onclick="startAudioCall()" class="header-btn" title="Voice Call"><i class="fas fa-phone"></i></button>
+                <button onclick="startVideoCall()" class="header-btn" title="Video Call"><i class="fas fa-video"></i></button>
+                <button onclick="showChatMenu()" class="header-btn" title="Menu"><i class="fas fa-ellipsis-v"></i></button>
+            </div>
+        </div>
 
-        <main class="chat-main">
+        <div class="messages-container" id="messagesContainer">
             <div class="messages" id="messages"></div>
-            <div class="typing" id="typingIndicator" style="display:none">Someone is typing...</div>
-            <div class="input-area">
-                <div class="input-row">
-                <button type="button" id="emojiBtn" onclick="toggleEmojiPicker()" class="emoji-btn">😊</button>
-                <input id="msg" placeholder="Type your message..." onkeypress="handleKeyPress(event)">
-                <button onclick="sendMsg()" class="send-btn">Send</button>
-                <button type="button" id="recordBtn" class="record-btn" onmousedown="startRecordingHold(event)" onmouseup="stopRecordingHold(event)" onmouseleave="cancelRecordingHold()" ontouchstart="startRecordingHold(event)" ontouchend="stopRecordingHold(event)" ontouchcancel="cancelRecordingHold()">Hold to Record</button>
-                <button onclick="startAudioCall()" class="call-btn">Call</button>
+            <div class="typing-indicator" id="typingIndicator" style="display:none">
+                <div class="typing-dots">
+                    <span></span><span></span><span></span>
+                </div>
+                <span id="typingText">typing...</span>
+            </div>
+        </div>
+
+        <div class="message-input-container">
+            <div class="message-input">
+                <button class="input-btn emoji-btn" onclick="toggleEmojiPicker()"><i class="far fa-smile"></i></button>
+                <input id="msg" placeholder="Message..." onkeypress="handleKeyPress(event)">
+                <button class="input-btn attach-btn" onclick="showAttachmentMenu()"><i class="fas fa-paperclip"></i></button>
+                <button class="input-btn voice-btn" id="voiceBtn" onclick="toggleRecording()" type="button" title="Record audio"><i class="fas fa-microphone"></i></button>
+                <button onclick="sendMsg()" class="send-btn"><i class="fas fa-paper-plane"></i></button>
             </div>
             <div id="emojiPicker" class="emoji-picker" style="display:none">
-                <span onclick="insertEmoji('😀')">😀</span>
-                <span onclick="insertEmoji('😂')">😂</span>
-                <span onclick="insertEmoji('😍')">😍</span>
-                <span onclick="insertEmoji('😉')">😉</span>
-                <span onclick="insertEmoji('🙌')">🙌</span>
-                <span onclick="insertEmoji('👍')">👍</span>
-                <span onclick="insertEmoji('🎉')">🎉</span>
-                <span onclick="insertEmoji('🎶')">🎶</span>
-                <span onclick="insertEmoji('🔥')">🔥</span>
-                <span onclick="insertEmoji('💬')">💬</span>
+                <div class="emoji-grid">
+                    <span onclick="insertEmoji('😀')">😀</span>
+                    <span onclick="insertEmoji('😂')">😂</span>
+                    <span onclick="insertEmoji('😍')">😍</span>
+                    <span onclick="insertEmoji('😉')">😉</span>
+                    <span onclick="insertEmoji('🙌')">🙌</span>
+                    <span onclick="insertEmoji('👍')">👍</span>
+                    <span onclick="insertEmoji('🎉')">🎉</span>
+                    <span onclick="insertEmoji('🎶')">🎶</span>
+                    <span onclick="insertEmoji('🔥')">🔥</span>
+                    <span onclick="insertEmoji('💬')">💬</span>
+                    <span onclick="insertEmoji('❤️')">❤️</span>
+                    <span onclick="insertEmoji('😢')">😢</span>
+                    <span onclick="insertEmoji('😮')">😮</span>
+                    <span onclick="insertEmoji('🙏')">🙏</span>
+                    <span onclick="insertEmoji('👏')">👏</span>
+                </div>
             </div>
-            <div class="audio-preview" id="audioPreviewContainer" style="display:none">
-                <p id="audioStatus">Recorded clip ready</p>
+            <div id="audioPreviewContainer" class="audio-preview" style="display:none">
                 <audio id="audioPreview" controls></audio>
-                <button onclick="clearRecording()" class="secondary-btn">Clear</button>
+                <div id="audioStatus" class="audio-status">Recorded clip ready</div>
             </div>
-        </main>
+        </div>
     </div>
 </div>
 
+<!-- Modals -->
 <div id="profileModal" class="modal" style="display:none">
     <div class="modal-content">
-        <h2>Edit Profile</h2>
-        <input id="oldPass" type="password" placeholder="Current Password">
-        <input id="newUser" placeholder="New Username (optional)">
-        <input id="newPass" type="password" placeholder="New Password (optional)">
-        <input id="newAvatarUrl" placeholder="New avatar URL (optional)">
-        <input id="newAvatarFile" type="file" accept="image/*" class="file-input">
+        <h2>Settings</h2>
+        <div class="settings-section">
+            <h3>Profile</h3>
+            <input id="oldPass" type="password" placeholder="Current Password">
+            <input id="newUser" placeholder="New Username (optional)">
+            <input id="newPass" type="password" placeholder="New Password (optional)">
+            <input id="newAvatarUrl" placeholder="New avatar URL (optional)">
+            <input id="newAvatarFile" type="file" accept="image/*" class="file-input">
+        </div>
+        <div class="settings-section">
+            <h3>Chat Color</h3>
+            <div class="color-picker-group">
+                <label>Chat Bubble Color:</label>
+                <input type="color" id="chatColorPicker" value="#0095f6">
+            </div>
+        </div>
         <div class="profile-actions">
             <button onclick="updateProfile()">Update</button>
             <button onclick="deleteAccount()" class="delete-account-btn">Delete Account</button>
@@ -99,16 +133,121 @@
     </div>
 </div>
 
-<div id="callModal" class="modal" style="display:none">
-    <div class="modal-content call-modal-content">
-        <h2>Voice Call</h2>
-        <div id="callStatus">Waiting...</div>
-        <audio id="remoteAudio" autoplay></audio>
-        <div class="call-actions" id="callActions">
-            <button id="acceptCallBtn" onclick="acceptCall()" class="accept-btn">Accept</button>
-            <button id="declineCallBtn" onclick="declineCall()" class="decline-btn">Decline</button>
-            <button id="endCallBtn" onclick="endCall()" class="end-btn">End Call</button>
+<div id="newChatModal" class="modal" style="display:none">
+    <div class="modal-content">
+        <h2>Start New Chat</h2>
+        <input id="newChatUser" placeholder="Enter username">
+        <div class="modal-actions">
+            <button onclick="startNewChat()">Start Chat</button>
+            <button onclick="closeNewChatModal()">Cancel</button>
         </div>
+    </div>
+</div>
+
+<div id="attachmentModal" class="modal" style="display:none">
+    <div class="modal-content">
+        <h2>Share</h2>
+        <div class="attachment-options">
+            <button onclick="shareImage()" class="attachment-option">
+                <i class="fas fa-image"></i>
+                <span>Photo</span>
+            </button>
+            <button onclick="shareVideo()" class="attachment-option">
+                <i class="fas fa-video"></i>
+                <span>Video</span>
+            </button>
+            <button onclick="shareFile()" class="attachment-option">
+                <i class="fas fa-file"></i>
+                <span>Document</span>
+            </button>
+        </div>
+        <button onclick="closeAttachmentModal()">Cancel</button>
+    </div>
+</div>
+
+<div id="callModal" class="modal" style="display:none">
+    <div class="modal-content call-modal">
+        <div class="call-info">
+            <img id="callAvatar" src="https://i.pravatar.cc/80" class="call-avatar">
+            <h3 id="callUser"></h3>
+            <p id="callStatus">Calling...</p>
+        </div>
+        <div class="call-controls">
+            <button id="acceptCallBtn" onclick="acceptCall()" class="call-btn accept">
+                <i class="fas fa-phone"></i>
+            </button>
+            <button id="declineCallBtn" onclick="declineCall()" class="call-btn decline">
+                <i class="fas fa-phone-slash"></i>
+            </button>
+            <button id="endCallBtn" onclick="endCall()" class="call-btn end">
+                <i class="fas fa-phone-slash"></i>
+            </button>
+        </div>
+        <div class="call-streams">
+            <video id="remoteVideo" autoplay playsinline class="remote-video"></video>
+            <audio id="remoteAudio" autoplay></audio>
+        </div>
+    </div>
+</div>
+
+<div id="chatMenuModal" class="modal" style="display:none">
+    <div class="modal-content chat-menu-modal">
+        <h3>Chat Options</h3>
+        <div class="menu-options">
+            <button onclick="clearChatPermanent()" class="menu-option danger">
+                <i class="fas fa-trash"></i> Delete Chat
+            </button>
+            <button onclick="muteNotifications()" class="menu-option">
+                <i class="fas fa-bell-slash"></i> Mute Notifications
+            </button>
+            <button onclick="logout()" class="menu-option danger">
+                <i class="fas fa-sign-out-alt"></i> Logout
+            </button>
+            <button onclick="closeChatMenu()" class="menu-option">
+                <i class="fas fa-times"></i> Close
+            </button>
+        </div>
+    </div>
+</div>
+
+<div id="zoomMenuModal" class="modal" style="display:none">
+    <div class="modal-content zoom-menu-modal">
+        <h3>Zoom Level</h3>
+        <div class="zoom-controls">
+            <button onclick="decreaseZoom()" class="zoom-btn"><i class="fas fa-minus"></i></button>
+            <span id="zoomLevel">100%</span>
+            <button onclick="increaseZoom()" class="zoom-btn"><i class="fas fa-plus"></i></button>
+            <button onclick="resetZoom()" class="zoom-btn"><i class="fas fa-redo"></i></button>
+        </div>
+        <button onclick="closeZoomMenu()" class="menu-option">
+            <i class="fas fa-times"></i> Close
+        </button>
+    </div>
+</div>
+
+<div id="reactionModal" class="modal" style="display:none">
+    <div class="modal-content reaction-modal">
+        <div class="reaction-options">
+            <span onclick="addReaction('❤️')">❤️</span>
+            <span onclick="addReaction('👍')">👍</span>
+            <span onclick="addReaction('😂')">😂</span>
+            <span onclick="addReaction('😮')">😮</span>
+            <span onclick="addReaction('😢')">😢</span>
+            <span onclick="addReaction('🙏')">🙏</span>
+        </div>
+    </div>
+</div>
+
+<div id="usersModal" class="modal" style="display:none">
+    <div class="modal-content users-modal">
+        <h2>All Users</h2>
+        <div class="users-search">
+            <input type="text" id="usersSearchInput" placeholder="Search users..." oninput="filterUsersList()">
+        </div>
+        <div id="usersList" class="users-list">
+            <!-- Users will be loaded here -->
+        </div>
+        <button onclick="closeUsersModal()" class="modal-close-btn">Close</button>
     </div>
 </div>
 

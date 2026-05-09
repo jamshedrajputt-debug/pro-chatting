@@ -56,7 +56,12 @@ function saveMessages() {
 }
 
 app.get("/users", (req, res) => {
-    return res.json({ success: true, users: Object.keys(users) });
+    const usersList = Object.entries(users).map(([username, userData]) => ({
+        username,
+        avatar: userData.avatar || null,
+        isActive: Object.keys(onlineUsers).includes(username)
+    }));
+    return res.json({ success: true, users: usersList });
 });
 
 app.post("/register", async (req, res) => {
@@ -125,6 +130,92 @@ app.post("/login", async (req, res) => {
         encryptedPrivateKey: user.encryptedPrivateKey || "",
         privateKeySalt: user.privateKeySalt || "",
         privateKeyIv: user.privateKeyIv || ""
+    });
+});
+
+app.post("/updateProfile", async (req, res) => {
+    const {
+        username,
+        oldPassword,
+        newUsername,
+        newPassword,
+        avatar,
+        encryptedPrivateKey,
+        privateKeySalt,
+        privateKeyIv
+    } = req.body;
+
+    if (!username || !oldPassword) {
+        return res.json({ error: "Username and current password are required" });
+    }
+
+    const user = users[username];
+    if (!user) {
+        return res.json({ error: "User not found" });
+    }
+
+    const match = await bcrypt.compare(oldPassword, user.password);
+    if (!match) {
+        return res.json({ error: "Incorrect password" });
+    }
+
+    if (newUsername && newUsername !== username) {
+        if (users[newUsername]) {
+            return res.json({ error: "New username already exists" });
+        }
+        if (newUsername.length < 3 || newUsername.length > 20) {
+            return res.json({ error: "Username must be 3-20 characters" });
+        }
+    }
+
+    if (newPassword) {
+        if (newPassword.length < 6) {
+            return res.json({ error: "Password must be at least 6 characters" });
+        }
+        user.password = await bcrypt.hash(newPassword, 10);
+    }
+
+    if (avatar) {
+        user.avatar = avatar;
+    }
+
+    if (encryptedPrivateKey) {
+        user.encryptedPrivateKey = encryptedPrivateKey;
+        user.privateKeySalt = privateKeySalt;
+        user.privateKeyIv = privateKeyIv;
+    }
+
+    let finalUsername = username;
+    if (newUsername && newUsername !== username) {
+        finalUsername = newUsername;
+        users[finalUsername] = user;
+        delete users[username];
+
+        if (onlineUsers[username]) {
+            onlineUsers[finalUsername] = onlineUsers[username];
+            delete onlineUsers[username];
+        }
+        if (userSockets[username]) {
+            userSockets[finalUsername] = userSockets[username];
+            delete userSockets[username];
+        }
+
+        messages = messages.map(msg => {
+            if (msg.from === username) msg.from = finalUsername;
+            if (msg.to === username) msg.to = finalUsername;
+            return msg;
+        });
+    }
+
+    saveUsers();
+    if (finalUsername !== username) {
+        saveMessages();
+    }
+
+    res.json({
+        success: true,
+        newUsername: finalUsername,
+        avatar: user.avatar || ""
     });
 });
 
@@ -235,13 +326,14 @@ io.on("connection", (socket) => {
         };
 
         messages.push(message);
-        saveMessages();
 
         socket.emit("message", message);
         const targetSocketId = userSockets[to];
         if (targetSocketId) {
             io.to(targetSocketId).emit("message", message);
         }
+
+        saveMessages();
     });
 
     socket.on("typing", (to) => {
@@ -284,6 +376,14 @@ io.on("connection", (socket) => {
         }
     });
 
+    socket.on("endCall", (data) => {
+        if (!socket.username || !data.to) return;
+        const targetSocketId = userSockets[data.to];
+        if (targetSocketId) {
+            io.to(targetSocketId).emit("callEnded", { from: socket.username });
+        }
+    });
+
     socket.on("editMessage", (data) => {
         if (!socket.username) return;
         const { id, newText } = data;
@@ -306,6 +406,18 @@ io.on("connection", (socket) => {
             saveMessages();
             io.emit("messageDeleted", { id });
         }
+    });
+
+    socket.on("addReaction", (data) => {
+        if (!socket.username) return;
+        const { messageId, emoji } = data;
+        // In a real implementation, you'd store reactions in the database
+        // For now, we'll just broadcast the reaction
+        io.emit("addReaction", {
+            messageId,
+            emoji,
+            from: socket.username
+        });
     });
 });
 

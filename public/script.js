@@ -1,9 +1,15 @@
 const socket = io(window.location.origin);
 let user = "";
 let avatar = "";
+let currentChat = "";
 let recipient = "";
 let peerConnection;
 let localStream;
+let mediaRecorder;
+let audioChunks = [];
+let recordedAudioBlob = null;
+let remoteAudio;
+let remoteVideo;
 let currentCallTarget = "";
 let incomingCall = false;
 let pendingOffer = null;
@@ -15,55 +21,40 @@ let privateKey = null;
 let myPublicKey = null;
 let myPublicKeyString = "";
 let inactivityTimer;
-const INACTIVITY_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+let activityListenersAdded = false;
+const INACTIVITY_TIMEOUT = 3 * 60 * 1000; // 3 minutes
 let isRecordingHold = false;
 let recordStartX = 0;
 let recordCancelThreshold = 80;
 let recordingCancelled = false;
+let pendingStopRecording = false;
+let chats = {}; // Store chat data
+let onlineUsers = [];
+let messageReactions = {}; // Store reactions for messages
+let currentZoom = 100; // Track zoom level
+let chatBubbleColor = localStorage.getItem("chatBubbleColor") || "#0095f6";
 
-function editMessage(messageId) {
-    const messageDiv = document.querySelector(`[data-id="${messageId}"]`);
-    if (!messageDiv) return;
-
-    const bubble = messageDiv.querySelector('.bubble');
-    const originalText = bubble.querySelector('div').innerText;
-
-    bubble.innerHTML = `
-        <input type="text" value="${originalText}" class="edit-input" id="editInput">
-        <button onclick="saveEdit('${messageId}')" class="save-edit-btn">Save</button>
-        <button onclick="cancelEdit()" class="cancel-edit-btn">Cancel</button>
-    `;
-
-    editingMessageId = messageId;
-    document.getElementById('editInput').focus();
+function shadeColor(color, percent) {
+    let R = parseInt(color.substring(1,3),16);
+    let G = parseInt(color.substring(3,5),16);
+    let B = parseInt(color.substring(5,7),16);
+    R = Math.min(255, Math.max(0, R + Math.round(255 * (percent / 100))));
+    G = Math.min(255, Math.max(0, G + Math.round(255 * (percent / 100))));
+    B = Math.min(255, Math.max(0, B + Math.round(255 * (percent / 100))));
+    const r = R.toString(16).padStart(2, '0');
+    const g = G.toString(16).padStart(2, '0');
+    const b = B.toString(16).padStart(2, '0');
+    return `#${r}${g}${b}`;
 }
 
-function saveEdit(messageId) {
-    const newText = document.getElementById('editInput').value.trim();
-    if (!newText) return;
-
-    socket.emit("editMessage", { id: messageId, newText });
-    cancelEdit();
+function applyChatTheme() {
+    const root = document.documentElement;
+    root.style.setProperty("--blue", chatBubbleColor);
+    root.style.setProperty("--message-bg-me", chatBubbleColor);
+    root.style.setProperty("--blue-hover", shadeColor(chatBubbleColor, -15));
 }
 
-function cancelEdit() {
-    if (editingMessageId) {
-        socket.emit("join", user); // Reload messages
-        editingMessageId = null;
-    }
-}
-
-function unsendMessage(messageId) {
-    if (!confirm("Unsend this message? This cannot be undone.")) {
-        return;
-    }
-    socket.emit("deleteMessage", { id: messageId });
-    const messageDiv = document.querySelector(`[data-id="${messageId}"]`);
-    if (messageDiv) {
-        const bubble = messageDiv.querySelector('.bubble');
-        if (bubble) bubble.innerHTML = `<div class="deleted-message">This message was unsent.</div>`;
-    }
-}
+applyChatTheme();
 
 async function fileToDataUrl(file) {
     return new Promise((resolve, reject) => {
@@ -86,24 +77,400 @@ async function resolveAvatarValue(urlInputId, fileInputId, fallbackUsername) {
     return getDefaultAvatar(fallbackUsername);
 }
 
+function showNewChatModal() {
+    document.getElementById("newChatModal").style.display = "block";
+}
+
+function closeNewChatModal() {
+    document.getElementById("newChatModal").style.display = "none";
+    document.getElementById("newChatUser").value = "";
+}
+
+function startNewChat() {
+    const username = document.getElementById("newChatUser").value.trim();
+    if (!username) {
+        alert("Please enter a username.");
+        return;
+    }
+    if (username === user) {
+        alert("You cannot chat with yourself.");
+        return;
+    }
+
+    currentChat = username;
+    recipient = username;
+    localStorage.setItem("sessionCurrentChat", currentChat);
+    if (!chats[currentChat]) {
+        chats[currentChat] = {
+            messages: [],
+            unreadCount: 0,
+            lastMessage: null,
+            avatar: getDefaultAvatar(username)
+        };
+    }
+
+    updateChatUI();
+    closeNewChatModal();
+    socket.emit("join", user);
+}
+
+function showAttachmentMenu() {
+    document.getElementById("attachmentModal").style.display = "block";
+}
+
+function closeAttachmentModal() {
+    document.getElementById("attachmentModal").style.display = "none";
+}
+
 function toggleEmojiPicker() {
     const picker = document.getElementById("emojiPicker");
+    if (!picker) return;
     picker.style.display = picker.style.display === "block" ? "none" : "block";
 }
 
 function insertEmoji(emoji) {
     const msgInput = document.getElementById("msg");
+    if (!msgInput) return;
     msgInput.value += emoji;
     msgInput.focus();
 }
 
-function closeEmojiPicker() {
-    document.getElementById("emojiPicker").style.display = "none";
+function shareImage() {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            sendImage(file);
+        }
+    };
+    input.click();
+    closeAttachmentModal();
+}
+
+function shareVideo() {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "video/*";
+    input.onchange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            sendVideo(file);
+        }
+    };
+    input.click();
+    closeAttachmentModal();
+}
+
+function shareFile() {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.onchange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            sendFile(file);
+        }
+    };
+    input.click();
+    closeAttachmentModal();
+}
+
+async function sendImage(file) {
+    if (!currentChat) {
+        alert("Select a chat first.");
+        return;
+    }
+
+    try {
+        const base64 = await fileToDataUrl(file);
+        const recipientPublicKey = await getPublicKeyFor(currentChat);
+        const encrypted = await encryptMessage(base64, recipientPublicKey, myPublicKey, currentChat);
+        const tempId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+        socket.emit("message", {
+            to: currentChat,
+            type: "image",
+            ciphertext: encrypted.ciphertext,
+            iv: encrypted.iv,
+            encryptedKeys: encrypted.encryptedKeys,
+            tempId
+        });
+    } catch (err) {
+        console.error(err);
+        alert("Failed to send image.");
+    }
+}
+
+async function sendVideo(file) {
+    if (!currentChat) {
+        alert("Select a chat first.");
+        return;
+    }
+
+    try {
+        const base64 = await fileToDataUrl(file);
+        const recipientPublicKey = await getPublicKeyFor(currentChat);
+        const encrypted = await encryptMessage(base64, recipientPublicKey, myPublicKey, currentChat);
+        const tempId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+        socket.emit("message", {
+            to: currentChat,
+            type: "video",
+            ciphertext: encrypted.ciphertext,
+            iv: encrypted.iv,
+            encryptedKeys: encrypted.encryptedKeys,
+            tempId
+        });
+    } catch (err) {
+        console.error(err);
+        alert("Failed to send video.");
+    }
+}
+
+async function sendFile(file) {
+    if (!currentChat) {
+        alert("Select a chat first.");
+        return;
+    }
+
+    try {
+        const base64 = await fileToDataUrl(file);
+        const recipientPublicKey = await getPublicKeyFor(currentChat);
+        const encrypted = await encryptMessage(JSON.stringify({
+            name: file.name,
+            size: file.size,
+            data: base64
+        }), recipientPublicKey, myPublicKey, currentChat);
+        const tempId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+        socket.emit("message", {
+            to: currentChat,
+            type: "file",
+            fileName: file.name,
+            ciphertext: encrypted.ciphertext,
+            iv: encrypted.iv,
+            encryptedKeys: encrypted.encryptedKeys,
+            tempId
+        });
+    } catch (err) {
+        console.error(err);
+        alert("Failed to send file.");
+    }
+}
+
+async function startVideoCall() {
+    if (!user) {
+        alert("Login first to start a video call.");
+        return;
+    }
+    if (currentCallTarget) {
+        alert("A call is already in progress.");
+        return;
+    }
+
+    const selectedUser = currentChat;
+    if (!selectedUser) {
+        alert("Select a chat first.");
+        return;
+    }
+    if (selectedUser === user) {
+        alert("You cannot call yourself.");
+        return;
+    }
+
+    currentCallTarget = selectedUser;
+    document.getElementById("callModal").style.display = "block";
+    document.getElementById("callUser").innerText = selectedUser;
+    document.getElementById("callAvatar").src = chats[selectedUser]?.avatar || getDefaultAvatar(selectedUser);
+    document.getElementById("callStatus").innerText = "Calling...";
+    updateCallButtons("active");
+
+    try {
+        localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+        peerConnection = new RTCPeerConnection();
+
+        localStream.getTracks().forEach((track) => peerConnection.addTrack(track, localStream));
+        peerConnection.ontrack = (event) => {
+            if (remoteAudio) {
+                remoteAudio.srcObject = event.streams[0];
+            }
+            if (remoteVideo) {
+                remoteVideo.srcObject = event.streams[0];
+            }
+        };
+        peerConnection.onicecandidate = (event) => {
+            if (event.candidate) {
+                socket.emit("iceCandidate", { candidate: event.candidate, to: selectedUser });
+            }
+        };
+
+        const offer = await peerConnection.createOffer();
+        await peerConnection.setLocalDescription(offer);
+        socket.emit("callUser", { offer, to: selectedUser });
+    } catch (err) {
+        console.error(err);
+        alert(err.name === "NotAllowedError" || err.name === "PermissionDeniedError"
+            ? "Microphone/camera access is required for calls. Please allow access and try again."
+            : "Unable to start the video call. Please try again.");
+        endCall();
+    }
+}
+
+function showChatInfo() {
+    // TODO: Implement chat info modal
+    alert("Chat info feature coming soon!");
+}
+
+function filterChats() {
+    const searchTerm = document.getElementById("searchChats").value.toLowerCase();
+    const chatItems = document.querySelectorAll(".chat-item");
+
+    chatItems.forEach(item => {
+        const name = item.querySelector(".chat-item-name").innerText.toLowerCase();
+        if (name.includes(searchTerm)) {
+            item.style.display = "flex";
+        } else {
+            item.style.display = "none";
+        }
+    });
+}
+
+function updateChatUI() {
+    // Update sidebar chats
+    const chatsList = document.getElementById("chatsList");
+    chatsList.innerHTML = "";
+
+    Object.keys(chats).forEach(chatUser => {
+        const chat = chats[chatUser];
+        const chatItem = document.createElement("div");
+        chatItem.className = `chat-item ${chatUser === currentChat ? 'active' : ''}`;
+        chatItem.onclick = () => selectChat(chatUser);
+
+        const isOnline = onlineUsers.includes(chatUser);
+        const statusBadge = isOnline ? '<span class="chat-item-status">Active</span>' : '';
+
+        const lastMsg = chat.lastMessage;
+        let lastMsgText = "No messages yet";
+        if (lastMsg) {
+            if (lastMsg.type === "text") {
+                lastMsgText = lastMsg.msg || "No message";
+            } else if (lastMsg.type === "image") {
+                lastMsgText = "Sent an image";
+            } else if (lastMsg.type === "video") {
+                lastMsgText = "Sent a video";
+            } else if (lastMsg.type === "audio") {
+                lastMsgText = "Sent a voice clip";
+            } else if (lastMsg.type === "file") {
+                lastMsgText = "Sent a file";
+            } else {
+                lastMsgText = "Sent a message";
+            }
+        }
+        const time = lastMsg ? new Date(lastMsg.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "";
+
+        chatItem.innerHTML = `
+            <img src="${chat.avatar}" class="avatar">
+            <div class="chat-item-info">
+                <div class="chat-item-name">${chatUser} ${statusBadge}</div>
+                <div class="chat-item-last-msg">${lastMsgText}</div>
+            </div>
+            <div class="chat-item-meta">
+                <div class="chat-item-time">${time}</div>
+                ${chat.unreadCount > 0 ? `<div class="unread-badge">${chat.unreadCount}</div>` : ''}
+            </div>
+        `;
+
+        chatsList.appendChild(chatItem);
+    });
+
+    // Update main chat area
+    if (currentChat) {
+        document.getElementById("chatTitle").innerText = currentChat;
+        document.getElementById("headerAvatar").src = chats[currentChat]?.avatar || getDefaultAvatar(currentChat);
+        document.getElementById("chatSubtitle").innerText = onlineUsers.includes(currentChat) ? "Active now" : "Offline";
+
+        // Clear messages and load current chat messages
+        document.getElementById("messages").innerHTML = "";
+        if (chats[currentChat]) {
+            chats[currentChat].messages.forEach(msg => addMessage(msg));
+            chats[currentChat].unreadCount = 0;
+        }
+    } else {
+        document.getElementById("chatTitle").innerText = "Select a chat";
+        document.getElementById("chatSubtitle").innerText = "Tap to start chatting";
+        document.getElementById("headerAvatar").src = avatar || "https://i.pravatar.cc/40";
+        document.getElementById("messages").innerHTML = "";
+    }
+}
+
+function selectChat(chatUser) {
+    currentChat = chatUser;
+    recipient = chatUser;
+    localStorage.setItem("sessionCurrentChat", currentChat);
+    if (chats[chatUser]) {
+        chats[chatUser].unreadCount = 0;
+    }
+    updateChatUI();
+    socket.emit("join", user);
+}
+
+function addReactionToMessage(messageId, emoji) {
+    if (!messageReactions[messageId]) {
+        messageReactions[messageId] = {};
+    }
+
+    if (!messageReactions[messageId][emoji]) {
+        messageReactions[messageId][emoji] = [];
+    }
+
+    if (!messageReactions[messageId][emoji].includes(user)) {
+        messageReactions[messageId][emoji].push(user);
+        socket.emit("addReaction", { messageId, emoji });
+        updateMessageReactions(messageId);
+    }
+}
+
+function updateMessageReactions(messageId) {
+    const messageDiv = document.querySelector(`[data-id="${messageId}"]`);
+    if (!messageDiv) return;
+
+    const reactionsDiv = messageDiv.querySelector('.reactions');
+    if (!reactionsDiv) return;
+
+    reactionsDiv.innerHTML = "";
+
+    if (messageReactions[messageId]) {
+        Object.entries(messageReactions[messageId]).forEach(([emoji, users]) => {
+            if (users.length > 0) {
+                const reactionDiv = document.createElement("div");
+                reactionDiv.className = "reaction";
+                reactionDiv.innerHTML = `${emoji} <span class="reaction-count">${users.length}</span>`;
+                reactionsDiv.appendChild(reactionDiv);
+            }
+        });
+    }
+}
+
+function showReactionModal(messageId) {
+    document.getElementById("reactionModal").style.display = "block";
+    // Store messageId for reaction handler
+    window.currentReactionMessageId = messageId;
+}
+
+function addReaction(emoji) {
+    if (window.currentReactionMessageId) {
+        addReactionToMessage(window.currentReactionMessageId, emoji);
+    }
+    document.getElementById("reactionModal").style.display = "none";
 }
 
 function startRecordingHold(event) {
     event.preventDefault();
-    if (isRecordingHold || !recipient) return;
+    if (isRecordingHold || !currentChat) {
+        alert("Choose a chat before recording audio.");
+        return;
+    }
     if (!privateKey || !myPublicKey) {
         alert("Secure messaging is unavailable because the account keys are missing.");
         return;
@@ -111,7 +478,8 @@ function startRecordingHold(event) {
     isRecordingHold = true;
     recordingCancelled = false;
     recordStartX = event.touches ? event.touches[0].clientX : event.clientX;
-    document.getElementById("recordBtn").innerText = "Release to Send";
+    const recordBtn = document.getElementById("voiceBtn") || document.querySelector(".voice-btn");
+    if (recordBtn) recordBtn.innerHTML = '<i class="fas fa-stop"></i>';
     beginRecording();
 }
 
@@ -122,8 +490,11 @@ function stopRecordingHold(event) {
         recordingCancelled = true;
     }
     isRecordingHold = false;
-    document.getElementById("recordBtn").innerText = "Hold to Record";
+    pendingStopRecording = true;
+    const recordBtn = document.getElementById("voiceBtn") || document.querySelector(".voice-btn");
+    if (recordBtn) recordBtn.innerHTML = '<i class="fas fa-microphone"></i>';
     if (mediaRecorder && mediaRecorder.state === "recording") {
+        pendingStopRecording = false;
         mediaRecorder.stop();
     }
 }
@@ -132,14 +503,15 @@ function cancelRecordingHold() {
     if (!isRecordingHold) return;
     recordingCancelled = true;
     isRecordingHold = false;
-    document.getElementById("recordBtn").innerText = "Hold to Record";
+    const recordBtn = document.getElementById("voiceBtn") || document.querySelector(".voice-btn");
+    if (recordBtn) recordBtn.innerHTML = '<i class="fas fa-microphone"></i>';
     if (mediaRecorder && mediaRecorder.state === "recording") {
         mediaRecorder.stop();
     }
 }
 
 async function sendRecordedAudio() {
-    if (!recipient) {
+    if (!currentChat) {
         alert("Choose a recipient before sending an audio message.");
         return;
     }
@@ -147,13 +519,13 @@ async function sendRecordedAudio() {
         return;
     }
     try {
-        const recipientPublicKey = await getPublicKeyFor(recipient);
+        const recipientPublicKey = await getPublicKeyFor(currentChat);
         const base64Audio = await blobToBase64(recordedAudioBlob);
-        const encrypted = await encryptMessage(base64Audio, recipientPublicKey, myPublicKey, recipient);
+        const encrypted = await encryptMessage(base64Audio, recipientPublicKey, myPublicKey, currentChat);
         const tempId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
         socket.emit("message", {
-            to: recipient,
+            to: currentChat,
             type: "audio",
             ciphertext: encrypted.ciphertext,
             iv: encrypted.iv,
@@ -202,19 +574,60 @@ function resetInactivityTimer() {
 }
 
 function addActivityListeners() {
+    if (activityListenersAdded) return;
     const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
     events.forEach(event => {
         document.addEventListener(event, resetInactivityTimer, true);
     });
+    activityListenersAdded = true;
 }
 
 function getDefaultAvatar(username) {
     return `https://i.pravatar.cc/150?u=${encodeURIComponent(username)}`;
 }
 
-window.onload = () => {
+window.onload = async () => {
     remoteAudio = document.getElementById("remoteAudio");
+    remoteVideo = document.getElementById("remoteVideo");
     updateCallButtons("none");
+    
+    // Restore zoom level
+    const savedZoom = localStorage.getItem("chatZoom");
+    if (savedZoom) {
+        currentZoom = parseInt(savedZoom);
+        applyZoom();
+    }
+
+    const sessionUser = localStorage.getItem("sessionUser");
+    if (sessionUser) {
+        user = sessionUser;
+        avatar = localStorage.getItem("sessionAvatar") || getDefaultAvatar(user);
+        currentChat = localStorage.getItem("sessionCurrentChat") || "";
+        recipient = currentChat;
+
+        const sessionPublicKey = localStorage.getItem("sessionPublicKey");
+        const sessionPrivateKey = localStorage.getItem("sessionPrivateKey");
+        if (sessionPublicKey) {
+            myPublicKeyString = sessionPublicKey;
+            try {
+                myPublicKey = await importPublicKey(sessionPublicKey);
+            } catch (err) {
+                console.warn("Could not restore public key from session.", err);
+            }
+        }
+        if (sessionPrivateKey) {
+            try {
+                privateKey = await importPrivateKey(sessionPrivateKey);
+            } catch (err) {
+                console.warn("Could not restore private key from session.", err);
+            }
+        }
+
+        document.getElementById("user").value = user;
+        enterChat();
+        return;
+    }
+
     if (savedUsername) {
         document.getElementById("user").value = savedUsername;
     }
@@ -223,7 +636,7 @@ window.onload = () => {
 async function register() {
     const username = document.getElementById("user").value.trim();
     const password = document.getElementById("pass").value;
-    const secret = document.getElementById("secret").value;
+    const secret = document.getElementById("secret").value || "";
 
     if (!username || !password) {
         alert("Username and password are required.");
@@ -262,7 +675,9 @@ async function register() {
         const privateKeyBytes = await crypto.subtle.exportKey("pkcs8", keyPair.privateKey);
         const encryptedPrivate = await encryptPrivateKey(privateKeyBytes, password);
 
-        const response = await fetch("/register", {
+        const url = `${window.location.origin}/register`;
+        console.log(`Registering at: ${url}`);
+        const response = await fetch(url, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -284,6 +699,8 @@ async function register() {
     }
 }
 
+window.register = register;
+
 async function login() {
     const username = document.getElementById("user").value.trim();
     const password = document.getElementById("pass").value;
@@ -294,12 +711,20 @@ async function login() {
     }
 
     try {
-        const response = await fetch("/login", {
+        const url = `${window.location.origin}/login`;
+        console.log(`Logging in at: ${url}`);
+        const response = await fetch(url, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ username, password })
         });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
         const data = await response.json();
+        console.log("Login response:", data);
         if (!data.success) {
             alert(data.error);
             return;
@@ -309,23 +734,34 @@ async function login() {
         avatar = data.avatar || getDefaultAvatar(username);
         localStorage.setItem("savedUsername", user);
         savedUsername = user;
+        localStorage.setItem("sessionUser", user);
+        localStorage.setItem("sessionAvatar", avatar);
+        localStorage.setItem("sessionCurrentChat", currentChat);
+
+        if (data.publicKey) {
+            myPublicKeyString = data.publicKey;
+            try {
+                myPublicKey = await importPublicKey(myPublicKeyString);
+                localStorage.setItem("sessionPublicKey", myPublicKeyString);
+            } catch (err) {
+                console.warn("Failed to import public key on login.", err);
+            }
+        }
 
         if (data.encryptedPrivateKey && data.privateKeySalt && data.privateKeyIv) {
             try {
                 privateKey = await decryptPrivateKey(data.encryptedPrivateKey, password, data.privateKeySalt, data.privateKeyIv);
-                if (data.publicKey) {
-                    myPublicKeyString = data.publicKey;
-                    myPublicKey = await importPublicKey(myPublicKeyString);
-                }
+                const exportedPrivate = await exportPrivateKey(privateKey);
+                localStorage.setItem("sessionPrivateKey", exportedPrivate);
             } catch (err) {
                 privateKey = null;
-                myPublicKey = null;
                 alert("Logged in, but secure messaging cannot be enabled. Check your password or register a new account.");
             }
         } else {
             privateKey = null;
-            myPublicKey = null;
-            alert("Logged in, but this account does not support encrypted messaging. Register a new secure account.");
+            if (!myPublicKey) {
+                alert("Logged in, but this account does not support encrypted messaging. Register a new secure account.");
+            }
         }
 
         enterChat();
@@ -335,48 +771,63 @@ async function login() {
     }
 }
 
+window.login = login;
+
 function logout() {
     endCall();
+    clearTimeout(inactivityTimer);
     if (socket && socket.connected) {
         socket.disconnect();
     }
 
+    localStorage.removeItem("sessionUser");
+    localStorage.removeItem("sessionAvatar");
+    localStorage.removeItem("sessionCurrentChat");
+    localStorage.removeItem("sessionPrivateKey");
+    localStorage.removeItem("sessionPublicKey");
+
     user = "";
     avatar = "";
-    recipient = "";
+    currentChat = "";
     privateKey = null;
     myPublicKey = null;
     myPublicKeyString = "";
     publicKeys = {};
+    chats = {};
+    onlineUsers = [];
 
     document.getElementById("auth").style.display = "block";
     document.getElementById("chat").style.display = "none";
     document.getElementById("messages").innerHTML = "";
-    document.getElementById("welcome").innerText = "";
-    document.getElementById("currentChat").innerText = "Select a user to start private chat";
     document.getElementById("user").value = localStorage.getItem("savedUsername") || "";
     document.getElementById("pass").value = "";
 }
 
 function clearChat() {
-    if (!recipient) {
+    if (!currentChat) {
         alert("Select a recipient first.");
         return;
     }
-    if (!confirm("This will permanently delete all messages with " + recipient + ". This cannot be undone. Continue?")) {
+    if (!confirm("This will permanently delete all messages with " + currentChat + ". This cannot be undone. Continue?")) {
         return;
     }
 
     fetch("/clearMessages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: user, target: recipient })
+        body: JSON.stringify({ username: user, target: currentChat })
     })
     .then(response => response.json())
     .then(data => {
         if (data.success) {
+            if (chats[currentChat]) {
+                chats[currentChat].messages = [];
+                chats[currentChat].lastMessage = null;
+            }
             document.getElementById("messages").innerHTML = "";
             socket.emit("join", user); // Reload messages
+            updateChatUI();
+            alert("Chat cleared successfully!");
         } else {
             alert(data.error);
         }
@@ -387,26 +838,149 @@ function clearChat() {
     });
 }
 
+// Advanced clear chat with permanent deletion warning
+function clearChatPermanent() {
+    if (!currentChat) {
+        alert("Select a recipient first.");
+        return;
+    }
+    const warningMsg = `⚠️ PERMANENT DELETE\n\nThis will permanently delete ALL messages with ${currentChat}.\n\nThis action CANNOT BE UNDONE and will delete messages on the server.\n\nType "DELETE" to confirm:`;
+    
+    const confirmation = prompt(warningMsg);
+    if (confirmation !== "DELETE") {
+        alert("Chat deletion cancelled.");
+        return;
+    }
+
+    fetch("/clearMessages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: user, target: currentChat })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            if (chats[currentChat]) {
+                chats[currentChat].messages = [];
+                chats[currentChat].lastMessage = null;
+            }
+            document.getElementById("messages").innerHTML = "";
+            socket.emit("join", user);
+            closeChatMenu();
+            updateChatUI();
+            alert("✓ Chat permanently deleted!");
+        } else {
+            alert(data.error);
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        alert("Failed to delete chat.");
+    });
+}
+
+// Chat menu functions
+function showChatMenu() {
+    document.getElementById("chatMenuModal").style.display = "block";
+}
+
+function closeChatMenu() {
+    document.getElementById("chatMenuModal").style.display = "none";
+}
+
+// Zoom menu functions
+function toggleZoomMenu() {
+    const modal = document.getElementById("zoomMenuModal");
+    modal.style.display = modal.style.display === "block" ? "none" : "block";
+}
+
+function closeZoomMenu() {
+    document.getElementById("zoomMenuModal").style.display = "none";
+}
+
+function increaseZoom() {
+    if (currentZoom < 200) {
+        currentZoom += 10;
+        applyZoom();
+    }
+}
+
+function decreaseZoom() {
+    if (currentZoom > 50) {
+        currentZoom -= 10;
+        applyZoom();
+    }
+}
+
+function resetZoom() {
+    currentZoom = 100;
+    applyZoom();
+}
+
+function applyZoom() {
+    const scale = currentZoom / 100;
+    const container = document.getElementById("messagesContainer") || document.getElementById("chat");
+    if (container) {
+        container.style.transform = `scale(${scale})`;
+        container.style.transformOrigin = "top center";
+    }
+    document.getElementById("zoomLevel").innerText = currentZoom + "%";
+    localStorage.setItem("chatZoom", currentZoom);
+}
+
+// Mute notifications
+function muteNotifications() {
+    const isMuted = localStorage.getItem("notificationsMuted") === "true";
+    localStorage.setItem("notificationsMuted", !isMuted);
+    closeChatMenu();
+    alert(isMuted ? "Notifications enabled" : "Notifications muted");
+}
+
+// Auto-scroll to latest message
+function autoScrollMessages() {
+    const messagesContainer = document.getElementById("messagesContainer") || document.querySelector(".messages-container");
+    if (messagesContainer) {
+        setTimeout(() => {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }, 100);
+    }
+}
+
 function enterChat() {
     document.getElementById("auth").style.display = "none";
     document.getElementById("chat").style.display = "flex";
-    document.getElementById("welcome").innerText = user;
-    document.getElementById("headerAvatar").src = avatar || "https://i.pravatar.cc/40";
-    document.getElementById("currentChat").innerText = recipient ? `Chatting with ${recipient}` : "Select a user to start private chat";
-    if (!socket.connected) {
+    updateChatUI();
+    
+    // Ensure socket is connected before joining
+    if (socket.connected) {
+        socket.emit("join", user);
+    } else {
         socket.connect();
+        socket.once("connect", () => {
+            socket.emit("join", user);
+        });
     }
-    socket.emit("join", user);
+    
     addActivityListeners();
     resetInactivityTimer();
 }
 
 function showProfile() {
-    document.getElementById("profileModal").style.display = "block";
+    const modal = document.getElementById("profileModal");
+    modal.style.display = "block";
+    const colorPicker = document.getElementById("chatColorPicker");
+    if (colorPicker) colorPicker.value = chatBubbleColor;
 }
 
 function closeProfile() {
-    document.getElementById("profileModal").style.display = "none";
+    const modal = document.getElementById("profileModal");
+    modal.style.display = "none";
+    document.getElementById("oldPass").value = "";
+    document.getElementById("newUser").value = "";
+    document.getElementById("newPass").value = "";
+    document.getElementById("newAvatarUrl").value = "";
+    const fileInput = document.getElementById("newAvatarFile");
+    if (fileInput) fileInput.value = "";
 }
 
 async function updateProfile() {
@@ -431,6 +1005,13 @@ async function updateProfile() {
         const exportedPrivate = await exportPrivateKey(privateKey);
         const privateBytes = base64ToArrayBuffer(exportedPrivate);
         encryptedPrivate = await encryptPrivateKey(privateBytes, newPassword);
+    }
+
+    // Save chat color preference
+    const colorPicker = document.getElementById("chatColorPicker");
+    if (colorPicker) {
+        chatBubbleColor = colorPicker.value;
+        localStorage.setItem("chatBubbleColor", chatBubbleColor);
     }
 
     const payload = {
@@ -462,32 +1043,124 @@ async function updateProfile() {
     user = data.newUsername || user;
     avatar = data.avatar || getDefaultAvatar(user);
     localStorage.setItem("savedUsername", user);
-    document.getElementById("welcome").innerText = user;
-    document.getElementById("headerAvatar").src = avatar || getDefaultAvatar(user);
-    document.getElementById("currentChat").innerText = recipient ? `Chatting with ${recipient}` : "Select a user to start private chat";
-    document.getElementById("user").value = user;
-
-    if (newPassword && encryptedPrivate) {
-        privateKey = await decryptPrivateKey(encryptedPrivate.encrypted, newPassword, encryptedPrivate.salt, encryptedPrivate.iv);
+    
+    // Save chat color if changed
+    if (colorPicker && colorPicker.value) {
+        chatBubbleColor = colorPicker.value;
+        localStorage.setItem("chatBubbleColor", chatBubbleColor);
+        applyChatTheme();
     }
-
+    
+    const title = document.getElementById("chatTitle");
+    if (title) title.innerText = currentChat || "Select a chat";
+    document.getElementById("headerAvatar").src = avatar || getDefaultAvatar(user);
+    document.getElementById("user").value = user;
+    updateChatUI();
+    if (socket && socket.connected) {
+        socket.username = user;
+        socket.emit("join", user);
+    }
+    alert("Profile updated successfully!");
     closeProfile();
-    alert("Profile updated!");
 }
 
-function setRecipient() {
-    const target = document.getElementById("targetUser").value.trim();
-    if (!target) {
-        alert("Enter the username you want to chat with.");
+let allUsers = [];
+let filteredUsers = [];
+
+async function showUsersModal() {
+    const modal = document.getElementById("usersModal");
+    modal.style.display = "block";
+    
+    try {
+        const response = await fetch(`${window.location.origin}/users`);
+        const data = await response.json();
+        
+        console.log("Users endpoint response:", data);
+        
+        if (data.success && data.users) {
+            allUsers = data.users;
+            console.log("All users loaded:", allUsers);
+            filteredUsers = [...allUsers];
+            displayUsersList(filteredUsers);
+        }
+    } catch (err) {
+        console.error("Failed to fetch users:", err);
+        alert("Failed to load users list.");
+    }
+}
+
+function closeUsersModal() {
+    const modal = document.getElementById("usersModal");
+    modal.style.display = "none";
+    document.getElementById("usersSearchInput").value = "";
+}
+
+function filterUsersList() {
+    const searchTerm = document.getElementById("usersSearchInput").value.trim().toLowerCase();
+    
+    if (!searchTerm) {
+        filteredUsers = [...allUsers];
+    } else {
+        filteredUsers = allUsers.filter(u => u.username.toLowerCase().includes(searchTerm));
+    }
+    
+    displayUsersList(filteredUsers);
+}
+
+function displayUsersList(users) {
+    const usersList = document.getElementById("usersList");
+    
+    if (users.length === 0) {
+        usersList.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-muted);">No users found</div>';
         return;
     }
-    if (target === user) {
+    
+    usersList.innerHTML = users.map(user => {
+        const statusClass = user.isActive ? 'active' : '';
+        const statusText = user.isActive ? 'Active now' : 'Offline';
+        const avatar = user.avatar || getDefaultAvatar(user.username);
+        
+        return `
+            <div class="user-item" onclick="selectUserFromList('${user.username}')">
+                <img src="${avatar}" class="user-avatar" onerror="this.src='https://i.pravatar.cc/40?u=${user.username}'">
+                <div class="user-info">
+                    <span class="user-name">${user.username}</span>
+                    <span class="user-status ${statusClass}">${statusText}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function selectUserFromList(username) {
+    if (username === user) {
         alert("You cannot chat with yourself.");
         return;
     }
+    
+    currentChat = username;
+    recipient = username;
+    localStorage.setItem("sessionCurrentChat", currentChat);
+    
+    if (!chats[currentChat]) {
+        chats[currentChat] = {
+            messages: [],
+            unreadCount: 0,
+            lastMessage: null,
+            avatar: getDefaultAvatar(username)
+        };
+    }
+    
+    closeUsersModal();
+    updateChatUI();
+    socket.emit("join", user);
+}
 
-    recipient = target;
-    document.getElementById("currentChat").innerText = `Chatting with ${recipient}`;
+function setRecipient() {
+    if (!currentChat) {
+        alert("Choose a chat first.");
+        return;
+    }
     document.getElementById("messages").innerHTML = "";
     socket.emit("join", user);
 }
@@ -513,18 +1186,21 @@ function updateCallButtons(mode) {
 }
 
 function updateRecordingUi(isRecording) {
-    const recordBtn = document.querySelector(".record-btn");
+    const recordBtn = document.getElementById("voiceBtn") || document.querySelector(".voice-btn");
     const preview = document.getElementById("audioPreviewContainer");
     const statusText = document.getElementById("audioStatus");
 
+    if (recordBtn) {
+        recordBtn.classList.toggle("recording", isRecording);
+    }
+    if (!preview || !statusText) return;
+
     if (isRecording) {
-        recordBtn.innerText = "Stop Recording";
-        statusText.innerText = "Recording...";
+        statusText.innerText = "Recording... Tap again to send.";
         preview.style.display = "flex";
     } else {
-        recordBtn.innerText = "Start Recording";
         if (recordedAudioBlob) {
-            statusText.innerText = "Recorded clip ready";
+            statusText.innerText = "Sending audio message...";
             preview.style.display = "flex";
         } else {
             preview.style.display = "none";
@@ -533,8 +1209,12 @@ function updateRecordingUi(isRecording) {
 }
 
 function renderOnlineUsers(list) {
-    document.getElementById("onlineCount").innerText = list.length;
+    const onlineCount = document.getElementById("onlineCount");
+    if (onlineCount) {
+        onlineCount.innerText = list.length;
+    }
     const container = document.getElementById("onlineUsersList");
+    if (!container) return;
     container.innerHTML = "";
     list.forEach((username) => {
         if (username === user) return;
@@ -542,9 +1222,11 @@ function renderOnlineUsers(list) {
         item.className = "online-user";
         item.innerText = username;
         item.onclick = () => {
+            currentChat = username;
             recipient = username;
-            document.getElementById("targetUser").value = recipient;
-            document.getElementById("currentChat").innerText = `Chatting with ${recipient}`;
+            localStorage.setItem("sessionCurrentChat", currentChat);
+            const title = document.getElementById("chatTitle");
+            if (title) title.innerText = currentChat;
             document.getElementById("messages").innerHTML = "";
             socket.emit("join", user);
         };
@@ -555,14 +1237,19 @@ function renderOnlineUsers(list) {
 function handleKeyPress(event) {
     if (event.key === "Enter") {
         sendMsg();
-    } else if (recipient) {
-        socket.emit("typing", recipient);
+    } else if (currentChat) {
+        socket.emit("typing", currentChat);
         clearTimeout(typingTimer);
-        typingTimer = setTimeout(() => socket.emit("stopTyping", recipient), 1000);
+        typingTimer = setTimeout(() => socket.emit("stopTyping", currentChat), 1000);
     }
 }
 
 async function toggleRecording() {
+    if (!currentChat) {
+        alert("Choose a chat before recording audio.");
+        return;
+    }
+
     if (mediaRecorder && mediaRecorder.state === "recording") {
         mediaRecorder.stop();
         return;
@@ -583,20 +1270,23 @@ async function toggleRecording() {
             }
         };
 
-        mediaRecorder.onstop = () => {
+        mediaRecorder.onstop = async () => {
             recordedAudioBlob = new Blob(audioChunks, { type: "audio/webm" });
             const audioUrl = URL.createObjectURL(recordedAudioBlob);
             const audioPreview = document.getElementById("audioPreview");
-            audioPreview.src = audioUrl;
+            if (audioPreview) audioPreview.src = audioUrl;
             updateRecordingUi(false);
             stream.getTracks().forEach((track) => track.stop());
+            await sendRecordedAudio();
         };
 
         mediaRecorder.start();
         updateRecordingUi(true);
     } catch (err) {
         console.error(err);
-        alert("Unable to start audio recording.");
+        alert(err.name === "NotAllowedError" || err.name === "PermissionDeniedError"
+            ? "Microphone access is required to record audio. Please allow access and try again."
+            : "Unable to start audio recording.");
     }
 }
 
@@ -633,9 +1323,21 @@ async function beginRecording() {
 
         mediaRecorder.start();
         updateRecordingUi(true);
+        if (pendingStopRecording && mediaRecorder.state === "recording") {
+            pendingStopRecording = false;
+            mediaRecorder.stop();
+        }
     } catch (err) {
         console.error(err);
-        alert("Unable to start audio recording.");
+        isRecordingHold = false;
+        recordingCancelled = false;
+        pendingStopRecording = false;
+        updateRecordingUi(false);
+        const recordBtn = document.getElementById("voiceBtn") || document.querySelector(".voice-btn");
+        if (recordBtn) recordBtn.innerHTML = '<i class="fas fa-microphone"></i>';
+        alert(err.name === "NotAllowedError" || err.name === "PermissionDeniedError"
+            ? "Microphone access is required to record audio. Please allow access and try again."
+            : "Unable to start audio recording.");
     }
 }
 
@@ -647,7 +1349,7 @@ function clearRecording() {
 }
 
 async function sendAudioMsg() {
-    if (!recipient) {
+    if (!currentChat) {
         alert("Choose a recipient before sending an audio message.");
         return;
     }
@@ -661,13 +1363,13 @@ async function sendAudioMsg() {
     }
 
     try {
-        const recipientPublicKey = await getPublicKeyFor(recipient);
+        const recipientPublicKey = await getPublicKeyFor(currentChat);
         const base64Audio = await blobToBase64(recordedAudioBlob);
-        const encrypted = await encryptMessage(base64Audio, recipientPublicKey, myPublicKey, recipient);
+        const encrypted = await encryptMessage(base64Audio, recipientPublicKey, myPublicKey, currentChat);
         const tempId = Date.now().toString();
 
         socket.emit("message", {
-            to: recipient,
+            to: currentChat,
             type: "audio",
             ciphertext: encrypted.ciphertext,
             iv: encrypted.iv,
@@ -695,7 +1397,7 @@ function blobToBase64(blob) {
 async function sendMsg() {
     const msg = document.getElementById("msg").value.trim();
     if (!msg) return;
-    if (!recipient) {
+    if (!currentChat) {
         alert("Choose a user to chat with first.");
         return;
     }
@@ -705,20 +1407,24 @@ async function sendMsg() {
     }
 
     try {
-        const recipientPublicKey = await getPublicKeyFor(recipient);
-        const encrypted = await encryptMessage(msg, recipientPublicKey, myPublicKey, recipient);
-        const tempId = Date.now().toString();
+        const recipientPublicKey = await getPublicKeyFor(currentChat);
+        const encrypted = await encryptMessage(msg, recipientPublicKey, myPublicKey, currentChat);
+        const tempId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
         socket.emit("message", {
-            to: recipient,
+            to: currentChat,
             ciphertext: encrypted.ciphertext,
             iv: encrypted.iv,
             encryptedKeys: encrypted.encryptedKeys,
             tempId
+        }, (ack) => {
+            if (!ack) {
+                alert("Message delivery failed. Please try again.");
+            }
         });
 
         document.getElementById("msg").value = "";
-        socket.emit("stopTyping", recipient);
+        socket.emit("stopTyping", currentChat);
     } catch (err) {
         console.error(err);
         alert(err.message || "Unable to send encrypted message.");
@@ -726,27 +1432,78 @@ async function sendMsg() {
 }
 
 socket.on("loadMessages", async (msgs) => {
-    document.getElementById("messages").innerHTML = "";
-    for (const message of msgs) {
-        if (isMessageVisible(message)) {
-            const decrypted = await tryDecryptMessage(message);
-            if (decrypted) addMessage(decrypted);
+    // Reset chat state before loading new messages to prevent duplicates
+    chats = {};
+
+    // Load and decrypt messages into chats data structure
+    for (const msg of msgs) {
+        const chatUser = msg.from === user ? msg.to : msg.from;
+        if (!chats[chatUser]) {
+            chats[chatUser] = { messages: [], unreadCount: 0, lastMessage: null, avatar: getDefaultAvatar(chatUser) };
         }
+        const decrypted = await tryDecryptMessage(msg);
+        chats[chatUser].messages.push(decrypted);
+        if (!chats[chatUser].lastMessage || new Date(decrypted.time) > new Date(chats[chatUser].lastMessage.time)) {
+            chats[chatUser].lastMessage = decrypted;
+        }
+    }
+
+    if (currentChat && !chats[currentChat]) {
+        chats[currentChat] = { messages: [], unreadCount: 0, lastMessage: null, avatar: getDefaultAvatar(currentChat) };
+    }
+
+    Object.values(chats).forEach(chat => {
+        chat.messages.sort((a, b) => new Date(a.time) - new Date(b.time));
+    });
+
+    // If we have a current chat, display its messages
+    if (currentChat) {
+        document.getElementById("messages").innerHTML = "";
+        if (chats[currentChat]) {
+            for (const message of chats[currentChat].messages) {
+                addMessage(message);
+            }
+        }
+        updateChatUI();
+        autoScrollMessages();
     }
 });
 
 socket.on("message", async (data) => {
-    if (!isMessageVisible(data)) return;
+    const chatUser = data.from === user ? data.to : data.from;
+    if (!chats[chatUser]) {
+        chats[chatUser] = { messages: [], unreadCount: 0, lastMessage: null, avatar: getDefaultAvatar(chatUser) };
+    }
+
     const decrypted = await tryDecryptMessage(data);
-    if (decrypted) addMessage(decrypted);
+    if (decrypted) {
+        chats[chatUser].messages.push(decrypted);
+        chats[chatUser].lastMessage = decrypted;
+
+        if (chatUser !== currentChat) {
+            chats[chatUser].unreadCount++;
+        }
+        updateChatUI();
+        if (chatUser === currentChat) {
+            autoScrollMessages();
+        }
+    }
 });
 
-socket.on("onlineUsers", renderOnlineUsers);
+socket.on("onlineUsers", (list) => {
+    onlineUsers = list;
+    updateChatUI();
+    if (currentChat && onlineUsers.includes(currentChat)) {
+        document.getElementById("chatSubtitle").innerText = "Active now";
+    } else if (currentChat) {
+        document.getElementById("chatSubtitle").innerText = "Offline";
+    }
+});
 
 socket.on("typing", (userTyping) => {
-    if (userTyping !== user) {
+    if (userTyping !== user && userTyping === currentChat) {
         document.getElementById("typingIndicator").style.display = "block";
-        document.getElementById("typingIndicator").innerText = `${userTyping} is typing...`;
+        document.getElementById("typingText").innerText = `${userTyping} is typing...`;
     }
 });
 
@@ -759,10 +1516,20 @@ socket.on("errorMessage", (message) => {
 });
 
 socket.on("messageEdited", (data) => {
+    // Update in chats data
+    Object.keys(chats).forEach(chatUser => {
+        const msgIndex = chats[chatUser].messages.findIndex(m => m.id === data.id);
+        if (msgIndex !== -1) {
+            chats[chatUser].messages[msgIndex].msg = data.newText;
+            chats[chatUser].messages[msgIndex].edited = true;
+            chats[chatUser].messages[msgIndex].editedAt = data.editedAt;
+        }
+    });
+
+    // Update UI if message is visible
     const messageDiv = document.querySelector(`[data-id="${data.id}"]`);
     if (messageDiv) {
-        const bubble = messageDiv.querySelector('.bubble');
-        const contentDiv = bubble.querySelector('div');
+        const contentDiv = messageDiv.querySelector('.message-content');
         if (contentDiv) {
             contentDiv.innerHTML = `${data.newText} <span class="edited">(edited)</span>`;
         }
@@ -770,12 +1537,32 @@ socket.on("messageEdited", (data) => {
 });
 
 socket.on("messageDeleted", (data) => {
+    // Update in chats data
+    Object.keys(chats).forEach(chatUser => {
+        chats[chatUser].messages = chats[chatUser].messages.filter(m => m.id !== data.id);
+        if (chats[chatUser].lastMessage && chats[chatUser].lastMessage.id === data.id) {
+            chats[chatUser].lastMessage = chats[chatUser].messages[chats[chatUser].messages.length - 1] || null;
+        }
+    });
+
+    // Update UI
     const messageDiv = document.querySelector(`[data-id="${data.id}"]`);
     if (messageDiv) {
-        const bubble = messageDiv.querySelector('.bubble');
-        if (bubble) {
-            bubble.innerHTML = `<div class="deleted-message">This message was unsent.</div>`;
-        }
+        messageDiv.remove();
+    }
+    updateChatUI();
+});
+
+socket.on("addReaction", (data) => {
+    if (!messageReactions[data.messageId]) {
+        messageReactions[data.messageId] = {};
+    }
+    if (!messageReactions[data.messageId][data.emoji]) {
+        messageReactions[data.messageId][data.emoji] = [];
+    }
+    if (!messageReactions[data.messageId][data.emoji].includes(data.from)) {
+        messageReactions[data.messageId][data.emoji].push(data.from);
+        updateMessageReactions(data.messageId);
     }
 });
 
@@ -799,10 +1586,11 @@ async function tryDecryptMessage(message) {
         };
     }
 
-    if (message.audioBase64) {
+    if (message.audioBase64 || message.imageData || message.videoData || message.fileData) {
         return message;
     }
-    if (message.msg && message.type !== "audio") {
+
+    if (message.msg && message.type !== "audio" && message.type !== "image" && message.type !== "video" && message.type !== "file") {
         return message;
     }
 
@@ -817,6 +1605,13 @@ async function tryDecryptMessage(message) {
         const plaintext = await decryptMessage(message);
         if (message.type === "audio") {
             return { ...message, audioBase64: plaintext };
+        } else if (message.type === "image") {
+            return { ...message, imageData: `data:image/jpeg;base64,${plaintext}` };
+        } else if (message.type === "video") {
+            return { ...message, videoData: `data:video/mp4;base64,${plaintext}` };
+        } else if (message.type === "file") {
+            const fileData = JSON.parse(plaintext);
+            return { ...message, fileData };
         }
         return { ...message, msg: plaintext };
     } catch (err) {
@@ -835,12 +1630,35 @@ function addMessage(data) {
     div.className = "msg " + (isMe ? "me" : "other");
     div.setAttribute("data-id", data.tempId || data.id || Date.now());
 
-    const sender = isMe ? "You" : data.from;
-    const targetInfo = isMe ? `<div class="target">to ${data.to}</div>` : "";
-    const time = data.time ? new Date(data.time).toLocaleTimeString() : new Date().toLocaleTimeString();
     let contentHtml = "";
+    let messageId = data.id || data.tempId || Date.now();
 
-    if (data.type === "audio") {
+    if (data.type === "image") {
+        if (data.imageData) {
+            contentHtml = `<img src="${data.imageData}" class="message-image" onclick="openImageModal('${data.imageData}')">`;
+        } else {
+            contentHtml = `<div>[Image could not be loaded]</div>`;
+        }
+    } else if (data.type === "video") {
+        if (data.videoData) {
+            contentHtml = `<video controls src="${data.videoData}" class="message-video"></video>`;
+        } else {
+            contentHtml = `<div>[Video could not be loaded]</div>`;
+        }
+    } else if (data.type === "file") {
+        if (data.fileData) {
+            contentHtml = `<div class="file-message">
+                <i class="fas fa-file"></i>
+                <div>
+                    <div class="file-name">${data.fileData.name}</div>
+                    <div class="file-size">${formatFileSize(data.fileData.size)}</div>
+                </div>
+                <button onclick="downloadFile('${data.fileData.data}', '${data.fileData.name}')" class="download-btn">Download</button>
+            </div>`;
+        } else {
+            contentHtml = `<div>[File could not be loaded]</div>`;
+        }
+    } else if (data.type === "audio") {
         if (data.audioBase64) {
             const audioSrc = `data:audio/webm;base64,${data.audioBase64}`;
             contentHtml = `<audio controls src="${audioSrc}"></audio>`;
@@ -853,27 +1671,104 @@ function addMessage(data) {
             msgText += ' <span class="edited">(edited)</span>';
         }
         msgText = processMentions(msgText);
-        contentHtml = `<div>${msgText}</div>`;
+        contentHtml = `<div class="message-content">${msgText}</div>`;
     }
 
-    const messageId = data.id || data.tempId || Date.now();
-    div.setAttribute("data-id", messageId);
-    const editButton = isMe && data.type !== "audio" ? `<button onclick="editMessage('${messageId}')" class="edit-btn">Edit</button>` : "";
-    const deleteButton = isMe ? `<button onclick="unsendMessage('${messageId}')" class="delete-btn">Delete</button>` : "";
+    const time = data.time ? new Date(data.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
 
     div.innerHTML = `
-        <img src="${data.avatar || "https://i.pravatar.cc/40"}" class="avatar small">
+        ${!isMe ? '<img src="' + (data.avatar || getDefaultAvatar(data.from)) + '" class="avatar">' : ''}
         <div class="bubble">
-            <div class="name">${sender}</div>
-            ${targetInfo}
             ${contentHtml}
-            <div class="message-actions">${editButton}${deleteButton}</div>
-            <div class="time">${time}</div>
+            <div class="message-time">${time}</div>
+            <div class="message-actions">
+                <button class="action-btn" onclick="showReactionModal('${messageId}')">😀</button>
+                ${isMe && data.type === "text" ? '<button class="action-btn" onclick="editMessage(\'' + messageId + '\')">Edit</button>' : ''}
+                ${isMe ? '<button class="action-btn" onclick="unsendMessage(\'' + messageId + '\')">Delete</button>' : ''}
+            </div>
+            <div class="reactions"></div>
         </div>
+        ${isMe ? '<img src="' + avatar + '" class="avatar">' : ''}
     `;
 
     document.getElementById("messages").appendChild(div);
+    updateMessageReactions(messageId);
     document.getElementById("messages").scrollTop = document.getElementById("messages").scrollHeight;
+}
+
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+function downloadFile(dataUrl, fileName) {
+    const link = document.createElement('a');
+    link.href = dataUrl;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+function openImageModal(imageSrc) {
+    // TODO: Implement image modal
+    window.open(imageSrc, '_blank');
+}
+
+function processMentions(text) {
+    return text.replace(/@(\w+)/g, '<span class="mention">@$1</span>');
+}
+
+function editMessage(messageId) {
+    const messageDiv = document.querySelector(`[data-id="${messageId}"]`);
+    if (!messageDiv) return;
+
+    const bubble = messageDiv.querySelector('.bubble');
+    const contentDiv = bubble.querySelector('.message-content');
+    if (!contentDiv) return;
+
+    const originalText = contentDiv.innerText.replace('(edited)', '').trim();
+
+    contentDiv.innerHTML = `
+        <input type="text" value="${originalText}" class="edit-input" id="editInput">
+        <button onclick="saveEdit('${messageId}')" class="save-edit-btn">Save</button>
+        <button onclick="cancelEdit()" class="cancel-edit-btn">Cancel</button>
+    `;
+
+    editingMessageId = messageId;
+    document.getElementById('editInput').focus();
+}
+
+function saveEdit(messageId) {
+    const newText = document.getElementById('editInput').value.trim();
+    if (!newText) return;
+
+    socket.emit("editMessage", { id: messageId, newText });
+    cancelEdit();
+}
+
+function cancelEdit() {
+    if (editingMessageId) {
+        socket.emit("join", user); // Reload messages
+        editingMessageId = null;
+    }
+}
+
+function unsendMessage(messageId) {
+    if (!confirm("Unsend this message? This cannot be undone.")) {
+        return;
+    }
+    socket.emit("deleteMessage", { id: messageId });
+    const messageDiv = document.querySelector(`[data-id="${messageId}"]`);
+    if (messageDiv) {
+        const bubble = messageDiv.querySelector('.bubble');
+        if (bubble) {
+            bubble.innerHTML = `<div class="deleted-message">This message was unsent.</div>`;
+        }
+    }
 }
 
 function randomBytes(length) {
@@ -1049,9 +1944,9 @@ async function startAudioCall() {
         return;
     }
 
-    const selectedUser = recipient || document.getElementById("targetUser").value.trim();
+    const selectedUser = currentChat;
     if (!selectedUser) {
-        alert("Select a recipient or enter a username first.");
+        alert("Select a chat first.");
         return;
     }
     if (selectedUser === user) {
@@ -1061,7 +1956,10 @@ async function startAudioCall() {
 
     currentCallTarget = selectedUser;
     document.getElementById("callModal").style.display = "block";
+    document.getElementById("callUser").innerText = selectedUser;
+    document.getElementById("callAvatar").src = chats[selectedUser]?.avatar || getDefaultAvatar(selectedUser);
     document.getElementById("callStatus").innerText = "Calling " + selectedUser + "...";
+    updateCallButtons("active");
 
     try {
         localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -1071,6 +1969,9 @@ async function startAudioCall() {
         peerConnection.ontrack = (event) => {
             if (remoteAudio) {
                 remoteAudio.srcObject = event.streams[0];
+            }
+            if (remoteVideo) {
+                remoteVideo.srcObject = event.streams[0];
             }
         };
         peerConnection.onicecandidate = (event) => {
@@ -1084,6 +1985,9 @@ async function startAudioCall() {
         socket.emit("callUser", { offer, to: selectedUser });
     } catch (err) {
         console.error(err);
+        alert(err.name === "NotAllowedError" || err.name === "PermissionDeniedError"
+            ? "Microphone access is required for voice calls. Please allow access and try again."
+            : "Unable to start the voice call. Please try again.");
         endCall();
     }
 }
@@ -1122,6 +2026,9 @@ async function acceptCall() {
         peerConnection.ontrack = (event) => {
             if (remoteAudio) {
                 remoteAudio.srcObject = event.streams[0];
+            }
+            if (remoteVideo) {
+                remoteVideo.srcObject = event.streams[0];
             }
         };
         peerConnection.onicecandidate = (event) => {
@@ -1162,6 +2069,7 @@ socket.on("callMade", async (data) => {
 
 socket.on("callAnswered", async (data) => {
     document.getElementById("callStatus").innerText = "Connected";
+    updateCallButtons("active");
     await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
 });
 
@@ -1171,14 +2079,9 @@ socket.on("iceCandidate", (data) => {
     }
 });
 
-socket.on("messageEdited", (data) => {
-    const messageDiv = document.querySelector(`[data-id="${data.id}"]`);
-    if (messageDiv) {
-        const bubble = messageDiv.querySelector('.bubble');
-        const contentDiv = bubble.querySelector('div');
-        contentDiv.innerText = data.newText;
-        if (data.edited) {
-            contentDiv.innerHTML += ' <span class="edited">(edited)</span>';
-        }
+socket.on("callEnded", (data) => {
+    if (currentCallTarget === data.from) {
+        endCall();
+        alert("Call ended by " + data.from);
     }
 });
