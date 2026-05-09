@@ -72,11 +72,12 @@
         </div>
 
         <div class="message-input-container">
+            <div id="replyPreview" class="reply-preview" style="display:none"></div>
             <div class="message-input">
                 <button class="input-btn emoji-btn" onclick="toggleEmojiPicker()"><i class="far fa-smile"></i></button>
                 <input id="msg" placeholder="Message..." onkeypress="handleKeyPress(event)">
                 <button class="input-btn attach-btn" onclick="showAttachmentMenu()"><i class="fas fa-paperclip"></i></button>
-                <button class="input-btn voice-btn" id="voiceBtn" onclick="toggleRecording()" type="button" title="Record audio"><i class="fas fa-microphone"></i></button>
+                <button class="input-btn voice-btn" id="voiceBtn" onmousedown="startRecording()" onmouseup="stopAndSendRecording()" ontouchstart="startRecording()" ontouchend="stopAndSendRecording()" type="button" title="Press to start recording, release to send"><i class="fas fa-microphone"></i></button>
                 <button onclick="sendMsg()" class="send-btn"><i class="fas fa-paper-plane"></i></button>
             </div>
             <div id="emojiPicker" class="emoji-picker" style="display:none">

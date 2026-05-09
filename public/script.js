@@ -8,6 +8,8 @@ let localStream;
 let mediaRecorder;
 let audioChunks = [];
 let recordedAudioBlob = null;
+let shouldAutoSendRecording = false;
+let recordingStream = null;
 let remoteAudio;
 let remoteVideo;
 let currentCallTarget = "";
@@ -23,13 +25,10 @@ let myPublicKeyString = "";
 let inactivityTimer;
 let activityListenersAdded = false;
 const INACTIVITY_TIMEOUT = 3 * 60 * 1000; // 3 minutes
-let isRecordingHold = false;
-let recordStartX = 0;
-let recordCancelThreshold = 80;
-let recordingCancelled = false;
 let pendingStopRecording = false;
 let chats = {}; // Store chat data
 let onlineUsers = [];
+let currentReply = null;
 let messageReactions = {}; // Store reactions for messages
 let currentZoom = 100; // Track zoom level
 let chatBubbleColor = localStorage.getItem("chatBubbleColor") || "#0095f6";
@@ -1196,7 +1195,7 @@ function updateRecordingUi(isRecording) {
     if (!preview || !statusText) return;
 
     if (isRecording) {
-        statusText.innerText = "Recording... Tap again to send.";
+        statusText.innerText = "Recording...";
         preview.style.display = "flex";
     } else {
         if (recordedAudioBlob) {
@@ -1287,6 +1286,102 @@ async function toggleRecording() {
         alert(err.name === "NotAllowedError" || err.name === "PermissionDeniedError"
             ? "Microphone access is required to record audio. Please allow access and try again."
             : "Unable to start audio recording.");
+    }
+}
+
+async function startRecording() {
+    if (!currentChat) {
+        alert("Choose a chat before recording audio.");
+        return;
+    }
+
+    if (mediaRecorder && mediaRecorder.state === "recording") {
+        return; // Already recording
+    }
+
+    // Reset pending flags
+    pendingStopRecording = false;
+    shouldAutoSendRecording = false;
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert("Audio recording is not supported in this browser.");
+        return;
+    }
+
+    try {
+        recordingStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioChunks = [];
+        mediaRecorder = new MediaRecorder(recordingStream);
+        shouldAutoSendRecording = false;
+
+        mediaRecorder.ondataavailable = (event) => {
+            if (event.data && event.data.size > 0) {
+                audioChunks.push(event.data);
+            }
+        };
+
+        mediaRecorder.onstop = async () => {
+            recordedAudioBlob = new Blob(audioChunks, { type: "audio/webm" });
+            const audioUrl = URL.createObjectURL(recordedAudioBlob);
+            const audioPreview = document.getElementById("audioPreview");
+            if (audioPreview) audioPreview.src = audioUrl;
+            updateRecordingUi(false);
+            recordingStream.getTracks().forEach((track) => track.stop());
+            
+            if (shouldAutoSendRecording) {
+                shouldAutoSendRecording = false;
+                // Small delay to ensure blob is ready
+                setTimeout(async () => {
+                    if (recordedAudioBlob && currentChat) {
+                        try {
+                            const recipientPublicKey = await getPublicKeyFor(currentChat);
+                            const base64Audio = await blobToBase64(recordedAudioBlob);
+                            const encrypted = await encryptMessage(base64Audio, recipientPublicKey, myPublicKey, currentChat);
+                            const tempId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+                            
+                            socket.emit("message", {
+                                to: currentChat,
+                                type: "audio",
+                                ciphertext: encrypted.ciphertext,
+                                iv: encrypted.iv,
+                                encryptedKeys: encrypted.encryptedKeys,
+                                tempId
+                            });
+                            
+                            clearRecording();
+                        } catch (err) {
+                            console.error("Error sending recorded audio:", err);
+                        }
+                    }
+                }, 50);
+            }
+        };
+
+        mediaRecorder.start();
+        updateRecordingUi(true);
+        
+        // Handle pending stop if user released button before recording started
+        if (pendingStopRecording) {
+            pendingStopRecording = false;
+            shouldAutoSendRecording = true;
+            mediaRecorder.stop();
+        }
+    } catch (err) {
+        console.error(err);
+        alert(err.name === "NotAllowedError" || err.name === "PermissionDeniedError"
+            ? "Microphone access is required to record audio. Please allow access and try again."
+            : "Unable to start audio recording.");
+    }
+}
+
+async function stopAndSendRecording() {
+    if (mediaRecorder && mediaRecorder.state === "recording") {
+        shouldAutoSendRecording = true;
+        mediaRecorder.stop();
+    } else {
+        // Recorder not started yet, set pending flags
+        pendingStopRecording = true;
+        shouldAutoSendRecording = true;
     }
 }
 
@@ -1411,19 +1506,29 @@ async function sendMsg() {
         const encrypted = await encryptMessage(msg, recipientPublicKey, myPublicKey, currentChat);
         const tempId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-        socket.emit("message", {
+        const messagePayload = {
             to: currentChat,
             ciphertext: encrypted.ciphertext,
             iv: encrypted.iv,
             encryptedKeys: encrypted.encryptedKeys,
             tempId
-        }, (ack) => {
+        };
+        if (currentReply) {
+            messagePayload.replyTo = {
+                id: currentReply.messageId,
+                from: currentReply.replyToUser,
+                text: currentReply.replyToText
+            };
+        }
+
+        socket.emit("message", messagePayload, (ack) => {
             if (!ack) {
                 alert("Message delivery failed. Please try again.");
             }
         });
 
         document.getElementById("msg").value = "";
+        cancelReply();
         socket.emit("stopTyping", currentChat);
     } catch (err) {
         console.error(err);
@@ -1606,8 +1711,14 @@ async function tryDecryptMessage(message) {
         if (message.type === "audio") {
             return { ...message, audioBase64: plaintext };
         } else if (message.type === "image") {
+            if (plaintext.startsWith("data:")) {
+                return { ...message, imageData: plaintext };
+            }
             return { ...message, imageData: `data:image/jpeg;base64,${plaintext}` };
         } else if (message.type === "video") {
+            if (plaintext.startsWith("data:")) {
+                return { ...message, videoData: plaintext };
+            }
             return { ...message, videoData: `data:video/mp4;base64,${plaintext}` };
         } else if (message.type === "file") {
             const fileData = JSON.parse(plaintext);
@@ -1622,6 +1733,45 @@ async function tryDecryptMessage(message) {
 
 function processMentions(text) {
     return text.replace(/@(\w+)/g, '<span class="mention">@$1</span>');
+}
+
+function setReplyContext(message) {
+    const replyText = message.msg || (message.type ? `[${message.type}]` : "[message]");
+    currentReply = {
+        messageId: message.id || message.tempId || Date.now().toString(),
+        replyToUser: message.from || "",
+        replyToText: replyText.length > 80 ? replyText.slice(0, 77) + "..." : replyText
+    };
+    renderReplyPreview();
+}
+
+function cancelReply() {
+    currentReply = null;
+    renderReplyPreview();
+}
+
+function renderReplyPreview() {
+    const preview = document.getElementById("replyPreview");
+    if (!preview) return;
+    if (currentReply) {
+        preview.innerHTML = `<span>Replying to <strong>@${currentReply.replyToUser}</strong>: "${currentReply.replyToText}"</span><button class="cancel-reply-btn" onclick="cancelReply()">×</button>`;
+        preview.style.display = "flex";
+    } else {
+        preview.innerHTML = "";
+        preview.style.display = "none";
+    }
+}
+
+function getMessageById(chatUser, messageId) {
+    if (!chats[chatUser] || !chats[chatUser].messages) return null;
+    return chats[chatUser].messages.find(m => (m.id || m.tempId || "") === messageId) || null;
+}
+
+function replyToMessage(messageId) {
+    if (!currentChat) return;
+    const message = getMessageById(currentChat, messageId);
+    if (!message) return;
+    setReplyContext(message);
 }
 
 function addMessage(data) {
@@ -1674,15 +1824,18 @@ function addMessage(data) {
         contentHtml = `<div class="message-content">${msgText}</div>`;
     }
 
+    const replyHtml = data.replyTo ? `<div class="message-reply-preview">Replying to <strong>@${data.replyTo.from}</strong>: ${processMentions(data.replyTo.text)}</div>` : "";
     const time = data.time ? new Date(data.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
 
     div.innerHTML = `
         ${!isMe ? '<img src="' + (data.avatar || getDefaultAvatar(data.from)) + '" class="avatar">' : ''}
         <div class="bubble">
+            ${replyHtml}
             ${contentHtml}
             <div class="message-time">${time}</div>
             <div class="message-actions">
                 <button class="action-btn" onclick="showReactionModal('${messageId}')">😀</button>
+                <button class="action-btn" onclick="replyToMessage('${messageId}')">Reply</button>
                 ${isMe && data.type === "text" ? '<button class="action-btn" onclick="editMessage(\'' + messageId + '\')">Edit</button>' : ''}
                 ${isMe ? '<button class="action-btn" onclick="unsendMessage(\'' + messageId + '\')">Delete</button>' : ''}
             </div>
