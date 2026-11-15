@@ -43,7 +43,7 @@ const now=()=>new Date().toISOString();
 const err=(res,code,detail)=>res.status(code).json({detail});
 const text=(s,max=200)=>typeof s==='string'?s.trim().slice(0,max):'';
 const ref=o=>o.reference || ('FXJ-'+String(o.id).padStart(6,'0'));
-const canView=(u,o)=>u.role==='staff'||(o.customer||o.ordered_by)===u.name;
+const canView=(u,o)=>u.role==='staff'||(o.customer||o.ordered_by)===u.username;
 const shipDefault=()=>({courier:'',tracking_id:'',tracking_url:'',updated_at:null});
 const safeUrl=url=>{const v=text(url,600);if(!v)return '';try{const u=new URL(v);return u.protocol==='https:'?u.toString():null;}catch{return null;}};
 function save(){
