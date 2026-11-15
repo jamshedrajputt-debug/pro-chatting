@@ -1,0 +1,328 @@
+'use strict';
+const $=id=>document.getElementById(id);
+const STATUS={pending:'Pending',confirmed:'Confirmed',in_progress:'In progress',quality_check:'Quality check',shipped:'Shipped',delivered:'Delivered',completed:'Completed',cancelled:'Cancelled'};
+const WCOL=['pending','in_progress','shipped','completed'];
+const state={me:null,orders:[],stats:null,view:'overview',selected:null,files:[],busy:false};
+const toastTimer={id:null};
+function node(tag,className,text){const e=document.createElement(tag);if(className)e.className=className;if(text!==undefined)e.textContent=String(text);return e}
+function time(s){const d=new Date(s);return Number.isFinite(d.getTime())?d.toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'}):'—'}
+function day(s){const d=new Date(s);return Number.isFinite(d.getTime())?d.toLocaleDateString(undefined,{day:'2-digit',month:'short',year:'numeric'}):'—'}
+function moneyless(v){return v===undefined||v===null||v===''?'—':String(v)}
+function statusName(s){return STATUS[s]||String(s||'Unknown')}
+function toast(message,isError=false){const t=$('toast');t.textContent=message;t.className='toast'+(isError?' error':'');clearTimeout(toastTimer.id);toastTimer.id=setTimeout(()=>t.classList.add('hidden'),4500)}
+async function api(url,options={}){
+  const headers={...options.headers};
+  if(options.body!==undefined&&!(options.body instanceof FormData))headers['Content-Type']='application/json';
+  if(state.me&&state.me.csrf)headers['x-csrf-token']=state.me.csrf;
+  let response;
+  try{response=await fetch(url,{credentials:'same-origin',...options,headers})}
+  catch{throw Error('Cannot connect. Check your internet and refresh.')}
+  const data=await response.json().catch(()=>({detail:'Server error'}));
+  if(!response.ok){
+    if(response.status===401&&state.me){resetApp();toast('Session expired. Please sign in again.',true)}
+    throw Error(data.detail||'Request failed');
+  }
+  return data;
+}
+function resetApp(){
+  state.me=null;state.orders=[];state.selected=null;
+  $('loginShell').classList.remove('hidden');$('dashboardShell').classList.add('hidden');
+  closeDrawer();$('loginPassword').value='';
+}
+function setLoggedIn(me){
+  state.me=me;$('loginShell').classList.add('hidden');$('dashboardShell').classList.remove('hidden');
+  $('userName').textContent=me.username;
+  $('userRole').textContent=me.role==='staff'?'Staff / Production':'Customer';
+  $('userAvatar').textContent=me.username.slice(0,2).toUpperCase();
+  $('addOrderButton').classList.toggle('hidden',me.role!=='customer');
+  for(const e of document.querySelectorAll('.staff-only'))e.classList.toggle('hidden',me.role!=='staff');
+  for(const e of document.querySelectorAll('.customer-only'))e.classList.toggle('hidden',me.role!=='customer');
+}
+async function refresh({silent=false}={}){
+  if(state.busy)return;
+  state.busy=true;
+  try {
+    const [list,dash]=await Promise.all([api('/api/orders'),api('/api/dashboard')]);
+    state.orders=list.orders||[];state.stats=dash.stats;
+    $('navOrderCount').textContent=state.orders.length;
+    renderStats();renderOrders();renderWorkflow();
+    if(state.selected){
+      const current=state.orders.find(o=>o.id===state.selected.id);
+      if(current)renderDetail(current);
+    }
+    if(!silent)toast('Dashboard is up to date');
+  } catch(ex){if(!silent)toast(ex.message,true)}
+  finally{state.busy=false}
+}
+function renderStats(){
+  const s=state.stats||{total:0,active:0,shipped:0,completed:0};
+  $('statTotal').textContent=s.total;
+  $('statActive').textContent=s.active;
+  $('statShipped').textContent=s.shipped;
+  $('statDone').textContent=s.completed;
+}
+function renderWorkflow(){
+  const wrap=$('workflowList');wrap.replaceChildren();
+  const by=(state.stats&&state.stats.by_status)||{};
+  const data=[
+    ['Waiting',(by.pending||0)+(by.confirmed||0)],
+    ['In production',(by.in_progress||0)+(by.quality_check||0)],
+    ['In transit',(by.shipped||0)],
+    ['Finished',(by.delivered||0)+(by.completed||0)]
+  ];
+  const total=(state.stats&&state.stats.total)||0;
+  for(const [label,value] of data){
+    const item=node('div','workflow-item');
+    const header=node('div','workflow-label');header.append(node('span','',label),node('span','',value));
+    const progress=node('div','progress');const fill=node('span');fill.style.width=(total?Math.round(100*value/total):0)+'%';progress.append(fill);
+    item.append(header,progress);wrap.append(item);
+  }
+}
+function filterOrders(){
+  const q=$('orderSearch').value.toLowerCase().trim();
+  const status=$('statusFilter').value;
+  let list=state.orders.filter(o=>status==='all'||o.status===status);
+  if(state.view==='tracking')list=list.filter(o=>o.shipping?.tracking_id||o.return_shipping?.tracking_id||['shipped','delivered'].includes(o.status));
+  if(q)list=list.filter(o=>[
+    o.reference,o.title,o.customer,o.colour,o.size,o.comments,
+    o.shipping?.tracking_id,o.shipping?.courier,o.return_shipping?.tracking_id
+  ].some(v=>String(v||'').toLowerCase().includes(q)));
+  if(state.view==='overview')list=list.slice(0,7);
+  return list;
+}
+function renderOrders(){
+  const list=filterOrders(),tbody=$('orderRows');tbody.replaceChildren();
+  $('resultCount').textContent=list.length+' order'+(list.length===1?'':'s')+' displayed';
+  $('emptyState').classList.toggle('hidden',list.length>0);
+  for(const o of list){
+    const tr=node('tr');tr.dataset.id=o.id;tr.tabIndex=0;tr.setAttribute('role','button');tr.setAttribute('aria-label','Open '+o.reference);
+    const first=node('td');const desc=node('div','order-desc');
+    const img=node('img');img.src=o.photos?.[0]||'';img.alt='Dress image';img.loading='lazy';img.onerror=()=>{img.style.visibility='hidden'};
+    const txt=node('div','order-txt');txt.append(node('b','',o.title),node('small','mono',o.reference));desc.append(img,txt);first.append(desc);
+    const customer=node('td','',moneyless(o.customer));
+    const date=node('td','',day(o.created_at));
+    const st=node('td');st.append(node('span','status-pill status-'+o.status,statusName(o.status)));
+    const tracking=node('td','mono',o.shipping?.tracking_id||'Not added');
+    const arrow=node('td','table-arrow','›');
+    tr.append(first,customer,date,st,tracking,arrow);
+    tr.addEventListener('click',()=>openDetail(o.id));
+    tr.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openDetail(o.id)}});
+    tbody.append(tr);
+  }
+}
+function navigate(view){
+  state.view=view;
+  $('sidebar').classList.remove('open');
+  const names={overview:'Overview',orders:'All orders',tracking:'Shipment tracking'};
+  $('breadcrumb').textContent=names[view];
+  $('viewHeading').textContent=names[view];
+  $('viewSubtitle').textContent=view==='overview'?'Your orders, progress and updates in one place.':view==='orders'?'Search, review and manage every dress order.':'Track outgoing parcels and return shipments.';
+  $('listHeading').textContent=view==='overview'?'Recent orders':view==='orders'?'All dress orders':'Tracking & shipments';
+  $('listSubtitle').textContent=view==='overview'?'Follow the latest order activity':view==='orders'?'All the orders available to your account':'Orders with shipment activity';
+  $('showAllButton').classList.toggle('hidden',view!=='overview');
+  for(const nav of document.querySelectorAll('[data-nav]'))nav.classList.toggle('active',nav.dataset.nav===view);
+  renderOrders();
+}
+function openDrawer(id){
+  $('overlay').classList.remove('hidden');
+  $(id).classList.remove('hidden');
+  document.body.style.overflow='hidden';
+}
+function closeDrawer(){
+  $('overlay').classList.add('hidden');
+  $('createDrawer').classList.add('hidden');
+  $('detailDrawer').classList.add('hidden');
+  document.body.style.overflow='';
+}
+function openCreate(){if(state.me?.role!=='customer')return;openDrawer('createDrawer')}
+function imageItem(file,index){
+  const card=node('div','preview-card');const img=node('img');img.src=URL.createObjectURL(file);img.onload=()=>URL.revokeObjectURL(img.src);img.alt='Reference photo '+(index+1);
+  const remove=node('button','','×');remove.type='button';remove.setAttribute('aria-label','Remove photo '+(index+1));
+  remove.onclick=()=>{state.files.splice(index,1);renderImagePreview()};
+  card.append(img,remove);return card;
+}
+function renderImagePreview(){
+  const wrap=$('photoPreviews');wrap.replaceChildren();
+  state.files.forEach((f,i)=>wrap.append(imageItem(f,i)));
+  $('photoCount').textContent=state.files.length+' of 8 images selected';
+}
+function readAsDataURL(file){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(Error('Unable to read photo'));r.readAsDataURL(file)})}
+async function compress(file){
+  if(file.size<=2000000)return readAsDataURL(file);
+  const url=URL.createObjectURL(file);
+  try {
+    const image=new Image();
+    await new Promise((resolve,reject)=>{image.onload=resolve;image.onerror=()=>reject(Error('Cannot open selected image'));image.src=url});
+    const ratio=Math.min(1,1800/Math.max(image.width,image.height));
+    const canvas=document.createElement('canvas');canvas.width=Math.round(image.width*ratio);canvas.height=Math.round(image.height*ratio);
+    const ctx=canvas.getContext('2d');if(!ctx)throw Error('Photo processing unavailable');
+    ctx.fillStyle='white';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(image,0,0,canvas.width,canvas.height);
+    let result=canvas.toDataURL('image/jpeg',0.82);
+    if(result.length>3300000)result=canvas.toDataURL('image/jpeg',0.64);
+    return result;
+  }finally{URL.revokeObjectURL(url)}
+}
+async function submitOrder(event){
+  event.preventDefault();
+  if(!state.files.length){toast('Please attach at least one dress picture',true);return}
+  const btn=$('submitOrderButton');btn.disabled=true;btn.textContent='Uploading...';
+  try{
+    const images=await Promise.all(state.files.map(compress));
+    const body={
+      title:$('dressTitle').value,size:$('dressSize').value,colour:$('dressColour').value,
+      quantity:Number($('dressQty').value),comments:$('dressComments').value,images
+    };
+    const data=await api('/api/orders',{method:'POST',body:JSON.stringify(body)});
+    $('newOrderForm').reset();state.files=[];renderImagePreview();closeDrawer();
+    await refresh({silent:true});
+    navigate('orders');toast('Order '+data.order.reference+' created successfully');
+    openDetail(data.order.id);
+  }catch(ex){toast(ex.message,true)}
+  finally{btn.disabled=false;btn.textContent='Submit order →'}
+}
+function appendDetail(label,value){
+  const item=node('div','detail-item');item.append(node('small','',label),node('b','',moneyless(value)));return item;
+}
+function renderShipping(o){
+  const box=$('shippingInfo');box.replaceChildren();
+  const s=o.shipping||{};
+  if(s.tracking_id||s.courier){
+    box.append(node('b','','Outbound: '+(s.tracking_id||'Awaiting number')));
+    box.append(node('span','','Courier: '+(s.courier||'Not specified')));
+    if(s.tracking_url&&s.tracking_url.startsWith('https://')){
+      const link=node('a','','Open courier tracking ↗');link.href=s.tracking_url;link.target='_blank';link.rel='noopener noreferrer';box.append(link);
+    }
+  }else box.append(node('span','muted','Staff have not added outward tracking yet.'));
+  if(o.return_shipping?.tracking_id){
+    box.append(node('b','','Return tracking: '+o.return_shipping.tracking_id));
+    box.append(node('span','','Return courier: '+(o.return_shipping.courier||'—')));
+    if(o.return_shipping.note)box.append(node('span','','Return note: '+o.return_shipping.note));
+  }
+}
+function renderMessages(o){
+  const wrap=$('messageThread');wrap.replaceChildren();
+  const messages=o.messages||[];
+  if(!messages.length)wrap.append(node('p','muted tiny','No messages yet. Ask a question or post an update.'));
+  for(const m of messages){
+    const item=node('div','message-item'+(m.by===state.me?.username?' mine':''));
+    item.append(node('div','msg-meta',m.by+' · '+time(m.at)),node('div','',m.text));
+    wrap.append(item);
+  }
+  wrap.scrollTop=wrap.scrollHeight;
+}
+function renderHistory(o){
+  const wrap=$('detailHistory');wrap.replaceChildren();
+  const items=(o.history||[]).slice().reverse().slice(0,50);
+  if(!items.length)wrap.append(node('p','muted tiny','No activity recorded'));
+  for(const h of items){
+    const item=node('div','timeline-item');
+    item.append(node('b','',h.label||('Status: '+(h.new_status||'updated'))),node('small','',((h.by||h.username||'Staff')+' · '+time(h.at||h.created_at))));
+    wrap.append(item);
+  }
+}
+function renderDetail(o){
+  state.selected=o;
+  $('detailRef').textContent=o.reference;
+  $('detailTitle').textContent=o.title;
+  $('detailMeta').textContent=(o.customer||'Customer')+' · Ordered '+day(o.created_at);
+  $('detailStatus').textContent=statusName(o.status);
+  $('detailStatus').className='status-pill status-'+o.status;
+  $('detailUpdated').textContent='Updated '+day(o.updated_at);
+  const grid=$('detailGrid');grid.replaceChildren(
+    appendDetail('Size',o.size),appendDetail('Colour',o.colour),
+    appendDetail('Quantity',o.quantity),appendDetail('Submitted by',o.customer),
+    appendDetail('Order reference',o.reference),appendDetail('Created',time(o.created_at))
+  );
+  $('detailComments').textContent=o.comments||'No custom instructions added.';
+  const gallery=$('detailPhotos');gallery.replaceChildren();
+  for(let i=0;i<(o.photos||[]).length;i++){
+    const img=node('img');img.src=o.photos[i];img.alt='Dress reference photo '+(i+1);
+    img.title='Open full image';img.onclick=()=>window.open(img.src,'_blank','noopener');
+    gallery.append(img);
+  }
+  renderShipping(o);renderMessages(o);renderHistory(o);
+  if(state.me.role==='staff'){
+    $('detailStatusSelect').value=o.status;
+    $('staffNote').value=o.staff_note||'';
+    $('shippingCourier').value=o.shipping?.courier||'';
+    $('shippingId').value=o.shipping?.tracking_id||'';
+    $('shippingUrl').value=o.shipping?.tracking_url||'';
+  }else{
+    $('returnCourier').value=o.return_shipping?.courier||'';
+    $('returnId').value=o.return_shipping?.tracking_id||'';
+    $('returnNote').value=o.return_shipping?.note||'';
+    const info=$('returnInfo');info.replaceChildren();
+    info.append(node('span','',o.return_shipping?.tracking_id?'Latest return: '+o.return_shipping.tracking_id:'No return tracking submitted yet'));
+  }
+}
+function openDetail(id){
+  const o=state.orders.find(o=>o.id===id);
+  if(!o)return toast('Order not found',true);
+  renderDetail(o);openDrawer('detailDrawer');
+}
+async function saveAndRefresh(path,method,payload,success){
+  try{
+    const id=state.selected?.id;if(!id)throw Error('Select an order first');
+    await api('/api/orders/'+id+path,{method,body:JSON.stringify(payload)});
+    await refresh({silent:true});
+    toast(success);
+  }catch(ex){toast(ex.message,true)}
+}
+async function init(){
+  $('passwordToggle').onclick=()=>{
+    const input=$('loginPassword');input.type=input.type==='password'?'text':'password';
+    $('passwordToggle').textContent=input.type==='password'?'Show':'Hide';
+  };
+  $('loginForm').onsubmit=async e=>{
+    e.preventDefault();const btn=$('signInButton');btn.disabled=true;
+    try{
+      const data=await api('/api/login',{method:'POST',body:JSON.stringify({username:$('loginName').value,password:$('loginPassword').value})});
+      $('loginPassword').value='';setLoggedIn(data);navigate('overview');await refresh({silent:true});toast('Welcome to FlyXJ');
+    }catch(ex){toast(ex.message,true)}
+    finally{btn.disabled=false}
+  };
+  $('logoutButton').onclick=async()=>{try{await api('/api/logout',{method:'POST'})}catch{}resetApp()};
+  $('menuToggle').onclick=()=>$('sidebar').classList.toggle('open');
+  $('refreshButton').onclick=()=>refresh();
+  $('addOrderButton').onclick=openCreate;
+  $('showAllButton').onclick=()=>navigate('orders');
+  $('helpAction').onclick=()=>navigate('orders');
+  for(const el of document.querySelectorAll('[data-nav]'))el.onclick=()=>navigate(el.dataset.nav);
+  $('statusFilter').onchange=renderOrders;
+  $('orderSearch').oninput=renderOrders;
+  $('overlay').onclick=closeDrawer;
+  for(const el of document.querySelectorAll('[data-close]'))el.onclick=closeDrawer;
+  document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDrawer()});
+  $('dressPhotos').onchange=e=>{
+    const newFiles=Array.from(e.target.files||[]);
+    for(const file of newFiles){
+      if(state.files.length>=8){toast('Maximum 8 photos allowed',true);break}
+      if(!['image/jpeg','image/png','image/webp'].includes(file.type)){toast('Please select JPG, PNG or WebP images',true);continue}
+      if(file.size>12000000){toast('This photo is too large (12 MB maximum original)',true);continue}
+      state.files.push(file);
+    }
+    e.target.value='';
+    renderImagePreview();
+  };
+  $('newOrderForm').onsubmit=submitOrder;
+  $('statusForm').onsubmit=async e=>{
+    e.preventDefault();
+    await saveAndRefresh('/status','PATCH',{status:$('detailStatusSelect').value,staff_note:$('staffNote').value},'Order status updated');
+  };
+  $('shippingForm').onsubmit=async e=>{
+    e.preventDefault();
+    await saveAndRefresh('/shipping','PATCH',{courier:$('shippingCourier').value,tracking_id:$('shippingId').value,tracking_url:$('shippingUrl').value},'Tracking sent to customer');
+  };
+  $('returnForm').onsubmit=async e=>{
+    e.preventDefault();
+    await saveAndRefresh('/return','POST',{courier:$('returnCourier').value,tracking_id:$('returnId').value,note:$('returnNote').value},'Return tracking sent to FlyXJ');
+  };
+  $('messageForm').onsubmit=async e=>{
+    e.preventDefault();const message=$('messageInput').value;
+    await saveAndRefresh('/messages','POST',{message},'Message sent');
+    $('messageInput').value='';
+  };
+  try{const me=await api('/api/me');setLoggedIn(me);navigate('overview');await refresh({silent:true})}catch{resetApp()}
+  setInterval(()=>{if(state.me&&document.visibilityState==='visible')refresh({silent:true})},45000);
+}
+init();
