@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FlyXJ Order Manager</title>
+<style>
+:root{font-family:system-ui,Arial,sans-serif;color:#172133;background:#f3f5f9}*{box-sizing:border-box}body{margin:0}header{background:#141d2b;color:#fff;padding:18px 20px;font-size:24px;font-weight:800;letter-spacing:1px}main{max-width:900px;margin:24px auto;padding:0 14px}.panel,.order{background:#fff;border-radius:14px;padding:22px;margin-bottom:18px;box-shadow:0 1px 8px #15213a13}h2{font-size:20px;margin-top:0}label{display:block;margin:12px 0 5px;font-size:14px;font-weight:600}input,select,textarea{width:100%;padding:12px;border:1px solid #d1d6df;border-radius:9px;font:inherit}textarea{min-height:76px}button{border:0;border-radius:9px;background:#233b66;color:white;padding:12px 17px;font:inherit;font-weight:650;cursor:pointer;margin:8px 6px 4px 0}button.sub{background:#e8ecf4;color:#243650}#app,#newOrder{display:none}.flex{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.muted{color:#576272;font-size:14px}img.orderPhoto{max-width:100%;max-height:240px;object-fit:contain;border-radius:8px}.badge{padding:5px 10px;background:#eef2f9;border-radius:20px;font-size:12px;font-weight:bold}.notice{padding:11px;background:#fff4d6;border-radius:8px;color:#76560c;font-size:13px}#message{margin:12px 0;color:#a33131}hr{border:0;border-top:1px solid #e8edf2;margin:20px 0}small{color:#677388}
+</style></head><body><header>FLYXJ | Order Manager</header><main>
+<p class="notice">Free test server: orders and photos may be lost if hosting restarts. Keep your own copies.</p>
+<div id="message" role="status"></div>
+<section class="panel" id="login"><h2>Login</h2>
+<label>Username</label><input id="username" autocomplete="username">
+<label>Password</label><input id="password" type="password" autocomplete="current-password">
+<button id="loginBtn">Sign in</button></section>
+<div id="app">
+<div class="panel flex"><div><h2 style="margin:0">Orders</h2><span id="welcome" class="muted"></span></div><div><button class="sub" id="refreshBtn">Refresh</button><button class="sub" id="logoutBtn">Logout</button></div></div>
+<section class="panel" id="newOrder"><h2>Add dress order</h2>
+<form id="orderForm"><label>Dress description / title</label><input id="title" required minlength="2" maxlength="120">
+<div class="flex"><div style="flex:1;min-width:140px"><label>Size</label><select id="size"><option>XXS</option><option>XS</option><option>S</option><option selected>M</option><option>L</option><option>XL</option><option>2XL</option><option>3XL</option><option>4XL</option><option>5XL</option><option>CUSTOM</option></select></div><div style="flex:1;min-width:140px"><label>Colour</label><input id="colour" placeholder="Black" required></div><div style="flex:1;min-width:100px"><label>Quantity</label><input id="quantity" type="number" value="1" min="1" max="1000"></div></div>
+<label>Dress picture (JPG / PNG / WebP, max 4MB)</label><input id="photo" type="file" accept="image/jpeg,image/png,image/webp" required>
+<label>Custom changes / comments</label><textarea id="comments" maxlength="2000" placeholder="Any special measurements or suggestions"></textarea>
+<button type="submit" id="submitBtn">Upload order</button></form></section>
+<div id="orders"></div></div>
+</main><script>
+let me=null;
+function $(id){return document.getElementById(id)}
+function notice(t){$('message').textContent=t||''}
+function el(tag,cls,txt){const x=document.createElement(tag);if(cls)x.className=cls;if(txt!==undefined)x.textContent=txt;return x}
+async function request(url,options={}){const headers={};if(!(options.body instanceof FormData))headers['Content-Type']='application/json';if(me&&me.csrf)headers['x-csrf-token']=me.csrf;const r=await fetch(url,{credentials:'same-origin',...options,headers:{...headers,...options.headers}});let data;try{data=await r.json()}catch{data={}}if(!r.ok)throw Error(data.detail||'Request failed');return data}
+function showLogin(){me=null;$('login').style.display='block';$('app').style.display='none'}
+function showApp(user){me=user;$('login').style.display='none';$('app').style.display='block';$('newOrder').style.display=user.role==='staff'?'none':'block';$('welcome').textContent=user.username+' · '+user.role}
+$('loginBtn').onclick=async()=>{notice('');try{const d=await request('/api/login',{method:'POST',body:JSON.stringify({username:$('username').value,password:$('password').value})});$('password').value='';showApp(d);await loadOrders()}catch(e){notice(e.message)}};
+$('logoutBtn').onclick=async()=>{try{await request('/api/logout',{method:'POST'})}catch(e){}showLogin()};
+$('refreshBtn').onclick=loadOrders;
+function statusLabel(s){return s==='in_progress'?'In progress':s==='completed'?'Completed':'Pending'}
+async function loadOrders(){notice('');try{const data=await request('/api/orders');const container=$('orders');container.replaceChildren();if(!data.orders.length){container.appendChild(el('div','panel','No orders yet.'));return}
+for(const o of data.orders){const card=el('div','order');const row=el('div','flex');row.append(el('h2','',('#'+o.id+' — '+o.title)),el('span','badge',statusLabel(o.status)));card.append(row);
+const pic=el('img','orderPhoto');pic.src=o.photo_url;pic.alt='Dress photo';card.append(pic);
+card.append(el('p','',('From '+o.ordered_by+' · Size '+o.size+' · Colour '+o.colour+' · Qty '+o.quantity)));
+if(o.comments)card.append(el('p','',('Comments: '+o.comments)));
+if(o.staff_note)card.append(el('p','',('Staff note: '+o.staff_note)));
+card.append(el('small','',new Date(o.created_at).toLocaleString()));
+if(me.role==='staff'){card.append(el('hr'));const select=el('select');for(const s of ['pending','in_progress','completed']){const opt=el('option','',statusLabel(s));opt.value=s;select.append(opt)}select.value=o.status;const note=el('textarea');note.placeholder='Staff note';note.value=o.staff_note||'';const btn=el('button','','Save status');btn.onclick=async()=>{try{await request('/api/orders/'+o.id+'/status',{method:'PATCH',body:JSON.stringify({status:select.value,staff_note:note.value})});await loadOrders()}catch(e){notice(e.message)}};card.append(select,note,btn)}container.append(card)}
+}catch(e){notice(e.message);if(e.message.includes('log in'))showLogin()}}
+$('orderForm').onsubmit=async(e)=>{e.preventDefault();notice('');const file=$('photo').files[0];if(!file){notice('Choose a photo');return}if(file.size>4000000){notice('Picture too large. Choose one under 4 MB');return}
+try{const photo=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(file)});
+$('submitBtn').disabled=true;await request('/api/orders',{method:'POST',body:JSON.stringify({title:$('title').value,size:$('size').value,colour:$('colour').value,quantity:Number($('quantity').value),comments:$('comments').value,photo})});$('orderForm').reset();await loadOrders();notice('Order uploaded successfully.')}catch(err){notice(err.message)}finally{$('submitBtn').disabled=false}};
+(async()=>{try{const u=await request('/api/me');showApp(u);await loadOrders()}catch{showLogin()}})();
+</script></body></html>
