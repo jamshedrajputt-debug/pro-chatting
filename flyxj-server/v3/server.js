@@ -3,10 +3,11 @@ const express = require('express');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const zlib = require('zlib');
 
 const app = express();
 app.disable('x-powered-by');
-app.use(express.json({limit:'40mb'}));
+app.use(express.json({limit:'90mb'}));
 app.use((req,res,next)=>{
   res.set('X-Content-Type-Options','nosniff');
   res.set('X-Frame-Options','DENY');
@@ -102,12 +103,24 @@ function financeRow(o){
  cost_pkr:cost,profit_pkr:profit,sale_usd:usd(sale),making_usd:usd(making),shipping_usd:usd(shipping),
  cost_usd:usd(cost),profit_usd:usd(profit),fx_pkr_per_usd:fx};
 }
-function parsePdf(raw) {
- if(typeof raw!=='string'||raw.length>8400000)return null;
- const m=/^data:application\/pdf;base64,([A-Za-z0-9+/]+={0,2})$/.exec(raw);
+const MAX_PDF_BYTES=30*1024*1024;
+function parsePdf(raw){
+ // Plain PDFs and losslessly gzip-compressed PDFs are both supported.
+ // Gzip is decompressed with an output cap to prevent zip bombs.
+ if(typeof raw!=='string'||raw.length>Math.ceil(MAX_PDF_BYTES*4/3)+1024)return null;
+ const m=/^data:application\/(pdf|x-flyxj-pdf\+gzip);base64,([A-Za-z0-9+/]+={0,2})$/.exec(raw);
  if(!m)return null;
- const buffer=Buffer.from(m[1],'base64');
- return buffer.length>=25&&buffer.length<=6000000&&buffer.subarray(0,5).toString()==='%PDF-'?buffer:null;
+ let bytes=Buffer.from(m[2],'base64');
+ if(bytes.length>MAX_PDF_BYTES)return null;
+ if(m[1]==='x-flyxj-pdf+gzip'){
+  if(bytes.length<10||bytes[0]!==0x1f||bytes[1]!==0x8b)return null;
+  try{bytes=zlib.gunzipSync(bytes,{maxOutputLength:MAX_PDF_BYTES})}catch{return null}
+ }
+ if(bytes.length<20||bytes.length>MAX_PDF_BYTES)return null;
+ // Allow headers after whitespace, BOM or benign preamble (per PDF-reader tolerances).
+ const offset=bytes.indexOf('%PDF-');
+ if(offset<0||offset>1024)return null;
+ return bytes;
 }
 function storedAttachment(req,res,folder,filename,mime,download=false){
  if(!filename||!/^[a-f0-9-]{36}\.(jpg|png|webp|pdf)$/.test(filename))return err(res,404,'Attachment missing');
@@ -277,7 +290,7 @@ app.post('/api/orders',auth,csrf,(req,res)=>{
   const id=orders.reduce((n,o)=>Math.max(n,Number(o.id)||0),0)+1;
   const created_at=now(),reference='FXJ-'+new Date().getUTCFullYear()+'-'+String(id).padStart(6,'0');
   const pdfBytes=parsePdf(v.pdf);
-  if(!pdfBytes)return err(res,400,'PDF attachment is mandatory for each order (PDF under 6MB).');
+  if(!pdfBytes)return err(res,400,'Attach a valid PDF under 30 MB. Auto-compressed upload is supported.');
   const keys=['bust','waist','hips','shoulder','sleeve','length','inseam','neck','other'];
   const measurements={};
   if(v.measurements&&typeof v.measurements==='object'&&!Array.isArray(v.measurements))
@@ -586,7 +599,7 @@ app.post('/api/restore',auth,csrf,(req,res)=>{
  for(const key of ['photos','pdfs','chat_photos']){
   if(!Array.isArray(b[key])||b[key].length>12000)return err(res,400,'Invalid backup attachments');
   for(const f of b[key]){
-   if(!/^[a-f0-9-]{36}\.(jpg|png|webp|pdf)$/.test(f?.name||'')||typeof f.data!=='string'||f.data.length>9000000)
+   if(!/^[a-f0-9-]{36}\.(jpg|png|webp|pdf)$/.test(f?.name||'')||typeof f.data!=='string'||f.data.length>(f.name.endsWith('.pdf')?Math.ceil(MAX_PDF_BYTES*4/3)+1024:9000000))
     return err(res,400,'Unsafe backup attachment');
   }
  }
@@ -604,5 +617,10 @@ app.use('/assets',express.static(path.join(__dirname,'assets'),{index:false,maxA
 app.use('/assets',express.static(path.join(__dirname,'../v2/assets'),{index:false,maxAge:'5m'}));
 app.get('/',(req,res)=>res.sendFile(path.join(__dirname,'index.html')));
 app.use((req,res)=>err(res,404,'Not found'));
+app.use((error,req,res,next)=>{
+ if(error?.type==='entity.too.large')return err(res,413,'Upload exceeds server size limit. PDF maximum is 30 MB; reduce photos too.');
+ console.error('Request error:',error?.message||String(error));
+ return err(res,400,'Invalid upload data. Please retry with a valid PDF.');
+});
 const PORT=Number(process.env.PORT)||10000;
 app.listen(PORT,'0.0.0.0',()=>console.log('FlyXJ dashboard v3 listening on '+PORT));
