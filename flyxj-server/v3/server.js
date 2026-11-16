@@ -615,6 +615,7 @@ app.post('/api/restore',auth,csrf,(req,res)=>{
 
 app.use('/assets',express.static(path.join(__dirname,'assets'),{index:false,maxAge:'5m'}));
 app.use('/assets',express.static(path.join(__dirname,'../v2/assets'),{index:false,maxAge:'5m'}));
+app.get('/chat',(req,res)=>res.sendFile(path.join(__dirname,'mobile-chat.html')));
 app.get('/',(req,res)=>res.sendFile(path.join(__dirname,'index.html')));
 app.use((req,res)=>err(res,404,'Not found'));
 app.use((error,req,res,next)=>{
