@@ -1,0 +1,30 @@
+name: FlyXJ V3 Verification
+on:
+  push:
+    branches: [flyxj-orders-render-free]
+    paths:
+      - 'flyxj-server/v3/**'
+      - '.github/workflows/flyxj-v3.yml'
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --omit=dev
+      - name: Check JavaScript syntax
+        run: |
+          node --check flyxj-server/v3/server.js
+          node --check flyxj-server/v3/pdf.js
+          node --check flyxj-server/v3/assets/app.js
+          node --check flyxj-server/v3/assets/order-extra.js
+          node --check flyxj-server/v3/assets/finance-extra.js
+          node --check flyxj-server/v3/assets/chat-extra.js
+          node --check flyxj-server/v3/assets/init-extra.js
+      - name: Check order-manager integration
+        run: node --test flyxj-server/v3/tests/integration.test.js
