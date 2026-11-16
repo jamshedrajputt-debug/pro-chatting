@@ -160,7 +160,7 @@ app.get('/api/events',auth,(req,res)=>{
   const heartbeat=setInterval(()=>{
     try{res.write(': keep-alive\n\n')}catch{clearInterval(heartbeat);trackingClients.delete(client)}
   },25000);
-  req.on('close',()=>{clearInterval(heartbeat);trackingClients.delete(client)});
+  res.on('close',()=>{clearInterval(heartbeat);trackingClients.delete(client)});
 });
 app.get('/api/dashboard',auth,(req,res)=>{
   const allowed=orders.filter(o=>canView(req.user,o));
