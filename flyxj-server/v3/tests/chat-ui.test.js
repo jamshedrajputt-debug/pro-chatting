@@ -4,6 +4,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
 const {JSDOM}=require('jsdom');
+const vm=require('node:vm');
 const root=path.resolve(__dirname,'..');
 const wait=ms=>new Promise(done=>setTimeout(done,ms));
 test('Android chat bubble opens a real popup and sends a customer message',async()=>{
@@ -24,8 +25,10 @@ test('Android chat bubble opens a real popup and sends a customer message',async
   return {ok:true,status:200,json:async()=>payload};
  };
  // Load scripts in exactly the same order as the real deferred webpage.
+ const browserContext=dom.getInternalVMContext();
  for(const script of ['app.js','order-extra.js','chat-extra.js','finance-extra.js','init-extra.js']){
-  win.eval(fs.readFileSync(path.join(root,'assets',script),'utf8'));
+  // Real <script> execution shares top-level bindings; strict eval() does not.
+  vm.runInContext(fs.readFileSync(path.join(root,'assets',script),'utf8'),browserContext,{filename:script});
  }
  try{
   await wait(140);
