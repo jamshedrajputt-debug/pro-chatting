@@ -5,14 +5,36 @@ function readMeasurements(){
  for(const [name,id] of Object.entries(map))if($(id).value.trim())result[name]=$(id).value.trim();
  return result;
 }
+const MAX_UPLOAD_PDF_BYTES=30*1024*1024;
 async function readRequiredPdf(){
- const file=$('orderPdf').files?.[0];
- if(!file)throw Error('Attach specification PDF (required)');
- if(file.size<25||file.size>6000000)throw Error('PDF must be under 6 MB');
- const raw=await readAsDataURL(file);
- const result=raw.replace(/^data:[^;]*;base64,/,'data:application/pdf;base64,');
- if(!result.startsWith('data:application/pdf;base64,JVBER'))throw Error('Choose a valid PDF');
- return result;
+ const file=$('orderPdf').files?.[0],message=$('pdfCompressStatus');
+ if(!file)throw Error('PDF file attach karna zaroori hai.');
+ if(file.size<20||file.size>MAX_UPLOAD_PDF_BYTES)throw Error('PDF must be below 30 MB. Please choose a smaller PDF.');
+ const first=new Uint8Array(await file.slice(0,1030).arrayBuffer());
+ let found=false;
+ for(let i=0;i<=first.length-5;i++){
+   if(first[i]===37&&first[i+1]===80&&first[i+2]===68&&first[i+3]===70&&first[i+4]===45){
+     found=true;break;
+   }
+ }
+ if(!found)throw Error('Selected file is not a valid PDF. Please select a .pdf document.');
+ if(message)message.textContent='Preparing PDF... Checking automatic compression.';
+ // Lossless compression of the upload payload where browser supports it.
+ // Not every PDF shrinks, so upload the original unchanged as a safe fallback.
+ if(typeof CompressionStream!=='undefined'&&typeof file.stream==='function'){
+   try{
+     const zipped=await new Response(file.stream().pipeThrough(new CompressionStream('gzip'))).blob();
+     if(zipped.size>0&&zipped.size<file.size*.94){
+       const typed=new Blob([zipped],{type:'application/x-flyxj-pdf+gzip'});
+       if(message)message.textContent='PDF automatically compressed for upload ('+Math.round(100*(1-zipped.size/file.size))+'% smaller).';
+       return await readAsDataURL(typed);
+     }
+   }catch(ex){
+     console.warn('Optional PDF transfer compression not available; using original PDF.');
+   }
+ }
+ if(message)message.textContent='PDF ready. Original quality will be kept.';
+ return await readAsDataURL(new Blob([file],{type:'application/pdf'}));
 }
 function formatAmount(value,currency='PKR'){
  const n=Number(value);
