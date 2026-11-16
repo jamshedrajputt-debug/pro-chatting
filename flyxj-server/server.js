@@ -1,4 +1,3 @@
 'use strict';
-// Entry point kept for existing Render configuration.
-// FlyXJ dashboard v2: multiple photos, tracking, conversation and progress.
-require('./v2/server.js');
+// FlyXJ order dashboard v3 is the active server. Keep this stable Render entrypoint.
+require('./v3/server.js');
