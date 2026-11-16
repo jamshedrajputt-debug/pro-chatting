@@ -426,6 +426,54 @@ app.patch('/api/orders/:id/finance',auth,csrf,(req,res)=>{
  try{save();pushOrder(o,'finance','Order pricing updated');res.json({order:publicOrder(o)})}catch{err(res,500,'Pricing save failed')}
 });
 
+
+function financialReport(req){
+ const list=orders.filter(o=>canView(req.user,o)&&isShipped(o)).map(financeRow).filter(Boolean)
+   .sort((a,b)=>new Date(a.date).getTime()-new Date(b.date).getTime());
+ const keys=['sale_pkr','making_pkr','shipping_pkr','cost_pkr','profit_pkr','sale_usd','making_usd','shipping_usd','cost_usd','profit_usd'];
+ const sum=(rows,k)=>Math.round(rows.reduce((n,o)=>n+(Number(o[k])||0),0)*100)/100;
+ const totals=Object.fromEntries(keys.map(k=>[k,sum(list,k)]));
+ const periods=(type,count)=>{
+  const today=new Date(),anchor=new Date(Date.UTC(today.getUTCFullYear(),today.getUTCMonth(),today.getUTCDate()));
+  if(type==='weekly')anchor.setUTCDate(anchor.getUTCDate()-(anchor.getUTCDay()+6)%7);
+  else anchor.setUTCDate(1);
+  const series=[];
+  for(let i=count-1;i>=0;i--){
+   const start=new Date(anchor);
+   if(type==='weekly')start.setUTCDate(start.getUTCDate()-i*7);
+   else start.setUTCMonth(start.getUTCMonth()-i);
+   const end=new Date(start);
+   if(type==='weekly')end.setUTCDate(end.getUTCDate()+7);
+   else end.setUTCMonth(end.getUTCMonth()+1);
+   const group=list.filter(o=>{const d=new Date(o.date);return d>=start&&d<end});
+   const row={date:start.toISOString().slice(0,10),
+    label:type==='weekly'?start.getUTCDate()+' '+start.toLocaleString('en',{month:'short',timeZone:'UTC'}):start.toLocaleString('en',{month:'short',year:'2-digit',timeZone:'UTC'}),
+    orders:group.length};
+   for(const k of keys)row[k]=sum(group,k);
+   series.push(row);
+  }
+  let cumulative=0;
+  for(const x of series){cumulative=Math.round((cumulative+x.profit_pkr)*100)/100;x.cumulative_profit_pkr=cumulative}
+  return series;
+ };
+ let runningPkr=0,runningUsd=0;
+ const rows=list.map(o=>{
+  runningPkr=Math.round((runningPkr+o.profit_pkr)*100)/100;
+  runningUsd=Math.round((runningUsd+o.profit_usd)*100)/100;
+  return {...o,cumulative_profit_pkr:runningPkr,cumulative_profit_usd:runningUsd};
+ });
+ return {rows,totals,count:rows.length,weekly:periods('weekly',10),monthly:periods('monthly',12),
+ disclaimer:'Gross profit = selling price minus making cost minus shipping cost. Excludes marketplace fees, taxes, refunds and other expenses. USD uses each order’s entered PKR/USD rate.'};
+}
+app.get('/api/finance',auth,(req,res)=>res.json(financialReport(req)));
+app.get('/api/finance.csv',auth,(req,res)=>{
+ const data=financialReport(req),keys=['reference','title','date','status','courier','tracking_id','sale_pkr','making_pkr','shipping_pkr','cost_pkr','profit_pkr','sale_usd','making_usd','shipping_usd','cost_usd','profit_usd','cumulative_profit_pkr','cumulative_profit_usd','fx_pkr_per_usd'];
+ const cell=v=>'"'+String(v??'').replaceAll('"','""')+'"';
+ res.set('Content-Type','text/csv; charset=utf-8');
+ res.set('Content-Disposition','attachment; filename="FLYXJ-financial-report.csv"');
+ res.send([keys.join(','),...data.rows.map(row=>keys.map(k=>cell(row[k])).join(','))].join('\r\n'));
+});
+
 app.use('/assets',express.static(path.join(__dirname,'assets'),{index:false,maxAge:'5m'}));
 app.use('/assets',express.static(path.join(__dirname,'../v2/assets'),{index:false,maxAge:'5m'}));
 app.get('/',(req,res)=>res.sendFile(path.join(__dirname,'index.html')));
