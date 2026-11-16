@@ -560,6 +560,46 @@ app.get('/api/orders/:id/summary.pdf',auth,(req,res)=>{
  res.send(require('./pdf.js')(lines));
 });
 
+
+// Free-hosting backup and recovery. Export sensitive private data only to authenticated staff.
+app.get('/api/backup.json',auth,(req,res)=>{
+ if(req.user.role!=='staff')return err(res,403,'Staff only');
+ const collect=(dir,names)=>[...new Set(names.filter(Boolean))].map(name=>{
+  const file=path.join(dir,name);
+  return {name,data:fs.existsSync(file)?fs.readFileSync(file).toString('base64'):null};
+ });
+ const archive={format:'flyxj-backup-v3',created_at:now(),orders,directChat,
+  additionalStaff,photos:collect(PHOTO_DIR,orders.flatMap(o=>[...(o.image_files||[]),...(o.finished_files||[])])),
+  pdfs:collect(PDF_DIR,orders.map(o=>o.pdf_file)),
+  chat_photos:collect(CHAT_PHOTO_DIR,directChat.map(m=>m.photo_file))};
+ res.set('Content-Type','application/json');
+ res.set('Content-Disposition','attachment; filename="FLYXJ-PRIVATE-backup.json"');
+ res.json(archive);
+});
+app.post('/api/restore',auth,csrf,(req,res)=>{
+ if(req.user.role!=='staff')return err(res,403,'Staff only');
+ if(req.get('x-confirm-restore')!=='REPLACE_ALL_DATA')return err(res,400,'Restore requires explicit confirmation');
+ const b=req.body;
+ if(b?.format!=='flyxj-backup-v3'||!Array.isArray(b.orders)||!Array.isArray(b.directChat)||!Array.isArray(b.additionalStaff)||
+ b.orders.length>1500||b.directChat.length>3000||b.additionalStaff.length>15)
+  return err(res,400,'Invalid backup');
+ for(const key of ['photos','pdfs','chat_photos']){
+  if(!Array.isArray(b[key])||b[key].length>12000)return err(res,400,'Invalid backup attachments');
+  for(const f of b[key]){
+   if(!/^[a-f0-9-]{36}\.(jpg|png|webp|pdf)$/.test(f?.name||'')||typeof f.data!=='string'||f.data.length>9000000)
+    return err(res,400,'Unsafe backup attachment');
+  }
+ }
+ try{
+  for(const [key,dir] of [['photos',PHOTO_DIR],['pdfs',PDF_DIR],['chat_photos',CHAT_PHOTO_DIR]]){
+   for(const file of b[key])if(file.data)fs.writeFileSync(path.join(dir,file.name),Buffer.from(file.data,'base64'));
+  }
+  orders=b.orders;directChat=b.directChat;additionalStaff=b.additionalStaff;
+  save();saveAtomic(CHAT_FILE,directChat);saveAtomic(STAFF_FILE,additionalStaff);
+  res.json({ok:true,orders:orders.length,chats:directChat.length});
+ }catch(e){console.error('Restore error:',e.message);err(res,500,'Restore incomplete: check backup')}
+});
+
 app.use('/assets',express.static(path.join(__dirname,'assets'),{index:false,maxAge:'5m'}));
 app.use('/assets',express.static(path.join(__dirname,'../v2/assets'),{index:false,maxAge:'5m'}));
 app.get('/',(req,res)=>res.sendFile(path.join(__dirname,'index.html')));
