@@ -48,6 +48,16 @@ test('Android chat bubble opens a real popup and sends a customer message',async
   assert.ok(sent,'chat message POST performed');
   assert.equal(JSON.parse(sent.body).message,'Hi, order tracking please');
   assert.match(doc.getElementById('chatMessages').textContent,/Hi, order tracking please/);
+  assert.equal(button.getAttribute('href'),'/chat','bubble is also a reliable Android navigation link');
+  Object.defineProperty(win.navigator,'userAgent',{value:'Mozilla/5.0 (Linux; Android 14; Pixel 8; wv) AppleWebKit/537.36',configurable:true});
+  let androidDefaultAllowed=null;
+  button.addEventListener('click',function(e){
+    androidDefaultAllowed=!e.defaultPrevented;
+    e.preventDefault(); // keep jsdom from trying to navigate
+  },{once:true});
+  button.dispatchEvent(new win.MouseEvent('click',{bubbles:true,cancelable:true}));
+  assert.equal(androidDefaultAllowed,true,'Android WebView navigation is not blocked by popup handler');
+  Object.defineProperty(win.navigator,'userAgent',{value:'Mozilla/5.0 Desktop Chrome',configurable:true});
   doc.getElementById('chatClose').click();
   assert.equal(panel.classList.contains('hidden'),true,'X closes chat popup');
   button.click();
