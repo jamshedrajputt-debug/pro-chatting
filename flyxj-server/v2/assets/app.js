@@ -2,7 +2,7 @@
 const $=id=>document.getElementById(id);
 const STATUS={pending:'Pending',confirmed:'Confirmed',in_progress:'In progress',quality_check:'Quality check',shipped:'Shipped',delivered:'Delivered',completed:'Completed',cancelled:'Cancelled'};
 const WCOL=['pending','in_progress','shipped','completed'];
-const state={me:null,orders:[],stats:null,view:'overview',selected:null,files:[],busy:false};
+const state={me:null,orders:[],stats:null,view:'overview',selected:null,files:[],busy:false,events:null,announcedTracking:new Set()};
 const toastTimer={id:null};
 function node(tag,className,text){const e=document.createElement(tag);if(className)e.className=className;if(text!==undefined)e.textContent=String(text);return e}
 function time(s){const d=new Date(s);return Number.isFinite(d.getTime())?d.toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'}):'—'}
@@ -25,7 +25,8 @@ async function api(url,options={}){
   return data;
 }
 function resetApp(){
-  state.me=null;state.orders=[];state.selected=null;
+  if(state.events){state.events.close();state.events=null}
+  state.me=null;state.orders=[];state.selected=null;state.announcedTracking.clear();
   $('loginShell').classList.remove('hidden');$('dashboardShell').classList.add('hidden');
   closeDrawer();$('loginPassword').value='';
 }
@@ -37,13 +38,46 @@ function setLoggedIn(me){
   $('addOrderButton').classList.toggle('hidden',me.role!=='customer');
   for(const e of document.querySelectorAll('.staff-only'))e.classList.toggle('hidden',me.role!=='staff');
   for(const e of document.querySelectorAll('.customer-only'))e.classList.toggle('hidden',me.role!=='customer');
+  connectTrackingEvents();
+}
+// Live updates through a session-authenticated private stream.
+// Polling continues as a fallback for devices where streaming is interrupted.
+function trackingFingerprint(o){return [o.id,o.shipping?.tracking_id||'',o.shipping?.courier||'',o.shipping?.updated_at||''].join('|')}
+function showTrackingAlert(order){
+  const key=trackingFingerprint(order);
+  if(!order.shipping?.tracking_id && !order.shipping?.courier)return;
+  if(state.announcedTracking.has(key))return;
+  state.announcedTracking.add(key);
+  toast('📦 Tracking updated: '+(order.reference||'order')+' · '+(order.shipping?.courier||'Courier')+' · '+(order.shipping?.tracking_id||'Tracking pending'));
+}
+function connectTrackingEvents(){
+  if(state.events){state.events.close();state.events=null}
+  if(state.me?.role!=='customer'||typeof EventSource==='undefined')return;
+  const events=new EventSource('/api/events');
+  state.events=events;
+  events.addEventListener('tracking',(event)=>{
+    if(state.events!==events)return;
+    try{
+      const info=JSON.parse(event.data);
+      if(!info.order_id)return;
+      showTrackingAlert({id:info.order_id,reference:info.reference,shipping:info});
+      refresh({silent:true});
+    }catch(ex){console.warn('Invalid tracking event received')}
+  });
 }
 async function refresh({silent=false}={}){
   if(state.busy)return;
   state.busy=true;
   try {
     const [list,dash]=await Promise.all([api('/api/orders'),api('/api/dashboard')]);
-    state.orders=list.orders||[];state.stats=dash.stats;
+    const previous=new Map(state.orders.map(o=>[o.id,trackingFingerprint(o)]));
+    const next=list.orders||[];
+    if(state.me?.role==='customer'&&state.orders.length){
+      for(const order of next){
+        if(previous.has(order.id)&&previous.get(order.id)!==trackingFingerprint(order))showTrackingAlert(order);
+      }
+    }
+    state.orders=next;state.stats=dash.stats;
     $('navOrderCount').textContent=state.orders.length;
     renderStats();renderOrders();renderWorkflow();
     if(state.selected){
@@ -102,7 +136,11 @@ function renderOrders(){
     const customer=node('td','',moneyless(o.customer));
     const date=node('td','',day(o.created_at));
     const st=node('td');st.append(node('span','status-pill status-'+o.status,statusName(o.status)));
-    const tracking=node('td','mono',o.shipping?.tracking_id||'Not added');
+    const tracking=node('td','mono');
+    if(o.shipping?.tracking_id){
+      tracking.append(node('strong','',o.shipping.tracking_id));
+      if(o.shipping.courier)tracking.append(node('div','tiny muted',o.shipping.courier));
+    }else tracking.append(node('span','muted','Not added'));
     const arrow=node('td','table-arrow','›');
     tr.append(first,customer,date,st,tracking,arrow);
     tr.addEventListener('click',()=>openDetail(o.id));
@@ -189,6 +227,7 @@ function renderShipping(o){
   if(s.tracking_id||s.courier){
     box.append(node('b','','Outbound: '+(s.tracking_id||'Awaiting number')));
     box.append(node('span','','Courier: '+(s.courier||'Not specified')));
+    if(s.updated_at)box.append(node('span','tiny muted','Shared with customer · '+time(s.updated_at)));
     if(s.tracking_url&&s.tracking_url.startsWith('https://')){
       const link=node('a','','Open courier tracking ↗');link.href=s.tracking_url;link.target='_blank';link.rel='noopener noreferrer';box.append(link);
     }
@@ -323,6 +362,9 @@ async function init(){
     $('messageInput').value='';
   };
   try{const me=await api('/api/me');setLoggedIn(me);navigate('overview');await refresh({silent:true})}catch{resetApp()}
+  document.addEventListener('visibilitychange',()=>{
+    if(state.me&&document.visibilityState==='visible')refresh({silent:true});
+  });
   setInterval(()=>{if(state.me&&document.visibilityState==='visible')refresh({silent:true})},45000);
 }
 init();
