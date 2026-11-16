@@ -66,3 +66,40 @@ test('Android chat bubble opens a real popup and sends a customer message',async
   dom.window.close();
  }
 });
+
+
+test('Dedicated Android chat screen loads history and sends a message',async()=>{
+ const html=fs.readFileSync(path.join(root,'mobile-chat.html'),'utf8');
+ const dom=new JSDOM(html,{url:'https://flyxj.example/chat',runScripts:'outside-only',pretendToBeVisual:true});
+ const win=dom.window,doc=win.document,history=[];
+ const called=[];
+ win.fetch=async(url,options={})=>{
+  const endpoint=String(url),method=options.method||'GET';
+  called.push({endpoint,method});
+  let payload={ok:true};
+  if(endpoint==='/api/me')payload={username:'usera',role:'customer',csrf:'token-123'};
+  else if(endpoint==='/api/chat'&&method==='GET')payload={messages:history,presence:{staff_online:true,customer_online:true}};
+  else if(endpoint==='/api/chat'&&method==='POST'){
+   const body=JSON.parse(options.body);
+   const message={id:'android-test-'+(history.length+1),from:'usera',to:'userb',body:body.message,at:'2026-11-16T10:00:00Z',seen_by:['usera'],photo_url:null};
+   history.push(message);payload={message};
+  }
+  else if(endpoint==='/api/chat/read')payload={ok:true,marked:0};
+  return {ok:true,status:200,json:async()=>payload};
+ };
+ // Avoid a network EventSource in the standalone DOM.
+ win.EventSource=undefined;
+ vm.runInContext(fs.readFileSync(path.join(root,'assets/mobile-chat.js'),'utf8'),dom.getInternalVMContext(),{filename:'mobile-chat.js'});
+ try{
+  await wait(130);
+  assert.match(doc.getElementById('presence').textContent,/online/i);
+  assert.match(doc.getElementById('history').textContent,/No messages yet/);
+  doc.getElementById('message').value='Please send my tracking ID';
+  doc.getElementById('compose').dispatchEvent(new win.Event('submit',{bubbles:true,cancelable:true}));
+  await wait(90);
+  assert.ok(called.some(x=>x.endpoint==='/api/chat'&&x.method==='POST'),'sends via authenticated chat endpoint');
+  assert.match(doc.getElementById('history').textContent,/Please send my tracking ID/,'message appears in chat');
+  assert.equal(doc.getElementById('message').value,'','input clears after successful sending');
+  assert.equal(doc.querySelector('a.back').getAttribute('href'),'/','Android back link returns to dashboard');
+ }finally{dom.window.close()}
+});
