@@ -368,6 +368,64 @@ app.post('/api/orders/:id/return',auth,csrf,(req,res)=>{
   history(o,req.user.username,'Return tracking submitted','return');
   try{save();pushOrder(o,'return','Return tracking received');res.json({order:publicOrder(o)})}catch{err(res,500,'Return tracking could not be saved')}
 });
+
+app.get('/api/orders/:id/pdf',auth,(req,res)=>{
+ const o=loadOrder(req,res);if(!o)return;
+ return storedAttachment(req,res,PDF_DIR,o.pdf_file,'application/pdf',true);
+});
+app.get('/api/orders/:id/finished/:index',auth,(req,res)=>{
+ const o=loadOrder(req,res);if(!o)return;
+ const ix=Number(req.params.index);
+ if(!Number.isInteger(ix)||ix<0||ix>9)return err(res,404,'Photo not found');
+ const file=o.finished_files?.[ix];
+ return storedAttachment(req,res,PHOTO_DIR,file,'image/'+(file?.endsWith('.jpg')?'jpeg':file?.split('.').pop()));
+});
+app.post('/api/orders/:id/finished',auth,csrf,(req,res)=>{
+ if(req.user.role!=='staff')return err(res,403,'Staff only');
+ const o=loadOrder(req,res);if(!o)return;
+ const p=imageData(req.body?.photo);
+ if(!p)return err(res,400,'Upload JPG, PNG or WebP under 2.5MB');
+ if((o.finished_files||[]).length>=10)return err(res,400,'Maximum 10 finished photos');
+ const name=crypto.randomUUID()+'.'+p.ext;
+ try {
+  fs.writeFileSync(path.join(PHOTO_DIR,name),p.bytes,{flag:'wx'});
+  o.finished_files=[...(o.finished_files||[]),name];
+  history(o,req.user.username,'Finished-product photo uploaded','photo');
+  save();pushOrder(o,'photo','Finished photo uploaded');
+  res.json({order:publicOrder(o)});
+ } catch(e) {try{fs.unlinkSync(path.join(PHOTO_DIR,name))}catch{};err(res,500,'Photo save failed')}
+});
+app.post('/api/orders/:id/request-approval',auth,csrf,(req,res)=>{
+ if(req.user.role!=='staff')return err(res,403,'Staff only');
+ const o=loadOrder(req,res);if(!o)return;
+ if(isShipped(o)||o.status==='cancelled')return err(res,400,'Order already closed');
+ o.approval={status:'requested',note:text(req.body?.note,1000),updated_at:now(),by:req.user.username};
+ o.status='awaiting_approval';
+ history(o,req.user.username,'Design approval requested','approval');
+ try{save();pushOrder(o,'approval','Design approval needed');res.json({order:publicOrder(o)})}catch{err(res,500,'Approval save failed')}
+});
+app.post('/api/orders/:id/approve',auth,csrf,(req,res)=>{
+ if(req.user.role!=='customer')return err(res,403,'Customer only');
+ const o=loadOrder(req,res);if(!o)return;
+ if(o.approval?.status!=='requested')return err(res,400,'No approval requested');
+ const decision=req.body?.decision;
+ if(!['approved','changes_requested'].includes(decision))return err(res,400,'Invalid approval decision');
+ o.approval={status:decision,note:text(req.body?.note,1000),updated_at:now(),by:req.user.username};
+ o.status=decision==='approved'?'confirmed':'pending';
+ history(o,req.user.username,decision==='approved'?'Design approved':'Customer requested changes','approval');
+ try{save();pushOrder(o,'approval',decision==='approved'?'Design approved':'Changes requested');res.json({order:publicOrder(o)})}catch{err(res,500,'Approval save failed')}
+});
+app.patch('/api/orders/:id/finance',auth,csrf,(req,res)=>{
+ if(req.user.role!=='staff')return err(res,403,'Staff only');
+ const o=loadOrder(req,res);if(!o)return;
+ const f=normalizeFinance(req.body,o.finance);
+ if(!f)return err(res,400,'Enter sale, making, shipping PKR prices and exchange rate PKR/USD');
+ if(isShipped(o)&&!f.recognized_at)f.recognized_at=now();
+ o.finance=f;
+ history(o,req.user.username,'Sale/making/shipping costs updated','finance');
+ try{save();pushOrder(o,'finance','Order pricing updated');res.json({order:publicOrder(o)})}catch{err(res,500,'Pricing save failed')}
+});
+
 app.use('/assets',express.static(path.join(__dirname,'assets'),{index:false,maxAge:'5m'}));
 app.use('/assets',express.static(path.join(__dirname,'../v2/assets'),{index:false,maxAge:'5m'}));
 app.get('/',(req,res)=>res.sendFile(path.join(__dirname,'index.html')));
