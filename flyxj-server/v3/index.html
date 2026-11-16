@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#122143">
+<meta name="description" content="FlyXJ order operations dashboard: dress orders, photos and shipment tracking.">
+<title>FLYXJ · Complete Order & Profit Dashboard</title>
+<link rel="stylesheet" href="/assets/style.css">
+<link rel="stylesheet" href="/assets/style-v3.css">
+<script defer src="/assets/app.js"></script>
+</head>
+<body>
+<div class="login-shell" id="loginShell">
+  <div class="login-art">
+    <div class="brand mark-light"><span class="brand-mark">FX</span><span>FLYXJ<small>ORDER STUDIO</small></span></div>
+    <div class="login-art-copy"><span class="eyebrow">ORDER MANAGEMENT SYSTEM</span><h1>From first sketch<br>to final stitch.</h1><p>Manage custom dress orders, every reference photo, and each delivery from one workspace.</p>
+    <div class="art-stats"><span><b>01</b> Receive</span><span><b>02</b> Make</span><span><b>03</b> Deliver</span></div></div>
+    <p class="art-foot">A workspace for the FlyXJ team and customers.</p>
+  </div>
+  <div class="login-form-panel">
+    <div class="login-card"><div class="mobile-brand brand"><span class="brand-mark">FX</span><span>FLYXJ<small>ORDER STUDIO</small></span></div>
+      <div class="login-topline">WELCOME BACK</div><h2>Sign in to your workspace</h2><p class="muted">Use your existing username and password. No registration required.</p>
+      <form id="loginForm"><label for="loginName">Username</label><input id="loginName" autocomplete="username" required placeholder="Your username">
+      <label for="loginPassword">Password</label><div class="password-wrap"><input id="loginPassword" type="password" autocomplete="current-password" required placeholder="Enter password"><button type="button" id="passwordToggle" class="text-button" aria-label="Show password">Show</button></div>
+      <button type="submit" class="btn btn-primary btn-block" id="signInButton">Sign in <span aria-hidden="true">→</span></button></form>
+      <p class="login-foot muted">Secure HTTPS connection · FlyXJ private order portal</p>
+    </div>
+  </div>
+</div>
+<div id="dashboardShell" class="dashboard-shell hidden">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-inner">
+      <div class="brand sidebar-brand"><span class="brand-mark">FX</span><span>FLYXJ<small>ORDER STUDIO</small></span></div>
+      <div class="nav-label">WORKSPACE</div>
+      <nav class="sidebar-nav" aria-label="Primary">
+        <button class="nav-link active" type="button" data-nav="overview"><span class="nav-symbol">▦</span> Overview</button>
+        <button class="nav-link" type="button" data-nav="orders"><span class="nav-symbol">▤</span> All orders <span id="navOrderCount" class="nav-count">0</span></button>
+        <button class="nav-link" type="button" data-nav="tracking"><span class="nav-symbol">◇</span> Tracking</button>
+        <button class="nav-link" type="button" data-nav="finance"><span class="nav-symbol">▥</span> Finance & Profit</button>
+        <button class="nav-link staff-only hidden" type="button" data-nav="team"><span class="nav-symbol">♙</span> Staff & Backup</button>
+      </nav>
+      <div class="sidebar-bottom"><div class="sidebar-info"><span class="pulse"></span> Connected to FlyXJ server</div><button class="nav-link logout-link" id="logoutButton" type="button"><span class="nav-symbol">↪</span> Log out</button></div>
+    </div>
+  </aside>
+  <div class="main-wrap">
+    <header class="topbar"><button type="button" class="icon-button menu-button" id="menuToggle" aria-label="Open menu">☰</button>
+      <div class="topbar-breadcrumb">WORKSPACE <span>/</span> <strong id="breadcrumb">Overview</strong></div>
+      <div class="topbar-actions"><button class="btn btn-ghost btn-refresh" type="button" id="refreshButton"><span aria-hidden="true">↻</span> Refresh</button><button class="icon-button notification-button" id="notificationButton" type="button" title="Latest updates">♧ <span id="notificationCount" class="notification-count hidden">0</span></button><span class="top-divider"></span><span class="user-avatar" id="userAvatar">FX</span><span class="user-details"><b id="userName">User</b><small id="userRole">Customer</small></span></div></header>
+    <main class="page-content">
+      <div class="page-intro"><div><div class="eyebrow dark">FLYXJ CONTROL CENTRE</div><h1 id="viewHeading">Overview</h1><p class="muted" id="viewSubtitle">Your orders, progress and updates in one place.</p></div>
+        <button type="button" class="btn btn-primary" id="addOrderButton"><span class="plus">+</span> New order</button></div>
+      <div class="notice"><span class="notice-icon">!</span> <span><strong>Free hosting / test environment.</strong> Order records and uploaded photos can be lost on restart. Keep your own backup of important orders and photos.</span></div>
+      <section class="stats-grid" id="statsGrid" aria-label="Order statistics">
+        <div class="stat-card"><div class="stat-label">Total orders <span class="stat-icon indigo">▣</span></div><strong id="statTotal">—</strong><small>All submitted orders</small></div>
+        <div class="stat-card"><div class="stat-label">Active orders <span class="stat-icon gold">◉</span></div><strong id="statActive">—</strong><small>Currently being processed</small></div>
+        <div class="stat-card"><div class="stat-label">In transit <span class="stat-icon blue">➤</span></div><strong id="statShipped">—</strong><small>Shipped or delivered</small></div>
+        <div class="stat-card"><div class="stat-label">Completed <span class="stat-icon green">✓</span></div><strong id="statDone">—</strong><small>Finished orders</small></div>
+      </section>
+
+      <section class="finance-panel hidden" id="financePanel">
+        <div class="section-header"><div><h2>Sales, costs and gross profit</h2><p class="muted">Records of shipped orders; prices shown per dress order and cumulative.</p></div><div class="section-actions"><button id="financeCsv" type="button" class="btn btn-soft">↓ Export CSV</button></div></div>
+        <div class="finance-summary">
+          <div class="finance-card"><span>Total sales</span><strong id="fSalesPkr">PKR 0</strong><small id="fSalesUsd">USD $0</small></div>
+          <div class="finance-card"><span>Making + shipping</span><strong id="fCostPkr">PKR 0</strong><small id="fCostUsd">USD $0</small></div>
+          <div class="finance-card primary-card"><span>Cumulative gross profit</span><strong id="fProfitPkr">PKR 0</strong><small id="fProfitUsd">USD $0</small></div>
+        </div>
+        <div class="chart-card"><div class="section-header"><div><h2>Profit performance</h2><p class="muted">Sales, costs and profit by period (PKR)</p></div><div class="period-switch"><button class="period-btn active" id="periodWeek" type="button">Weekly</button><button class="period-btn" id="periodMonth" type="button">Monthly</button></div></div><div id="profitChart" class="chart-host"></div><div class="chart-legend"><span class="lg-sales">Sales</span><span class="lg-cost">Costs</span><span class="lg-profit">Gross profit</span></div></div>
+        <div class="table-wide-wrapper"><div class="section-header"><h2>Per-order financial ledger</h2><span class="muted tiny" id="financeCount">0 shipped orders</span></div><div class="ledger-scroll"><table class="ledger-table"><thead><tr><th>ORDER</th><th>DATE</th><th>COURIER / TRACKING</th><th>SALE PKR / USD</th><th>MAKING PKR / USD</th><th>SHIPPING PKR / USD</th><th>TOTAL COST PKR / USD</th><th>GROSS PROFIT PKR / USD</th><th>CUMULATIVE PROFIT PKR / USD</th></tr></thead><tbody id="financeRows"></tbody></table></div><p class="muted tiny" id="financeDisclaimer">Gross profit excludes marketplace fees, taxes and other expenses.</p></div>
+      </section>
+      <section class="team-panel hidden" id="teamPanel">
+        <div class="panel-card"><h2>Staff accounts</h2><p class="muted">Create additional production staff logins. Do not send passwords in chat.</p><div id="teamAccounts"></div>
+          <form id="staffCreateForm" class="inline-form"><input id="staffNewUser" required minlength="3" maxlength="30" placeholder="New staff username"><input type="password" id="staffNewPass" required minlength="12" placeholder="New password (12+ characters)"><button class="btn btn-primary" type="submit">Create staff</button></form></div>
+        <div class="panel-card"><h2>Backup & recovery</h2><p class="muted">Render free hosting is not permanent. Export a private backup regularly. It contains sensitive client orders, PDFs, photos and account hashes.</p><button class="btn btn-primary" type="button" id="exportBackup">↓ Download private backup</button><hr><p class="muted">Restore replaces all existing server data. Keep a separate backup before restoring.</p><input type="file" id="backupFile" accept=".json,application/json"><button class="btn btn-soft" type="button" id="restoreBackup">Restore selected backup</button></div>
+      </section>
+      <section class="content-layout" id="ordersContent">
+        <div class="main-column">
+          <div class="section-header"><div><h2 id="listHeading">Recent orders</h2><p class="muted" id="listSubtitle">Follow the latest order activity</p></div><div class="section-actions"><button type="button" class="btn btn-soft" id="showAllButton">View all orders</button></div></div>
+          <div class="filter-bar" id="filterBar"><div class="search-box"><span>⌕</span><input id="orderSearch" placeholder="Search ID, dress, colour, tracking..." aria-label="Search orders"></div><select id="statusFilter" aria-label="Filter by status">
+            <option value="all">All statuses</option><option value="pending">Pending</option><option value="awaiting_approval">Awaiting approval</option><option value="confirmed">Confirmed</option><option value="cutting">Cutting</option><option value="stitching">Stitching</option><option value="in_progress">In progress</option><option value="quality_check">Quality check</option><option value="shipped">Shipped</option><option value="delivered">Delivered</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></div>
+          <div class="order-table-wrap"><table class="order-table"><thead><tr><th>ORDER / DRESS</th><th>CUSTOMER</th><th>DATE</th><th>STATUS</th><th>TRACKING</th><th></th></tr></thead><tbody id="orderRows"></tbody></table><div id="emptyState" class="empty-state hidden"><div class="empty-icon">▤</div><h3>No orders found</h3><p>Try adjusting the filters or create a new order.</p></div></div>
+          <div class="table-footer"><span id="resultCount" class="muted">0 orders</span><span class="muted">Click any order to view details</span></div>
+        </div>
+        <aside class="right-column"><section class="insight-card"><div class="section-header"><h2>Order workflow</h2><span class="dot-menu">•••</span></div><p class="muted">Current order distribution</p><div class="workflow-list" id="workflowList"></div><div class="insight-footer">Updated when you refresh</div></section>
+          <section class="help-card"><span class="help-icon">✦</span><h3>Made for custom orders</h3><p>Upload up to 8 dress photos, share measurements, and follow each order through production and shipping.</p><button id="helpAction" type="button">See my orders <span aria-hidden="true">↗</span></button></section>
+        </aside>
+      </section>
+    </main>
+  </div>
+</div>
+<div class="overlay hidden" id="overlay"></div>
+<div class="drawer hidden" id="createDrawer" role="dialog" aria-modal="true" aria-label="New dress order">
+  <div class="drawer-header"><div><span class="eyebrow dark">NEW REQUEST</span><h2>Create dress order</h2><p>Add your style references and preferences.</p></div><button type="button" class="icon-button close-drawer" data-close aria-label="Close">×</button></div>
+  <form id="newOrderForm"><div class="drawer-body">
+      <div class="field"><label for="dressTitle">Dress / design name <span>*</span></label><input required id="dressTitle" maxlength="120" placeholder="e.g. Custom black leather dress"></div>
+      <div class="field-grid"><div class="field"><label for="dressSize">Size <span>*</span></label><select id="dressSize" required><option value="">Select size</option><option>XXS</option><option>XS</option><option>S</option><option>M</option><option>L</option><option>XL</option><option>2XL</option><option>3XL</option><option>4XL</option><option>5XL</option><option>CUSTOM</option></select></div><div class="field"><label for="dressQty">Quantity <span>*</span></label><input id="dressQty" type="number" min="1" max="1000" value="1" required></div></div>
+      <div class="field"><label for="dressColour">Colour <span>*</span></label><input id="dressColour" required maxlength="80" placeholder="e.g. Black / Red / Custom"></div>
+      <div class="field-grid"><div class="field"><label>Priority</label><select id="orderPriority"><option value="normal">Normal</option><option value="high">High priority</option><option value="urgent">Urgent</option></select></div><div class="field"><label>Expected delivery date</label><input id="orderDeadline" type="date"></div></div>
+      <div class="field"><label>Custom measurements (cm or inches — mention units)</label><div class="measure-grid"><input id="measureBust" placeholder="Bust e.g. 36 in"><input id="measureWaist" placeholder="Waist"><input id="measureHips" placeholder="Hips"><input id="measureShoulder" placeholder="Shoulder"><input id="measureSleeve" placeholder="Sleeve"><input id="measureLength" placeholder="Length"></div></div>
+      <div class="field"><label for="orderPdf">Dress design / specification PDF <span>* REQUIRED</span></label><input type="file" id="orderPdf" accept=".pdf,application/pdf" required><p class="muted tiny">Every new order requires a valid PDF (maximum 6 MB). Add sketches, measurement sheet or order details.</p></div>
+      <div class="field"><label for="dressComments">Measurements / custom instructions</label><textarea id="dressComments" maxlength="2500" rows="5" placeholder="Include your bust/waist/hip measurements, changes, fitting details, or special suggestions."></textarea></div>
+      <div class="field"><label>Dress photos <span>*</span> <small>Up to 8 images</small></label><label for="dressPhotos" class="upload-box"><span class="upload-symbol">⇧</span><strong>Click to upload photos</strong><small>JPG, PNG or WebP. Multiple files supported.</small></label><input id="dressPhotos" type="file" multiple accept="image/jpeg,image/png,image/webp" class="visually-hidden"><div id="photoPreviews" class="photo-previews"></div><p id="photoCount" class="tiny muted">0 of 8 images selected</p></div>
+    </div><div class="drawer-footer"><button type="button" class="btn btn-soft" data-close>Cancel</button><button type="submit" class="btn btn-primary" id="submitOrderButton">Submit order →</button></div></form>
+</div>
+<div class="drawer detail-drawer hidden" id="detailDrawer" role="dialog" aria-modal="true" aria-label="Order details">
+  <div class="drawer-header"><div><span class="eyebrow dark" id="detailRef">ORDER</span><h2 id="detailTitle">Order details</h2><p id="detailMeta">Loading...</p></div><button type="button" class="icon-button close-drawer" data-close aria-label="Close">×</button></div>
+  <div class="drawer-body">
+    <div class="detail-status-row"><span class="status-pill" id="detailStatus">Pending</span><span class="tiny muted" id="detailUpdated"></span></div>
+    <div class="photo-gallery" id="detailPhotos"></div>
+    <div class="detail-grid" id="detailGrid"></div>
+    <div class="detail-section"><h3>Special instructions</h3><p class="detail-copy" id="detailComments">—</p></div>
+    <div class="detail-section"><h3>PDF specification & measurements</h3><div id="orderPdfLink"></div><div class="measure-grid readonly-grid" id="detailMeasurements"></div><p class="muted tiny" id="detailDeadline"></p></div>
+    <div class="detail-section"><h3>Finished dress gallery</h3><div class="photo-gallery" id="finishedGallery"></div><form class="staff-only hidden" id="finishedForm"><label>Upload completed dress photo (staff)</label><input type="file" id="finishedPhoto" accept="image/jpeg,image/png,image/webp" required><button type="submit" class="btn btn-soft">Upload photo</button></form></div>
+    <div class="detail-section"><h3>Design approval</h3><div class="tracking-box" id="approvalInfo"></div><form class="staff-only hidden" id="requestApprovalForm"><textarea id="approvalRequestNote" rows="2" maxlength="1000" placeholder="Details to approve"></textarea><button type="submit" class="btn btn-soft">Request customer approval</button></form><form class="customer-only hidden" id="approvalDecisionForm"><textarea id="approvalDecisionNote" rows="2" maxlength="1000" placeholder="Optional approval comments"></textarea><div class="field-grid"><button type="button" class="btn btn-primary" id="approveDesign">✓ Approve design</button><button type="button" class="btn btn-soft" id="requestChanges">Request changes</button></div></form></div>
+    <div class="detail-section"><h3>Shipping & tracking</h3><div id="shippingInfo" class="tracking-box"></div><form id="shippingForm" class="staff-only hidden"><div class="field-grid"><div class="field"><label>Courier</label><input id="shippingCourier" maxlength="100" placeholder="DHL / Royal Mail"></div><div class="field"><label>Tracking ID</label><input id="shippingId" maxlength="120" placeholder="Tracking number"></div></div><div class="field"><label>Courier tracking link (optional)</label><input type="url" id="shippingUrl" placeholder="https://..."></div><button class="btn btn-soft" type="submit">Save shipping tracking</button></form></div>
+    <div class="detail-section"><h3>Pricing & profit — PKR / USD</h3><div id="detailFinanceView" class="tracking-box"></div>
+      <form class="staff-only hidden" id="financeForm"><div class="field-grid"><div class="field"><label>Selling price (PKR)</label><input id="salePkr" type="number" min="0.01" step="0.01" placeholder="e.g. 40000" required></div><div class="field"><label>Making cost (PKR)</label><input id="makingPkr" type="number" min="0" step="0.01" required></div></div><div class="field-grid"><div class="field"><label>Shipping cost (PKR)</label><input id="shippingPkr" type="number" min="0" step="0.01" required></div><div class="field"><label>PKR for 1 USD</label><input id="usdRate" type="number" min="0.01" step="0.01" placeholder="Enter actual order FX rate" required></div></div><button type="submit" class="btn btn-soft">Save pricing</button></form></div>
+    <div class="detail-section staff-only hidden" id="staffSection"><h3>Production status</h3><form id="statusForm"><div class="field"><label>Order status</label><select id="detailStatusSelect"><option value="pending">Pending</option><option value="awaiting_approval">Awaiting approval</option><option value="confirmed">Confirmed</option><option value="cutting">Cutting</option><option value="stitching">Stitching</option><option value="in_progress">In progress</option><option value="quality_check">Quality check</option><option value="shipped">Shipped</option><option value="delivered">Delivered</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></div><div class="field"><label>Internal update / note</label><textarea id="staffNote" rows="2" maxlength="1000" placeholder="Note about the production stage"></textarea></div><button type="submit" class="btn btn-primary">Update status</button></form></div>
+    <div class="detail-section customer-only hidden" id="returnSection"><h3>Send return tracking ID</h3><p class="muted tiny">If you are returning a parcel, send its tracking number to FlyXJ staff here.</p><div id="returnInfo" class="tracking-box"></div><form id="returnForm"><div class="field-grid"><div class="field"><label>Return courier</label><input id="returnCourier" maxlength="100" placeholder="Courier name"></div><div class="field"><label>Return tracking ID</label><input id="returnId" maxlength="120" placeholder="Tracking number"></div></div><div class="field"><label>Return notes (optional)</label><textarea id="returnNote" rows="2" maxlength="1000"></textarea></div><button class="btn btn-soft" type="submit">Send return tracking</button></form></div>
+    <div class="detail-section"><h3>PDF cost summary</h3><a class="btn btn-soft" id="summaryPdfLink" href="#" target="_blank">↓ Download order cost summary</a></div>
+    <div class="detail-section"><h3>Order conversation</h3><p class="muted tiny">Send questions or updates about this order.</p><div class="message-thread" id="messageThread"></div><form id="messageForm"><div class="message-compose"><textarea id="messageInput" maxlength="1000" rows="2" placeholder="Write a message to the other side..." required></textarea><button class="btn btn-primary" type="submit">Send</button></div></form></div>
+    <div class="detail-section"><h3>Activity timeline</h3><div class="timeline" id="detailHistory"></div></div>
+  </div>
+</div>
+<button id="floatingChatButton" class="floating-chat" type="button" aria-label="Open live chat"><span>◉</span><span id="chatUnread" class="chat-unread hidden">0</span></button>
+<section id="floatingChatPanel" class="floating-chat-panel hidden" role="dialog" aria-label="Direct customer and staff live chat">
+  <div class="chat-widget-header"><div><strong>✉ FlyXJ Live Chat</strong><small id="chatPresence">Connecting…</small></div><button type="button" id="chatClose" aria-label="Minimize chat">×</button></div>
+  <div class="chat-widget-messages" id="chatMessages"><div class="muted tiny">Your messages will appear here.</div></div>
+  <form id="directChatForm" class="chat-widget-compose"><div id="chatFileName" class="muted tiny"></div><div class="chat-input-row"><label class="chat-attach" for="chatAttach" title="Attach image">⊕</label><input id="chatAttach" type="file" accept="image/jpeg,image/png,image/webp" class="visually-hidden"><textarea id="chatInput" rows="2" maxlength="1500" placeholder="Type a message..."></textarea><button type="submit">➤</button></div></form>
+</section>
+<div class="toast hidden" id="toast" role="status"></div>
+<!-- FlyXJ v3: mandatory PDF, financial ledger, approvals and direct chat -->
+</body>
+</html>
