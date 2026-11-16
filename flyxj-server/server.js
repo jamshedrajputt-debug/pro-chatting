@@ -1,3 +1,3 @@
 'use strict';
-// FlyXJ order dashboard v3 is the active server. Keep this stable Render entrypoint.
+// FlyXJ live Render entrypoint. V3 order operations and finance dashboard.
 require('./v3/server.js');
