@@ -400,7 +400,7 @@ async function init(){
     await saveAndRefresh('/messages','POST',{message},'Message sent');
     $('messageInput').value='';
   };
-  initExtraFeatures();
+  setTimeout(initExtraFeatures,0);
   try{const me=await api('/api/me');setLoggedIn(me);navigate('overview');await refresh({silent:true})}catch{resetApp()}
   document.addEventListener('visibilitychange',()=>{
     if(state.me&&document.visibilityState==='visible')refresh({silent:true});
