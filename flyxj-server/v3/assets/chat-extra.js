@@ -38,12 +38,9 @@ async function markChatRead(){
  state.unread=0;updateChatBadge();
  try{await api('/api/chat/read',{method:'POST',body:'{}'})}catch(e){}
 }
-async function toggleDirectChat(open){
- state.chatOpen=typeof open==='boolean'?open:!state.chatOpen;
- $('floatingChatPanel').classList.toggle('hidden',!state.chatOpen);
- if(state.chatOpen){
-  await loadDirectChat();await markChatRead();$('chatInput').focus();
- }
+function toggleDirectChat(open){
+ // Shared, synchronous opening mechanism; data loading never blocks popup.
+ toggleChatSurface(open);
 }
 async function sendDirectChat(event){
  event.preventDefault();
