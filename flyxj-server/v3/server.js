@@ -532,6 +532,31 @@ app.post('/api/staff',auth,csrf,(req,res)=>{
  try{saveAtomic(STAFF_FILE,additionalStaff);res.status(201).json({username})}catch{err(res,500,'Could not create staff')}
 });
 
+
+app.get('/api/orders/:id/summary.pdf',auth,(req,res)=>{
+ const o=loadOrder(req,res);if(!o)return;
+ const f=financeRow(o),shipping=o.shipping||{};
+ const fmt=(field,currency)=>f?f[field].toFixed(2)+' '+currency:'Not set';
+ const lines=[
+ 'FLYXJ ORDER COST SUMMARY','NOT A TAX INVOICE','',
+ 'Order: '+ref(o),'Dress: '+o.title,'Customer: '+(o.customer||o.ordered_by),
+ 'Ordered: '+o.created_at,'Size: '+o.size+'  Colour: '+o.colour+'  Quantity: '+o.quantity,
+ 'Status: '+o.status,'Courier: '+(shipping.courier||'Not assigned'),
+ 'Tracking ID: '+(shipping.tracking_id||'Not assigned'),'',
+ 'Selling price: '+fmt('sale_pkr','PKR'),'Making cost: '+fmt('making_pkr','PKR'),
+ 'Shipping cost: '+fmt('shipping_pkr','PKR'),'Total cost: '+fmt('cost_pkr','PKR'),
+ 'Gross profit: '+fmt('profit_pkr','PKR'),'',
+ 'Selling price: '+fmt('sale_usd','USD'),'Making cost: '+fmt('making_usd','USD'),
+ 'Shipping cost: '+fmt('shipping_usd','USD'),'Total cost: '+fmt('cost_usd','USD'),
+ 'Gross profit: '+fmt('profit_usd','USD'),
+ 'PKR per USD: '+(f?f.fx_pkr_per_usd:'Not set'),'',
+ 'Gross profit excludes taxes, platform fees and returns.','Created: '+now()
+ ];
+ res.set('Content-Type','application/pdf');
+ res.set('Content-Disposition','attachment; filename="'+ref(o)+'-cost-summary.pdf"');
+ res.send(require('./pdf.js')(lines));
+});
+
 app.use('/assets',express.static(path.join(__dirname,'assets'),{index:false,maxAge:'5m'}));
 app.use('/assets',express.static(path.join(__dirname,'../v2/assets'),{index:false,maxAge:'5m'}));
 app.get('/',(req,res)=>res.sendFile(path.join(__dirname,'index.html')));
