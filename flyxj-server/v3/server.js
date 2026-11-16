@@ -613,10 +613,11 @@ app.post('/api/restore',auth,csrf,(req,res)=>{
  }catch(e){console.error('Restore error:',e.message);err(res,500,'Restore incomplete: check backup')}
 });
 
+app.use('/assets',(req,res,next)=>{res.set('Cache-Control','no-store, max-age=0');next()});
 app.use('/assets',express.static(path.join(__dirname,'assets'),{index:false,maxAge:'5m'}));
 app.use('/assets',express.static(path.join(__dirname,'../v2/assets'),{index:false,maxAge:'5m'}));
-app.get('/chat',(req,res)=>res.sendFile(path.join(__dirname,'mobile-chat.html')));
-app.get('/',(req,res)=>res.sendFile(path.join(__dirname,'index.html')));
+app.get('/chat',(req,res)=>{res.set('Cache-Control','no-store, max-age=0');res.sendFile(path.join(__dirname,'mobile-chat.html'))});
+app.get('/',(req,res)=>{res.set('Cache-Control','no-store, max-age=0');res.sendFile(path.join(__dirname,'index.html'))});
 app.use((req,res)=>err(res,404,'Not found'));
 app.use((error,req,res,next)=>{
  if(error?.type==='entity.too.large')return err(res,413,'Upload exceeds server size limit. PDF maximum is 30 MB; reduce photos too.');
