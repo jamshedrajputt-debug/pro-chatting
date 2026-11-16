@@ -474,6 +474,64 @@ app.get('/api/finance.csv',auth,(req,res)=>{
  res.send([keys.join(','),...data.rows.map(row=>keys.map(k=>cell(row[k])).join(','))].join('\r\n'));
 });
 
+
+const chatVisible=(u,m)=>u.role==='staff'||m.from===u.username||m.to===u.username;
+const presentChat=m=>({id:m.id,from:m.from,to:m.to,body:m.body,at:m.at,seen_by:m.seen_by||[],
+ photo_url:m.photo_file?'/api/chat/'+m.id+'/photo':null});
+const presentPresence=()=>({staff_online:[...trackingClients].some(c=>c.role==='staff'),
+ customer_online:[...trackingClients].some(c=>c.role==='customer')});
+app.get('/api/chat',auth,(req,res)=>{
+ res.json({messages:directChat.filter(m=>chatVisible(req.user,m)).slice(-300).map(presentChat),presence:presentPresence()});
+});
+app.post('/api/chat',auth,csrf,(req,res)=>{
+ const body=text(req.body?.message,1500);
+ const image=req.body?.photo,pic=image?imageData(image):null;
+ if((image&&!pic)||(!body&&!pic))return err(res,400,'Enter a message or JPG/PNG/WebP photo under 2.5MB');
+ const to=req.user.role==='staff'?users[0].name:users[1].name;
+ let file=null;
+ try{
+  if(pic){file=crypto.randomUUID()+'.'+pic.ext;fs.writeFileSync(path.join(CHAT_PHOTO_DIR,file),pic.bytes,{flag:'wx'})}
+  const msg={id:crypto.randomUUID(),from:req.user.username,to,body,at:now(),photo_file:file,seen_by:[req.user.username]};
+  directChat.push(msg);
+  if(directChat.length>3000)directChat=directChat.slice(-3000);
+  saveAtomic(CHAT_FILE,directChat);
+  const safe=presentChat(msg);
+  pushEvent('chat',safe,c=>c.role==='staff'||c.username===msg.from||c.username===msg.to);
+  res.status(201).json({message:safe});
+ }catch(e){
+  if(file)try{fs.unlinkSync(path.join(CHAT_PHOTO_DIR,file))}catch{}
+  err(res,500,'Could not send chat message');
+ }
+});
+app.get('/api/chat/:id/photo',auth,(req,res)=>{
+ const m=directChat.find(x=>x.id===req.params.id);
+ if(!m||!chatVisible(req.user,m)||!m.photo_file)return err(res,404,'Chat photo not found');
+ const ext=m.photo_file.split('.').pop();
+ return storedAttachment(req,res,CHAT_PHOTO_DIR,m.photo_file,'image/'+(ext==='jpg'?'jpeg':ext));
+});
+app.post('/api/chat/read',auth,csrf,(req,res)=>{
+ let changes=0;
+ for(const m of directChat)if(chatVisible(req.user,m)&&!(m.seen_by||[]).includes(req.user.username)){
+  m.seen_by=[...(m.seen_by||[]),req.user.username];changes++;
+ }
+ if(changes){saveAtomic(CHAT_FILE,directChat);pushEvent('chat_read',{username:req.user.username},()=>true)}
+ res.json({ok:true,marked:changes});
+});
+app.get('/api/staff',auth,(req,res)=>{
+ if(req.user.role!=='staff')return err(res,403,'Staff only');
+ res.json({staff:[{name:users[1].name,active:true},...additionalStaff.map(u=>({name:u.name,active:u.active!==false}))]});
+});
+app.post('/api/staff',auth,csrf,(req,res)=>{
+ if(req.user.role!=='staff')return err(res,403,'Staff only');
+ const username=text(req.body?.username,30),password=req.body?.password;
+ if(!/^[a-zA-Z0-9_-]{3,30}$/.test(username)||typeof password!=='string'||password.length<12||password.length>200)return err(res,400,'Use a 3-30 character username and 12+ character password');
+ if([...users,...additionalStaff].some(u=>u.name.toLowerCase()===username.toLowerCase()))return err(res,409,'Username already exists');
+ if(additionalStaff.length>=15)return err(res,400,'Staff account limit reached');
+ const salt=crypto.randomBytes(16).toString('hex'),hash=crypto.scryptSync(password,salt,32).toString('hex');
+ additionalStaff.push({name:username,salt,hash,active:true,created_at:now(),created_by:req.user.username,role:'staff'});
+ try{saveAtomic(STAFF_FILE,additionalStaff);res.status(201).json({username})}catch{err(res,500,'Could not create staff')}
+});
+
 app.use('/assets',express.static(path.join(__dirname,'assets'),{index:false,maxAge:'5m'}));
 app.use('/assets',express.static(path.join(__dirname,'../v2/assets'),{index:false,maxAge:'5m'}));
 app.get('/',(req,res)=>res.sendFile(path.join(__dirname,'index.html')));
