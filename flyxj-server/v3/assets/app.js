@@ -368,6 +368,15 @@ async function init(){
   const chatButton=$('floatingChatButton'),chatClose=$('chatClose');
   if(chatButton){chatButton.onclick=()=>toggleChatSurface();chatButton.setAttribute('aria-expanded','false')}
   if(chatClose)chatClose.onclick=()=>toggleChatSurface(false);
+  const directForm=$('directChatForm'),chatAttach=$('chatAttach');
+  if(directForm)directForm.onsubmit=e=>{
+    if(typeof sendDirectChat==='function')return sendDirectChat(e);
+    e.preventDefault();toast('Chat service is loading. Reopen the app.',true);
+  };
+  if(chatAttach)chatAttach.onchange=()=>{
+    const label=$('chatFileName');
+    if(label)label.textContent=chatAttach.files?.[0]?.name||'';
+  };
   $('passwordToggle').onclick=()=>{
     const input=$('loginPassword');input.type=input.type==='password'?'text':'password';
     $('passwordToggle').textContent=input.type==='password'?'Show':'Hide';
