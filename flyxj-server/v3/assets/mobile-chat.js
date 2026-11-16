@@ -119,8 +119,10 @@
       var photo=await preparePhoto(file);
       var result=await api('/api/chat','POST',{message:content,photo:photo});
       if(!state.messages.some(function(m){return m.id===result.message.id})){
-        state.messages.push(result.message);render();
+        state.messages.push(result.message);
       }
+      // Always repaint after sending (SSE or polling may already have inserted it).
+      render();
       $('message').value='';$('photo').value='';$('filePreview').textContent='';$('filePreview').style.display='none';
       await fetchMessages(true);
     }catch(ex){showError(ex.message)}
