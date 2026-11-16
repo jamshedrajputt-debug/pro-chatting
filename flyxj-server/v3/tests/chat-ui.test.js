@@ -98,7 +98,7 @@ test('Dedicated Android chat screen loads history and sends a message',async()=>
   doc.getElementById('compose').dispatchEvent(new win.Event('submit',{bubbles:true,cancelable:true}));
   await wait(90);
   assert.ok(called.some(x=>x.endpoint==='/api/chat'&&x.method==='POST'),'sends via authenticated chat endpoint');
-  assert.match(doc.getElementById('history').textContent,/Please send my tracking ID/,'message appears in chat');
+  assert.match(doc.getElementById('history').textContent,/Please send my tracking ID/,'message appears in chat; error='+doc.getElementById('error').textContent+'; calls='+JSON.stringify(called));
   assert.equal(doc.getElementById('message').value,'','input clears after successful sending');
   assert.equal(doc.querySelector('a.back').getAttribute('href'),'/','Android back link returns to dashboard');
  }finally{dom.window.close()}
