@@ -36,6 +36,19 @@ if(users.some(u=>u.password.length<12)||users[0].name.toLowerCase()===users[1].n
 }
 const sessions=new Map();
 const loginTries=new Map();
+// Live tracking events are visible only to the order's authenticated customer.
+const trackingClients=new Set();
+function notifyCustomerTracking(order){
+  const body='event: tracking\ndata: '+JSON.stringify({
+    order_id:order.id,reference:ref(order),
+    courier:order.shipping.courier,tracking_id:order.shipping.tracking_id,
+    updated_at:order.shipping.updated_at
+  })+'\n\n';
+  for(const client of trackingClients){
+    if(client.username!==(order.customer||order.ordered_by))continue;
+    try{client.response.write(body)}catch{trackingClients.delete(client)}
+  }
+}
 const STATUSES=['pending','confirmed','in_progress','quality_check','shipped','delivered','completed','cancelled'];
 const SIZES=['XXS','XS','S','M','L','XL','2XL','3XL','4XL','5XL','CUSTOM'];
 const MAX_IMAGES=8,MAX_IMAGE_BYTES=2500000,MAX_TOTAL_BYTES=16000000;
@@ -133,6 +146,22 @@ app.post('/api/logout',auth,csrf,(req,res)=>{
   res.set('Set-Cookie','flyxj_session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0');
   res.json({ok:true});
 });
+app.get('/api/events',auth,(req,res)=>{
+  // Session-authenticated, per-user server-sent events; no public order data.
+  res.status(200);
+  res.set('Content-Type','text/event-stream; charset=utf-8');
+  res.set('Cache-Control','no-cache, no-transform');
+  res.set('X-Accel-Buffering','no');
+  res.set('Connection','keep-alive');
+  res.flushHeaders();
+  const client={username:req.user.username,response:res};
+  trackingClients.add(client);
+  res.write('event: connected\ndata: {"ok":true}\n\n');
+  const heartbeat=setInterval(()=>{
+    try{res.write(': keep-alive\n\n')}catch{clearInterval(heartbeat);trackingClients.delete(client)}
+  },25000);
+  req.on('close',()=>{clearInterval(heartbeat);trackingClients.delete(client)});
+});
 app.get('/api/dashboard',auth,(req,res)=>{
   const allowed=orders.filter(o=>canView(req.user,o));
   res.json({stats:slimStats(allowed),recent:allowed.slice(-5).reverse().map(publicOrder),statuses:STATUSES});
@@ -228,7 +257,7 @@ app.patch('/api/orders/:id/shipping',auth,csrf,(req,res)=>{
   if(!courier&&!tracking_id)return err(res,400,'Enter courier or tracking ID');
   o.shipping={courier,tracking_id,tracking_url,updated_at:now()};
   history(o,req.user.username,'Shipping tracking updated','shipping');
-  try{save();res.json({order:publicOrder(o)})}catch{err(res,500,'Shipping details could not be saved')}
+  try{save();notifyCustomerTracking(o);res.json({order:publicOrder(o)})}catch{err(res,500,'Shipping details could not be saved')}
 });
 app.post('/api/orders/:id/return',auth,csrf,(req,res)=>{
   if(req.user.role!=='customer')return err(res,403,'Customer only');
