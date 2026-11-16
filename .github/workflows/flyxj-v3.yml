@@ -28,3 +28,7 @@ jobs:
           node --check flyxj-server/v3/assets/init-extra.js
       - name: Check order-manager integration
         run: node --test flyxj-server/v3/tests/integration.test.js
+      - name: Install browser DOM test runtime
+        run: npm install --no-save --package-lock=false --ignore-scripts jsdom@26
+      - name: Test chat popup and message send in browser DOM
+        run: node --test flyxj-server/v3/tests/chat-ui.test.js
