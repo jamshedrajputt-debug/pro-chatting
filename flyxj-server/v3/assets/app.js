@@ -366,7 +366,7 @@ async function saveAndRefresh(path,method,payload,success){
 async function init(){
   // Direct click wiring does not depend on the separate chat-init bundle.
   const chatButton=$('floatingChatButton'),chatClose=$('chatClose');
-  if(chatButton){chatButton.onclick=()=>toggleChatSurface();chatButton.setAttribute('aria-expanded','false')}
+  if(chatButton){chatButton.onclick=e=>{if(/Android/i.test(navigator.userAgent))return; e.preventDefault();toggleChatSurface()};chatButton.setAttribute('aria-expanded','false')}
   if(chatClose)chatClose.onclick=()=>toggleChatSurface(false);
   const directForm=$('directChatForm'),chatAttach=$('chatAttach');
   if(directForm)directForm.onsubmit=e=>{
