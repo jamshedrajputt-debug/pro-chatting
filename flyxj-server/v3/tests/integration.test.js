@@ -113,6 +113,34 @@ test('FLYXJ V3: authenticated PDF orders, approval, shipment, profit, chat, back
   assert.equal((await api('/api/finance',third)).status,200);
   assert.equal((await api('/api/orders',third)).status,200);
   assert.equal((await api('/api/orders',a,'POST',{...baseOrder,pdf},{'x-csrf-token':'wrong'})).status,403);
+
+  // The previous 6MB limit was rejecting valid dress specification documents.
+  const largePdf=Buffer.alloc(7*1024*1024,65);
+  Buffer.from('%PDF-1.7\n').copy(largePdf,0);
+  const bigRaw='data:application/pdf;base64,'+largePdf.toString('base64');
+  const largeResponse=await api('/api/orders',a,'POST',{...baseOrder,title:'Large PDF dress',pdf:bigRaw});
+  assert.equal(largeResponse.status,201,'PDF larger than old 6MB limit accepted: '+await largeResponse.clone().text().then(t=>t.slice(0,300)));
+  const largeOrder=(await largeResponse.json()).order;
+  const returnedLarge=await api(largeOrder.pdf_url,a);
+  assert.equal(returnedLarge.status,200);
+  assert.equal((await returnedLarge.arrayBuffer()).byteLength,largePdf.length,'PDF bytes preserved after upload');
+  const zippedPdf=require('node:zlib').gzipSync(largePdf);
+  const compressedData='data:application/x-flyxj-pdf+gzip;base64,'+zippedPdf.toString('base64');
+  const zippedResponse=await api('/api/orders',a,'POST',{...baseOrder,title:'Compressed PDF dress',pdf:compressedData});
+  assert.equal(zippedResponse.status,201,'gzip PDF upload accepted: '+await zippedResponse.clone().text().then(t=>t.slice(0,300)));
+  const compressedOrder=(await zippedResponse.json()).order;
+  const returnedZipped=Buffer.from(await (await api(compressedOrder.pdf_url,a)).arrayBuffer());
+  assert.ok(returnedZipped.equals(largePdf),'Gzip upload returns original valid PDF without quality loss');
+  const bomPdf=Buffer.concat([Buffer.from([239,187,191,10]),Buffer.from('%PDF-1.7\n1 0 obj\n<<>>\nendobj\n%%EOF')]);
+  const bomResponse=await api('/api/orders',a,'POST',{...baseOrder,title:'Preamble PDF dress',pdf:'data:application/pdf;base64,'+bomPdf.toString('base64')});
+  assert.equal(bomResponse.status,201,'PDF with BOM/preamble accepted');
+  const invalidGzip=await api('/api/orders',a,'POST',{...baseOrder,pdf:'data:application/x-flyxj-pdf+gzip;base64,'+Buffer.from('not a gzip file').toString('base64')});
+  assert.equal(invalidGzip.status,400,'invalid gzip payload rejected');
+  const zippedBomb=Buffer.alloc(30*1024*1024+1,65);
+  Buffer.from('%PDF-1.7\n').copy(zippedBomb,0);
+  const bombResponse=await api('/api/orders',a,'POST',{...baseOrder,pdf:'data:application/x-flyxj-pdf+gzip;base64,'+require('node:zlib').gzipSync(zippedBomb).toString('base64')});
+  assert.equal(bombResponse.status,400,'PDF gzip output above 30MB rejected safely');
+
  }finally{
   processServer.kill('SIGTERM');
   await delay(200);
