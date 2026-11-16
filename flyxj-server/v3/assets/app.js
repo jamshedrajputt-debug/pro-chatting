@@ -436,7 +436,13 @@ async function init(){
     await saveAndRefresh('/messages','POST',{message},'Message sent');
     $('messageInput').value='';
   };
-  setTimeout(initExtraFeatures,0);
+  // Defer looking up the optional module until the other deferred scripts have loaded.
+  // Passing initExtraFeatures directly throws ReferenceError before the module exists.
+  setTimeout(()=>{
+    if(typeof initExtraFeatures==='function'){
+      try{initExtraFeatures()}catch(err){console.error('FlyXJ extra UI initialization error:',err)}
+    }else console.warn('FlyXJ extra script missing. Essential chat click remains available.');
+  },0);
   try{const me=await api('/api/me');setLoggedIn(me);navigate('overview');await refresh({silent:true})}catch{resetApp()}
   document.addEventListener('visibilitychange',()=>{
     if(state.me&&document.visibilityState==='visible')refresh({silent:true});
