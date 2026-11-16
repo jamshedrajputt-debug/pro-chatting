@@ -24,9 +24,32 @@ async function api(url,options={}){
   }
   return data;
 }
+// This opens the popup immediately even if optional chat scripts or network calls fail.
+function toggleChatSurface(open){
+  const panel=$('floatingChatPanel'),button=$('floatingChatButton');
+  if(!panel||!button)return;
+  const shouldOpen=(typeof open==='boolean')?open:panel.classList.contains('hidden');
+  state.chatOpen=shouldOpen;
+  panel.classList.toggle('hidden',!shouldOpen);
+  panel.setAttribute('aria-hidden',String(!shouldOpen));
+  button.setAttribute('aria-expanded',String(shouldOpen));
+  if(shouldOpen){
+    // Always open the UI first; network loading is secondary and may be slow.
+    const input=$('chatInput');
+    if(input)input.focus();
+    if(typeof loadDirectChat==='function'){
+      Promise.resolve().then(()=>loadDirectChat()).then(()=>{
+        if(state.chatOpen&&typeof markChatRead==='function')return markChatRead();
+      }).catch(e=>console.warn('Chat loading retry available:',e));
+    } else {
+      const messages=$('chatMessages');
+      if(messages)messages.textContent='Chat is loading. Please refresh if it stays unavailable.';
+    }
+  }
+}
 function resetApp(){
   if(state.events){state.events.close();state.events=null}
-  state.me=null;state.orders=[];state.selected=null;state.announcedTracking.clear();
+  state.me=null;state.orders=[];state.selected=null;state.announcedTracking.clear();state.chatOpen=false;
   $('floatingChatButton').classList.add('hidden');$('floatingChatPanel').classList.add('hidden');
   $('loginShell').classList.remove('hidden');$('dashboardShell').classList.add('hidden');
   closeDrawer();$('loginPassword').value='';
@@ -341,6 +364,10 @@ async function saveAndRefresh(path,method,payload,success){
   }catch(ex){toast(ex.message,true)}
 }
 async function init(){
+  // Direct click wiring does not depend on the separate chat-init bundle.
+  const chatButton=$('floatingChatButton'),chatClose=$('chatClose');
+  if(chatButton){chatButton.onclick=()=>toggleChatSurface();chatButton.setAttribute('aria-expanded','false')}
+  if(chatClose)chatClose.onclick=()=>toggleChatSurface(false);
   $('passwordToggle').onclick=()=>{
     const input=$('loginPassword');input.type=input.type==='password'?'text':'password';
     $('passwordToggle').textContent=input.type==='password'?'Show':'Hide';
