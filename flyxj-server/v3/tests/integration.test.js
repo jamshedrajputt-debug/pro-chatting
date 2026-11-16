@@ -49,6 +49,12 @@ test('FLYXJ V3: authenticated PDF orders, approval, shipment, profit, chat, back
   const health=await (await api('/api/health')).json();
   assert.equal(health.version,'3.0');
   assert.equal((await api('/api/orders')).status,401,'require login');
+  const page=await api('/chat');
+  assert.equal(page.status,200,'Mobile chat route is accessible');
+  assert.match(await page.text(),/FLYXJ.*Direct Live Chat/);
+  const script=await api('/assets/mobile-chat.js');
+  assert.equal(script.status,200,'Mobile chat script served');
+  assert.match(await script.text(),/function initialize/);
   const a=await login('usera','TestingCustomerPass!123');
   const b=await login('userb','TestingStaffPass!123');
   const baseOrder={title:'Custom leather dress',size:'M',colour:'Black',quantity:1,comments:'Made to size',
