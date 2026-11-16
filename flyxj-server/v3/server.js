@@ -323,21 +323,24 @@ app.patch('/api/orders/:id/status',auth,csrf,(req,res)=>{
   const o=loadOrder(req,res);if(!o)return;
   const status=text(req.body&&req.body.status,40),note=text(req.body&&req.body.staff_note,1000);
   if(!STATUSES.includes(status))return err(res,400,'Choose a valid status');
+  // Validate the whole change before changing an order in memory or on disk.
+  let nextShipping=o.shipping||shipDefault(),nextFinance=o.finance||financeDefault();
   if(req.body?.shipping){
-   const sh=req.body.shipping;
-   const courier=text(sh.courier,100),tracking_id=text(sh.tracking_id,120),tracking_url=safeUrl(sh.tracking_url);
-   if(tracking_url===null)return err(res,400,'Courier tracking link must be HTTPS');
-   o.shipping={courier,tracking_id,tracking_url,updated_at:now()};
+    const sh=req.body.shipping;
+    const courier=text(sh.courier,100),tracking_id=text(sh.tracking_id,120),tracking_url=safeUrl(sh.tracking_url);
+    if(tracking_url===null)return err(res,400,'Courier tracking link must be HTTPS');
+    nextShipping={courier,tracking_id,tracking_url,updated_at:now()};
   }
   if(req.body?.finance){
-   const f=normalizeFinance(req.body.finance,o.finance);
-   if(!f)return err(res,400,'Enter selling price, making cost, shipping cost in PKR, and PKR/USD rate');
-   o.finance=f;
+    const f=normalizeFinance(req.body.finance,o.finance);
+    if(!f)return err(res,400,'Enter selling price, making cost, shipping cost in PKR, and PKR/USD rate');
+    nextFinance=f;
   }
-  if(['shipped','delivered','completed'].includes(status)&&(!validFinance(o.finance)||!o.shipping?.courier||!o.shipping?.tracking_id))
-   return err(res,400,'Shipping requires courier, tracking ID, sale price, making cost, shipping cost and PKR per USD rate');
-  if(['cutting','stitching'].includes(status)&&o.approval?.status==='requested')
-   return err(res,400,'Customer approval is pending');
+  if(['shipped','delivered','completed'].includes(status)&&(!validFinance(nextFinance)||!nextShipping?.courier||!nextShipping?.tracking_id))
+    return err(res,400,'Shipping requires courier, tracking ID, selling price, making cost, shipping cost and PKR per USD rate');
+  if(['cutting','stitching'].includes(status)&&o.pdf_file&&o.approval?.status!=='approved')
+    return err(res,400,'Customer approval required before cutting or stitching');
+  o.shipping=nextShipping;o.finance=nextFinance;
   o.status=status;o.staff_note=note;
   if(isShipped(o)&&!o.finance.recognized_at)o.finance.recognized_at=now();
   if(status==='shipped'&&!o.shipped_at)o.shipped_at=now();
