@@ -11,7 +11,7 @@ async function loadTeam(){
  }catch(e){toast(e.message,true)}
 }
 function initExtraFeatures(){
- $('floatingChatButton').onclick=()=>toggleDirectChat();
+ $('floatingChatButton').onclick=e=>{if(/Android/i.test(navigator.userAgent))return; e.preventDefault();toggleDirectChat()};
  $('chatClose').onclick=()=>toggleDirectChat(false);
  $('directChatForm').onsubmit=sendDirectChat;
  $('chatAttach').onchange=()=>{$('chatFileName').textContent=$('chatAttach').files?.[0]?.name||''};
