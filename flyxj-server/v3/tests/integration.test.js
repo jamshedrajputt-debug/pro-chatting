@@ -28,7 +28,7 @@ test('FLYXJ V3: authenticated PDF orders, approval, shipment, profit, chat, back
  const base='http://127.0.0.1:'+port;
  async function api(route,session,method='GET',payload=null,extraHeaders={}){
   const headers={...extraHeaders};
-  if(session){headers.cookie=session.cookie;headers['x-csrf-token']=session.csrf}
+  if(session){headers.cookie=session.cookie;if(!Object.prototype.hasOwnProperty.call(headers,'x-csrf-token'))headers['x-csrf-token']=session.csrf}
   if(payload!==null)headers['Content-Type']='application/json';
   return fetch(base+route,{method,headers,...(payload!==null?{body:JSON.stringify(payload)}:{})});
  }
