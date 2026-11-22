@@ -71,14 +71,15 @@ function renderExtraDetails(o){
  const f=o.finance||{},view=$('detailFinanceView');view.replaceChildren();
  if(f.sale_pkr!==null&&f.sale_pkr!==undefined&&Number(f.fx_pkr_per_usd)>0){
   const sale=Number(f.sale_pkr),making=Number(f.making_pkr),shipping=Number(f.shipping_pkr),fx=Number(f.fx_pkr_per_usd);
-  const cost=making+shipping,profit=sale-cost;
+  const earning=Number(o.customer_earning_pkr)||0,cost=making+shipping+earning,profit=sale-cost;
   view.append(node('b','', 'Selling price: '+formatAmount(sale)+' | '+formatAmount(sale/fx,'USD')));
   view.append(node('span','', 'Making cost: '+formatAmount(making)+' | '+formatAmount(making/fx,'USD')));
   view.append(node('span','', 'Shipping cost: '+formatAmount(shipping)+' | '+formatAmount(shipping/fx,'USD')));
+  view.append(node('span','', 'User A earning: '+formatAmount(earning)+' | '+formatAmount(earning/fx,'USD')));
   view.append(node('span','', 'Total cost: '+formatAmount(cost)+' | '+formatAmount(cost/fx,'USD')));
   view.append(node('b','', 'Gross profit: '+formatAmount(profit)+' | '+formatAmount(profit/fx,'USD')));
   view.append(node('small','muted','Historical rate: '+fx+' PKR per USD'));
- }else view.append(node('span','muted','Staff will enter sale price, making cost, shipping cost and exchange rate.'));
+ }else view.append(node('span','muted','User A earning: '+formatAmount(o.customer_earning_pkr||0)+'. User B will enter sale price, making cost, shipping cost and exchange rate.'));
  if(state.me?.role==='staff'){
   $('salePkr').value=f.sale_pkr??'';$('makingPkr').value=f.making_pkr??'';
   $('shippingPkr').value=f.shipping_pkr??'';$('usdRate').value=f.fx_pkr_per_usd??'';
