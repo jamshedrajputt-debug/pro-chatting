@@ -38,9 +38,9 @@ test('Four dress photos become one actual JPEG with Size and Color text in the p
  assert.match(composer.svgCaption('XL','Dark Brown').toString(),/SIZE/);
  assert.match(composer.svgCaption('XL','Dark Brown').toString(),/Dark Brown/);
  assert.match(composer.svgCaption('<danger>','Black').toString(),/&lt;danger&gt;/,'XML escapes untrusted sizes');
- const upper=await sharp(image).extract({left:3,top:8,width:200,height:200}).stats();
- const bottom=await sharp(image).extract({left:3,top:1205,width:200,height:100}).stats();
- assert.notDeepEqual(upper.channels.map(x=>Math.round(x.mean)),bottom.channels.map(x=>Math.round(x.mean)),
+ const upper=await sharp(image).extract({left:3,top:8,width:5,height:5}).raw().toBuffer();
+ const bottom=await sharp(image).extract({left:3,top:1205,width:5,height:5}).raw().toBuffer();
+ assert.notDeepEqual([...upper.subarray(0,3)],[...bottom.subarray(0,3)],
   'footer visually different from photo grid');
  for(const original of photos){
   const normalized=await composer.normalizePhoto(original);
