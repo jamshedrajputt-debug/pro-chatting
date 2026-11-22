@@ -209,6 +209,9 @@ function renderOrders(){
     }
     trigger.onclick=e=>{
       e.stopPropagation();document.querySelectorAll('.flyxj-actions-menu').forEach(n=>{if(n!==menu)n.classList.add('hidden')});
+      const rect=trigger.getBoundingClientRect();
+      menu.style.top=Math.max(8,Math.min(window.innerHeight-160,rect.bottom+4))+'px';
+      menu.style.left=Math.max(8,Math.min(window.innerWidth-192,rect.right-180))+'px';
       menu.classList.toggle('hidden');
     };
     actions.append(trigger,menu);arrow.append(actions);
