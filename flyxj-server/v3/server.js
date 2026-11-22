@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
 const persistent = require('./persistent.js');
+const whatsapp = require('./whatsapp.js');
 
 const app = express();
 app.disable('x-powered-by');
@@ -399,6 +400,10 @@ app.post('/api/orders/:id/restore',auth,csrf,async(req,res)=>{
  pushOrder(next,'order','Order restored');
  return res.json({order:publicOrder(next)});
 });
+app.get('/api/orders/:id/whatsapp',auth,(req,res)=>{
+ const o=loadOrder(req,res);if(!o)return;
+ return res.json({url:whatsapp.waLink(o),recipient:whatsapp.RECIPIENT,automatic_enabled:whatsapp.whatsappConfigured(),note:'WhatsApp link opens a prepared message. The person sending must tap Send; media links require FlyXJ login.'});
+});
 app.get('/api/orders/:id',auth,(req,res)=>{
   const o=loadOrder(req,res);if(o)res.json({order:publicOrder(o)});
 });
@@ -473,7 +478,13 @@ app.post('/api/orders',auth,csrf,async(req,res)=>{
     orders.push(o);
     try{await save()}catch(ex){orders.pop();throw ex;}
     pushOrder(o,'order','New dress order submitted');
-    res.status(201).json({order:publicOrder(o)});
+    // Non-blocking: order success must never depend on WhatsApp availability.
+    if(whatsapp.whatsappConfigured()){
+      whatsapp.notifyViaBusinessApi(o).then(result=>{
+        if(result.status!=='accepted_by_provider')console.warn('WhatsApp template notification:',result.status);
+      }).catch(e=>console.warn('WhatsApp notification unavailable:',e.message));
+    }
+    res.status(201).json({order:publicOrder(o),whatsapp_url:whatsapp.waLink(o),whatsapp_auto_enabled:whatsapp.whatsappConfigured()});
   }catch(ex){
     image_files.forEach(f=>{try{fs.unlinkSync(path.join(PHOTO_DIR,f))}catch{}});
     try{fs.unlinkSync(path.join(PDF_DIR,pdfName))}catch{}
