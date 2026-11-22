@@ -189,15 +189,31 @@ function renderOrders(){
       tracking.append(node('strong','',o.shipping.tracking_id));
       if(o.shipping.courier)tracking.append(node('div','tiny muted',o.shipping.courier));
     }else tracking.append(node('span','muted','Not added'));
-    const arrow=node('td','table-arrow','›');
+    const arrow=node('td','table-arrow');
+    if(state.me?.role==='staff'){
+      const pack=node('a','order-sheet-link','▦ 4 Photos + PDF');
+      pack.href='/order/'+o.id;
+      pack.title='Open the full order pack with photos, size, colour and shipping PDF';
+      pack.addEventListener('click',e=>e.stopPropagation());
+      arrow.append(pack);
+    }else arrow.textContent='›';
     tr.append(first,customer,date,st,tracking,arrow);
     tr.addEventListener('click',()=>openDetail(o.id));
     tr.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openDetail(o.id)}});
     tbody.append(tr);
   }
 }
-function navigate(view){
+function navigate(view,{fromHistory=false}={}){
   state.view=view;
+  if(state.me&&!fromHistory){
+    try{
+      const target='#'+view;
+      if(history.state?.flyxjView&&history.state?.view!==view)
+        history.pushState({flyxjView:true,view},'',target);
+      else if(!history.state?.flyxjView)
+        history.replaceState({flyxjView:true,view},'',target);
+    }catch(e){}
+  }
   $('sidebar').classList.remove('open');
   const names={overview:'Overview',orders:'All orders',tracking:'Shipment tracking',finance:'Finance & Profit',team:'Staff & Backup'};
   $('breadcrumb').textContent=names[view];
@@ -219,12 +235,18 @@ function openDrawer(id){
   $('overlay').classList.remove('hidden');
   $(id).classList.remove('hidden');
   document.body.style.overflow='hidden';
+  if(state.me){
+    try{history.pushState({flyxjView:true,view:state.view,flyxjDrawer:id},'', '#'+state.view+'-'+id)}catch(e){}
+  }
 }
-function closeDrawer(){
+function closeDrawer(options={}){
   $('overlay').classList.add('hidden');
   $('createDrawer').classList.add('hidden');
   $('detailDrawer').classList.add('hidden');
   document.body.style.overflow='';
+  if(!options.fromHistory&&history.state?.flyxjDrawer){
+    try{history.replaceState({flyxjView:true,view:state.view},'', '#'+state.view)}catch(e){}
+  }
 }
 function openCreate(){if(state.me?.role!=='customer')return;openDrawer('createDrawer')}
 function imageItem(file,index){
@@ -353,6 +375,11 @@ function renderDetail(o){
 function openDetail(id){
   const o=state.orders.find(o=>o.id===id);
   if(!o)return toast('Order not found',true);
+  // Android order details have a real page in WebView history so Back works.
+  if(state.me?.role==='staff'&&/Android/i.test(navigator.userAgent)){
+    window.location.assign('/order/'+encodeURIComponent(id));
+    return;
+  }
   renderDetail(o);openDrawer('detailDrawer');
 }
 async function saveAndRefresh(path,method,payload,success){
@@ -385,7 +412,7 @@ async function init(){
     e.preventDefault();const btn=$('signInButton');btn.disabled=true;
     try{
       const data=await api('/api/login',{method:'POST',body:JSON.stringify({username:$('loginName').value,password:$('loginPassword').value})});
-      $('loginPassword').value='';setLoggedIn(data);navigate('overview');await refresh({silent:true});toast('Welcome to FlyXJ');
+      $('loginPassword').value='';setLoggedIn(data);navigate(location.hash==='#orders'?'orders':'overview');await refresh({silent:true});toast('Welcome to FlyXJ');
     }catch(ex){toast(ex.message,true)}
     finally{btn.disabled=false}
   };
@@ -401,6 +428,13 @@ async function init(){
   $('overlay').onclick=closeDrawer;
   for(const el of document.querySelectorAll('[data-close]'))el.onclick=closeDrawer;
   document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDrawer()});
+  window.addEventListener('popstate',event=>{
+    if(!state.me)return;
+    // Hardware Back: close the active order form/details instead of exiting the app.
+    closeDrawer({fromHistory:true});
+    if(event.state?.flyxjView&&event.state.view&&event.state.view!==state.view)
+      navigate(event.state.view,{fromHistory:true});
+  });
   $('dressPhotos').onchange=e=>{
     const newFiles=Array.from(e.target.files||[]);
     for(const file of newFiles){
@@ -443,7 +477,7 @@ async function init(){
       try{initExtraFeatures()}catch(err){console.error('FlyXJ extra UI initialization error:',err)}
     }else console.warn('FlyXJ extra script missing. Essential chat click remains available.');
   },0);
-  try{const me=await api('/api/me');setLoggedIn(me);navigate('overview');await refresh({silent:true})}catch{resetApp()}
+  try{const me=await api('/api/me');setLoggedIn(me);navigate(location.hash==='#orders'?'orders':'overview');await refresh({silent:true})}catch{resetApp()}
   document.addEventListener('visibilitychange',()=>{
     if(state.me&&document.visibilityState==='visible')refresh({silent:true});
   });
