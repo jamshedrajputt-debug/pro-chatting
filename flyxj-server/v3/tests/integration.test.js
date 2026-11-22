@@ -47,7 +47,7 @@ test('FLYXJ V3: authenticated PDF orders, approval, shipment, profit, chat, back
   }
   assert.ok(ready,'server started: '+logs);
   const health=await (await api('/api/health')).json();
-  assert.equal(health.version,'4.0');
+  assert.equal(health.version,'4.1');
   assert.equal((await api('/api/orders')).status,401,'require login');
   const page=await api('/chat');
   assert.equal(page.status,200,'Mobile chat route is accessible');
@@ -92,6 +92,31 @@ test('FLYXJ V3: authenticated PDF orders, approval, shipment, profit, chat, back
   assert.equal((await api(order.pdf_url,a)).status,200,'customer can open own PDF');
   assert.equal((await api(order.pdf_url,b)).status,200,'staff can open PDF');
   assert.equal((await api(order.photos[0],a)).status,200,'customer photo');
+  const whats=(await (await api('/api/orders/'+order.id+'/whatsapp',a)).json());
+  assert.equal(whats.recipient,'971567527192');
+  assert.match(whats.url,/^https:\/\/wa.me\/971567527192\?text=/);
+  const decoded=decodeURIComponent(whats.url.split('?text=')[1]);
+  assert.match(decoded,/api\/orders\/1\/pdf/);
+  assert.match(decoded,/api\/orders\/1\/photos\/0/);
+  assert.equal(whats.automatic_enabled,false,'WhatsApp cannot auto-send without configured Business API');
+  assert.equal((await api('/api/orders/deleted',a)).status,200);
+  const changed=await api('/api/orders/'+order.id+'/edit',a,'PATCH',{
+   updated_at:order.updated_at,title:'Custom revised leather dress',colour:'Dark brown',size:'L',
+   quantity:2,comments:'New production note',images:[picture,picture],
+   pdf:'data:application/pdf;base64,'+Buffer.from('%PDF-1.7\n2 0 obj\n<< /Updated true >>\nendobj\n%%EOF').toString('base64')
+  });
+  assert.equal(changed.status,200,'User A can edit and replace PDF/photos');
+  const edited=(await changed.json()).order;
+  assert.equal(edited.title,'Custom revised leather dress');
+  assert.equal(edited.size,'L');
+  assert.equal(edited.photos.length,2,'replacement photos are saved');
+  assert.equal((await api(edited.pdf_url,b)).status,200,'replaced PDF remains accessible');
+  assert.equal((await api(edited.photos[1],b)).status,200,'replaced photo accessible');
+  assert.equal((await api('/api/orders/'+order.id+'/edit',a,'PATCH',{updated_at:order.updated_at,title:'Stale edit'})).status,409,'stale edits rejected');
+  const staffEdit=await api('/api/orders/'+order.id+'/edit',b,'PATCH',{updated_at:edited.updated_at,colour:'Walnut brown',priority:'urgent'});
+  assert.equal(staffEdit.status,200,'User B can edit same order');
+  assert.equal((await staffEdit.json()).order.colour,'Walnut brown');
+
   assert.equal((await api('/api/orders/'+order.id+'/status',a,'PATCH',{status:'shipped'})).status,403);
   assert.equal((await api('/api/orders/'+order.id+'/status',b,'PATCH',{status:'shipped'})).status,400,'shipping needs prices and tracking');
   assert.equal((await api('/api/orders/'+order.id+'/finance',a,'PATCH',{sale_pkr:40000})).status,403);
@@ -169,6 +194,20 @@ test('FLYXJ V3: authenticated PDF orders, approval, shipment, profit, chat, back
   Buffer.from('%PDF-1.7\n').copy(zippedBomb,0);
   const bombResponse=await api('/api/orders',a,'POST',{...baseOrder,pdf:'data:application/x-flyxj-pdf+gzip;base64,'+require('node:zlib').gzipSync(zippedBomb).toString('base64')});
   assert.equal(bombResponse.status,400,'PDF gzip output above 30MB rejected safely');
+  const beforeDelete=(await (await api('/api/orders/'+compressedOrder.id,a)).json()).order;
+  const del=await api('/api/orders/'+compressedOrder.id,a,'DELETE',{updated_at:beforeDelete.updated_at});
+  assert.equal(del.status,200,'User A can soft-delete order');
+  assert.equal((await api('/api/orders/'+compressedOrder.id,b)).status,404,'deleted order is hidden from User B');
+  const deleted=(await (await api('/api/orders/deleted',a)).json()).orders;
+  assert.ok(deleted.some(x=>x.id===compressedOrder.id),'User A sees recoverable deleted orders');
+  assert.ok((await (await api('/api/orders/deleted',b)).json()).orders.some(x=>x.id===compressedOrder.id),'User B sees deleted orders');
+  const restore=await api('/api/orders/'+compressedOrder.id+'/restore',b,'POST',{});
+  assert.equal(restore.status,200,'User B can restore order deleted by User A');
+  assert.equal((await api('/api/orders/'+compressedOrder.id,a)).status,200,'restored order visible to User A');
+  const newer=(await (await api('/api/orders/'+compressedOrder.id,b)).json()).order;
+  assert.equal((await api('/api/orders/'+compressedOrder.id,b,'DELETE',{updated_at:newer.updated_at})).status,200,'User B can delete order too');
+  assert.equal((await api('/api/orders/'+compressedOrder.id+'/restore',a,'POST',{})).status,200,'User A can restore staff-deleted order');
+
 
  }finally{
   processServer.kill('SIGTERM');
