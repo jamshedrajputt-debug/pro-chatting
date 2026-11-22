@@ -57,8 +57,11 @@ test('FLYXJ V3: authenticated PDF orders, approval, shipment, profit, chat, back
   assert.match(await script.text(),/function initialize/);
   const a=await login('usera','TestingCustomerPass!123');
   const b=await login('userb','TestingStaffPass!123');
+  const testImageBuffer=await require('sharp')({create:{width:36,height:36,channels:3,background:'#994433'}}).png().toBuffer();
+  const validPicture='data:image/png;base64,'+testImageBuffer.toString('base64');
   const baseOrder={title:'Custom leather dress',size:'M',colour:'Black',quantity:1,comments:'Made to size',
-   images:[picture],measurements:{bust:'36 in',waist:'28 in'},expected_date:'2026-12-30',priority:'high'};
+   images:[validPicture,validPicture,validPicture,validPicture],
+   measurements:{bust:'36 in',waist:'28 in'},expected_date:'2026-12-30',priority:'high'};
   assert.equal((await api('/api/orders',a,'POST',baseOrder)).status,400,'PDF required');
   assert.equal((await api('/api/orders',b,'POST',{...baseOrder,pdf})).status,403,'staff cannot submit');
   const newResponse=await api('/api/orders',a,'POST',{...baseOrder,pdf});
@@ -92,6 +95,44 @@ test('FLYXJ V3: authenticated PDF orders, approval, shipment, profit, chat, back
   assert.match(imageResponse.headers.get('content-type'),/image\/png/);
   assert.match(imageResponse.headers.get('content-disposition'),/MAKER-IMAGE.png/);
   assert.deepEqual(Buffer.from(await imageResponse.arrayBuffer()),fakePng,'download preserves generated PNG exactly');
+
+  // Android WebViews may drop session cookies when handing off to the native
+  // downloader. Mobile-only tickets must be issued with staff auth + CSRF and
+  // then remain accessible via high-entropy URLs from Chrome without cookies.
+  const pdfPrepPath='/api/orders/'+order.id+'/mobile-file';
+  assert.equal((await api(pdfPrepPath,a,'POST',{kind:'maker'})).status,403,'Customer cannot request Maker Image ticket');
+  assert.equal((await api(pdfPrepPath,b,'POST',{kind:'zip'})).status,400,'Only PDF or one maker PNG allowed');
+  assert.equal((await api(pdfPrepPath,b,'POST',{kind:'pdf'},{'x-csrf-token':'invalid'})).status,403,'File tickets require CSRF protection');
+  const pdfTicketResponse=await api(pdfPrepPath,a,'POST',{kind:'pdf'});
+  assert.equal(pdfTicketResponse.status,200,'Customer can request an original-PDF ticket for own order');
+  const pdfTicket=await pdfTicketResponse.json();
+  assert.match(pdfTicket.url,/^\/api\/mobile-file\/[a-f0-9]{64}$/);
+  assert.match(pdfTicket.filename,/SPEC\.pdf$/);
+  assert.equal(pdfTicket.expires_in_seconds,600);
+  const mobilePdf=await api(pdfTicket.url);
+  assert.equal(mobilePdf.status,200,'Mobile PDF is downloadable without a session cookie');
+  assert.match(mobilePdf.headers.get('content-disposition'),/attachment.*\.pdf/);
+  assert.match(mobilePdf.headers.get('content-type'),/application\/pdf/);
+  assert.match(Buffer.from(await mobilePdf.arrayBuffer()).toString('latin1'),/%PDF-1\.4/);
+  assert.equal(mobilePdf.headers.get('cache-control'),'private, no-store, max-age=0');
+  assert.equal((await api('/api/mobile-file/'+('a'.repeat(64)))).status,404,'Random ticket never grants access');
+  const makerTicketResponse=await api(pdfPrepPath,b,'POST',{kind:'maker'});
+  assert.equal(makerTicketResponse.status,200,'Staff can generate the combined PNG on the server: '+await makerTicketResponse.clone().text()+' '+logs.slice(-350));
+  const makerTicket=await makerTicketResponse.json();
+  assert.match(makerTicket.url,/^\/api\/mobile-file\/[a-f0-9]{64}$/);
+  assert.match(makerTicket.filename,/MAKER-IMAGE\.png$/);
+  const mobileMaker=await api(makerTicket.url);
+  assert.equal(mobileMaker.status,200,'Android can save image without passing WebView cookies');
+  assert.match(mobileMaker.headers.get('content-disposition'),/attachment.*\.png/);
+  assert.match(mobileMaker.headers.get('content-type'),/image\/png/);
+  const makerPng=Buffer.from(await mobileMaker.arrayBuffer());
+  assert.equal(makerPng.subarray(0,8).toString('hex'),'89504e470d0a1a0a','valid PNG header');
+  assert.equal(makerPng.readUInt32BE(16),1200,'maker PNG width 1200');
+  assert.equal(makerPng.readUInt32BE(20),1400,'maker PNG height 1400');
+  const makerPreview=await api(makerTicket.preview_url);
+  assert.equal(makerPreview.status,200,'Inline preview allows mobile Save Image');
+  assert.match(makerPreview.headers.get('content-disposition'),/inline.*\.png/);
+
   assert.equal((await api(order.pdf_url,a)).status,200,'customer can open own PDF');
   assert.equal((await api(order.pdf_url,b)).status,200,'staff can open PDF');
   assert.equal((await api(order.photos[0],a)).status,200,'customer photo');

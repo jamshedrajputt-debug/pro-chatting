@@ -637,6 +637,88 @@ app.post('/api/orders/:id/return',auth,csrf,async(req,res)=>{
 });
 
 // Temporary maker image is not business data: never changes orders or Supabase.
+// Android WebView may not pass login cookies to its native DownloadManager.
+// A staff/customer-only POST issues a 10-minute high-entropy capability URL;
+// the eventual file GET works in a normal mobile browser without cookies.
+// The token is private, never included in WhatsApp messages or public pages.
+const mobileFileTickets=new Map();
+function cleanMobileFileTickets(forInsert=false){
+ const current=Date.now();
+ for(const [ticket,entry] of mobileFileTickets)
+  if(entry.expires<=current)mobileFileTickets.delete(ticket);
+ while(mobileFileTickets.size>(forInsert?7:8))mobileFileTickets.delete(mobileFileTickets.keys().next().value);
+}
+app.post('/api/orders/:id/mobile-file',auth,csrf,async(req,res)=>{
+ const o=loadOrder(req,res);if(!o)return;
+ const kind=req.body?.kind;
+ if(kind!=='pdf'&&kind!=='maker')return err(res,400,'Choose PDF or Maker Image');
+ if(kind==='maker'&&req.user.role!=='staff')return err(res,403,'Maker Image download is User B only');
+ try{
+  let bytes=null,filename='',mime='';
+  if(kind==='pdf'){
+   if(!o.pdf_file||!/^[a-f0-9-]{36}\.pdf$/.test(o.pdf_file))return err(res,404,'Original PDF not found');
+   const pdf=await persistent.retrieveOrLocal(PDF_DIR,o.pdf_file,'pdfs');
+   if(!pdf||!pdf.subarray(0,1024).includes(Buffer.from('%PDF-')))
+    return err(res,404,'Original PDF unavailable. Ask the customer to replace the PDF.');
+   filename=ref(o)+'-SPEC.pdf';mime='application/pdf';
+  }else{
+   const names=Array.isArray(o.image_files)?o.image_files.slice(0,4):[];
+   const photos=[];
+   for(const name of names){
+    if(!/^[a-f0-9-]{36}\.(jpg|png|webp)$/.test(name))return err(res,404,'A reference photo is invalid');
+    const photo=await persistent.retrieveOrLocal(PHOTO_DIR,name,'photos');
+    if(!photo)return err(res,404,'A reference photo is missing from storage');
+    photos.push(photo);
+   }
+   if(!photos.length&&typeof o.image==='string'){
+    const parsed=imageData(o.image);if(parsed)photos.push(parsed.bytes);
+   }
+   if(!photos.length)return err(res,404,'This order has no reference photos');
+   // Exactly one PNG file is built on the server: no Canvas, base64 upload,
+   // Blob URL, JS click or WebView storage permission required.
+   const sharp=require('sharp');
+   const jpg=await require('./maker-compose.js').makerCollage(photos,{size:o.size,colour:o.colour});
+   bytes=await sharp(jpg).png({compressionLevel:9}).toBuffer();
+   if(bytes.length>12*1024*1024)throw Error('Combined image is too large for mobile download');
+   filename=ref(o)+'-MAKER-IMAGE.png';mime='image/png';
+  }
+  cleanMobileFileTickets(true);
+  const token=crypto.randomBytes(32).toString('hex');
+  mobileFileTickets.set(token,{orderId:o.id,kind,filename,mime,bytes,
+   pdfFile:kind==='pdf'?o.pdf_file:null,expires:Date.now()+10*60*1000});
+  const url='/api/mobile-file/'+token;
+  res.set('Cache-Control','private, no-store');
+  return res.json({url,preview_url:kind==='maker'?url+'?preview=1':null,
+   filename,expires_in_seconds:600,kind});
+ }catch(e){
+  console.warn('Mobile download preparation failed for order',o.id,':',e.message);
+  return err(res,503,'Could not prepare the file. Check reference files and retry.');
+ }
+});
+app.get('/api/mobile-file/:ticket',async(req,res)=>{
+ const token=req.params.ticket;
+ if(!/^[a-f0-9]{64}$/.test(token))return err(res,404,'Download expired');
+ cleanMobileFileTickets();
+ const ticket=mobileFileTickets.get(token);
+ if(!ticket||ticket.expires<=Date.now())return err(res,404,'Download link expired. Reopen the order and try again.');
+ const o=orders.find(o=>o.id===ticket.orderId&&!o.deleted_at);
+ if(!o)return err(res,404,'This order is no longer available');
+ try{
+  const bytes=ticket.kind==='maker'?ticket.bytes:
+   await persistent.retrieveOrLocal(PDF_DIR,ticket.pdfFile,'pdfs');
+  if(!Buffer.isBuffer(bytes)||!bytes.length)return err(res,404,'File unavailable. Prepare a new download link.');
+  res.set('Content-Type',ticket.mime);
+  res.set('Content-Disposition',(ticket.kind==='maker'&&req.query.preview==='1'?'inline':'attachment')+
+   '; filename="'+ticket.filename+'"');
+  res.set('Cache-Control','private, no-store, max-age=0');
+  res.set('Referrer-Policy','no-referrer');
+  res.set('X-Content-Type-Options','nosniff');
+  return res.send(bytes);
+ }catch(e){
+  console.warn('Mobile download unavailable:',e.message);
+  return err(res,503,'Private storage is temporarily unavailable. Retry shortly.');
+ }
+});
 // Browser combines photos into one PNG; this route supports Android downloads.
 const makerImageTickets=new Map();
 function purgeMakerTickets(){

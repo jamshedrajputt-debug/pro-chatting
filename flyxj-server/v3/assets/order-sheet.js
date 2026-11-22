@@ -4,6 +4,7 @@
   const match=/^\/order\/([1-9]\d{0,8})\/?$/.exec(location.pathname);
   const id=match?match[1]:null;
   let order=null,viewIndex=0,allPhotos=false;
+  const mobileDownloads={maker:null,pdf:null};
   function el(tag,className,text){
     const n=document.createElement(tag);
     if(className)n.className=className;
@@ -103,7 +104,7 @@
     row('PDF spec',o.pdf_url?'Attached':'Not available');
     row('Measurements',Object.entries(o.measurements||{}).filter(([,v])=>v).map(([key,v])=>key+': '+v).join(' · ')||'See PDF');
     $('notes').textContent=o.comments?'Notes: '+o.comments:'';
-    if(o.pdf_url){$('pdfLink').href=o.pdf_url;$('pdfLink').classList.remove('hidden')}
+    if(o.pdf_url){$('pdfLink').href='#';$('pdfLink').classList.remove('hidden')}
     else $('pdfLink').classList.add('hidden');
     showThumbs();
     $('message').classList.add('hidden');
@@ -136,26 +137,87 @@
       $('addressHint').textContent='Use the original attached PDF as the source of truth.';
     }
   }
-  async function downloadMakerImage(){
-    const button=$('makerDownload'),status=$('makerStatus');
-    if(!order||!window.FlyxjMakerCollage)return;
-    button.disabled=true;button.textContent='Preparing your image…';
-    status.textContent='Combining photos with size and color...';
+  async function copyPrivateLink(url,button){
+    const link=location.origin+url;
     try{
-      const user=await api('/api/me');
-      if(user.role!=='staff')throw Error('Only User B / staff can download this image.');
-      await window.FlyxjMakerCollage.download(order,user.csrf,message=>{status.textContent=message});
-      status.textContent='One PNG image prepared. Check your Downloads folder.';
+      if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(link);
+      else{
+        const input=el('textarea');input.value=link;input.setAttribute('readonly','');
+        input.style.position='fixed';input.style.left='-3000px';
+        document.body.append(input);input.select();
+        if(!document.execCommand('copy'))throw Error('Clipboard unavailable');
+        input.remove();
+      }
+      button.textContent='✓ Copied — paste in Chrome';
     }catch(e){
-      status.textContent=e.message||'Could not download the image. Try again.';
-    }finally{
-      button.disabled=false;button.textContent='↓ Download Maker Image';
+      // Native Android WebViews sometimes disable clipboard access as well.
+      window.prompt('Copy this private link and paste into Chrome within 10 minutes:',link);
     }
+  }
+  async function prepareMobileFile(kind,csrf){
+    if(!order||!csrf)throw Error('Sign in again to download files.');
+    const res=await fetch('/api/orders/'+encodeURIComponent(order.id)+'/mobile-file',{
+      method:'POST',credentials:'same-origin',
+      headers:{accept:'application/json','content-type':'application/json','x-csrf-token':csrf},
+      body:JSON.stringify({kind})
+    });
+    const body=await res.json().catch(()=>({}));
+    if(!res.ok||!body.url)throw Error(body.detail||'File preparation failed. Try again.');
+    return {...body,createdAt:Date.now()};
+  }
+  function readyDownload(kind,file,csrf){
+    const anchor=$(kind==='maker'?'makerDownload':'pdfLink');
+    const status=$(kind==='maker'?'makerStatus':'pdfStatus');
+    const copy=$(kind==='maker'?'makerCopy':'pdfCopy');
+    mobileDownloads[kind]=file;
+    anchor.href=file.url;
+    anchor.download=file.filename;
+    anchor.target='_blank';
+    anchor.rel='noopener noreferrer';
+    anchor.setAttribute('aria-disabled','false');
+    anchor.textContent=kind==='maker'?'↓ Download Maker Image (PNG)':'↓ Download Original PDF';
+    const name=kind==='maker'?'combined image':'PDF';
+    status.textContent='Your '+name+' is ready. Tap Download. If nothing happens in the app, tap Copy link for Chrome and paste it into Chrome within 10 minutes.';
+    copy.classList.remove('hidden');
+    if(kind==='maker'){
+      $('makerBackup').classList.remove('hidden');
+      $('makerPreview').href=file.preview_url;
+    }
+    copy.onclick=()=>copyPrivateLink(file.url,copy);
+    anchor.onclick=e=>{
+      const current=mobileDownloads[kind];
+      if(current&&Date.now()-current.createdAt<9*60*1000)return;
+      // A timed-out token must be reissued while the user is logged in.
+      e.preventDefault();
+      anchor.setAttribute('aria-disabled','true');
+      status.textContent='Refreshing your secure download link…';
+      prepareMobileFile(kind,csrf).then(f=>readyDownload(kind,f,csrf)).catch(error=>{
+        status.textContent=error.message;anchor.setAttribute('aria-disabled','false');
+      });
+    };
+  }
+  async function setupMobileDownloads(){
+    const user=await api('/api/me');
+    const csrf=user.csrf;
+    const tasks=[];
+    if(order.pdf_url){
+      tasks.push(prepareMobileFile('pdf',csrf).then(file=>readyDownload('pdf',file,csrf))
+       .catch(e=>{$('pdfStatus').textContent=e.message}));
+    }else $('pdfStatus').textContent='No PDF attached to this order.';
+    if(user.role==='staff'){
+      tasks.push(prepareMobileFile('maker',csrf).then(file=>{
+        readyDownload('maker',file,csrf);
+        if(new URLSearchParams(location.search).has('download')){
+          $('makerDownload').focus();
+          $('makerStatus').textContent='Maker image ready — tap the blue Download Maker Image button. If the app blocks downloads, copy the link into Chrome.';
+        }
+      }).catch(e=>{$('makerStatus').textContent=e.message}));
+    }else $('makerDownload').closest('.simple-maker')?.classList.add('hidden');
+    await Promise.all(tasks);
   }
   async function start(){
     if(!id)return fail('Invalid order link. Return to orders and open a valid order.');
     $('morePhotos').onclick=()=>{allPhotos=!allPhotos;showThumbs()};
-    $('makerDownload').onclick=downloadMakerImage;
     $('viewerClose').onclick=closePhoto;
     $('viewerPrev').onclick=()=>stepPhoto(-1);
     $('viewerNext').onclick=()=>stepPhoto(1);
@@ -178,6 +240,10 @@
     try{
       const data=await api('/api/orders/'+id);
       renderOrder(data.order);showAddress();
+      setupMobileDownloads().catch(e=>{
+        $('makerStatus').textContent=e.message;
+        $('pdfStatus').textContent=e.message;
+      });
       const actions=window.FlyxjOrderActions;
       if(actions){
         $('sheetEdit').onclick=()=>actions.edit(data.order.id);
@@ -193,9 +259,6 @@
             waButton.onclick=null;
           }
         }).catch(()=>{waButton.classList.add('hidden');waButton.onclick=null});
-      }
-      if(new URLSearchParams(location.search).has('download')){
-        downloadMakerImage();
       }
     }catch(e){fail(e.message)}
   }
