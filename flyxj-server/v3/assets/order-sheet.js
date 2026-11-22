@@ -136,56 +136,26 @@
       $('addressHint').textContent='Use the original attached PDF as the source of truth.';
     }
   }
-  async function showMaker(){
-    const cells=$('makerRows'),status=$('makerStatus'),state=$('makerState');
-    $('makerDownload').href='/api/orders/'+id+'/maker.zip';
-    $('makerTextDownload').href='/api/orders/'+id+'/maker.txt';
+  async function downloadMakerImage(){
+    const button=$('makerDownload'),status=$('makerStatus');
+    if(!order||!window.FlyxjMakerCollage)return;
+    button.disabled=true;button.textContent='Preparing your image…';
+    status.textContent='Combining photos with size and color...';
     try{
-      const {maker,ai_configured}=await api('/api/orders/'+id+'/maker');
-      const p=maker.fields||{},selected=maker.selected||{};
-      cells.replaceChildren();
-      const fields=[
-       ['Recipient / Name','',p.recipient,'recipient'],
-       ['Delivery address','',p.address,'address'],
-       ['Email','',p.email,'email'],
-       ['Phone','',p.phone,'phone'],
-       ['Colour',selected.colour,p.colour,'colour'],
-       ['Size',selected.size,p.size,'size'],
-       ['Quantity',selected.quantity,p.quantity,'quantity'],
-       ['Measurements',Object.entries(order.measurements||{}).filter(([,v])=>v).map(([key,value])=>key+': '+value).join(', '),p.measurements,'measurements'],
-       ['Special notes',order.comments,p.notes,'notes']
-      ];
-      for(const [label,fromOrder,fromPdf,key] of fields){
-        const tr=el('tr'),first=el('td','',label),selectedCell=el('td','',fromOrder||'—');
-        const unfilled=!fromPdf;
-        const pdfCell=el('td',unfilled?'maker-missing':'',fromPdf||'Verify from original PDF');
-        if(maker.conflicts?.includes(key)){
-          selectedCell.classList.add('maker-alert');pdfCell.classList.add('maker-alert');
-          pdfCell.textContent=(fromPdf||'Not found')+'  ⚠ MISMATCH';
-        }
-        tr.append(first,selectedCell,pdfCell);cells.append(tr);
-      }
-      if(maker.source==='ai_pdf_review')state.textContent='AI PDF extraction';
-      else if(maker.source==='scanned_pdf_unreadable')state.textContent='Scanned PDF';
-      else state.textContent='PDF text extraction';
-      const problems=maker.conflicts?.length||0;
-      status.textContent=problems
-        ?'⚠ Colour, size or quantity mismatch detected. Confirm with User A before sending the pack to the maker.'
-        :maker.review_required?'Some fields were not readable in this PDF. Check the original PDF before shipping or cutting.':'Fields extracted. Please verify address and garment specs before production.';
-      $('makerWarning').textContent=maker.source==='scanned_pdf_unreadable'&&!ai_configured
-        ?'This PDF appears image-only. Automatic AI vision needs a server API key. No address or email has been guessed.'
-        :'Manufacturer must check the original PDF and all reference photos before making. User A selected details always stay visible.';
+      const user=await api('/api/me');
+      if(user.role!=='staff')throw Error('Only User B / staff can download this image.');
+      await window.FlyxjMakerCollage.download(order,user.csrf,message=>{status.textContent=message});
+      status.textContent='One PNG image prepared. Check your Downloads folder.';
     }catch(e){
-      cells.replaceChildren();
-      const tr=el('tr'),td=el('td','', 'Maker table could not load. Original PDF and photos remain available.');
-      td.colSpan=3;tr.append(td);cells.append(tr);
-      state.textContent='Needs checking';
-      status.textContent='Maker extraction not available: '+e.message;
+      status.textContent=e.message||'Could not download the image. Try again.';
+    }finally{
+      button.disabled=false;button.textContent='↓ Download Maker Image';
     }
   }
   async function start(){
     if(!id)return fail('Invalid order link. Return to orders and open a valid order.');
     $('morePhotos').onclick=()=>{allPhotos=!allPhotos;showThumbs()};
+    $('makerDownload').onclick=downloadMakerImage;
     $('viewerClose').onclick=closePhoto;
     $('viewerPrev').onclick=()=>stepPhoto(-1);
     $('viewerNext').onclick=()=>stepPhoto(1);
@@ -207,7 +177,10 @@
     });
     try{
       const data=await api('/api/orders/'+id);
-      renderOrder(data.order);showMaker();showAddress();
+      renderOrder(data.order);showAddress();
+      if(new URLSearchParams(location.search).has('download')){
+        downloadMakerImage();
+      }
     }catch(e){fail(e.message)}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);
