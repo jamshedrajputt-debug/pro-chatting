@@ -7,6 +7,7 @@
  const $=id=>document.getElementById(id);
  const el=(tag,cls,txt)=>{const x=document.createElement(tag);if(cls)x.className=cls;if(txt!==undefined)x.textContent=String(txt);return x};
  const values=['XXS','XS','S','M','L','XL','2XL','3XL','4XL','5XL','CUSTOM'];
+ const shoeSizes=['UK 2','UK 3','UK 4','UK 5','UK 6','UK 7','UK 8','UK 9','UK 10','UK 11','UK 12','UK 13','EU 35','EU 36','EU 37','EU 38','EU 39','EU 40','EU 41','EU 42','EU 43','EU 44','EU 45','EU 46','EU 47','EU 48','US 4','US 5','US 6','US 7','US 8','US 9','US 10','US 11','US 12','US 13','US 14','CUSTOM'];
  let active=false;
  const request=async(url,opts={})=>{
   const headers={accept:'application/json',...(opts.body?{'content-type':'application/json'}:{}),...(opts.headers||{})};
@@ -17,37 +18,38 @@
  };
  async function toWhatsApp(order){
   try{
-   const id=encodeURIComponent(order.id);
    const me=await request('/api/me');
-   if(me.role!=='staff')throw Error('Only User B can send WhatsApp order files.');
-   const progress=await request('/api/orders/'+id+'/whatsapp/send-files',{
-    method:'POST',headers:{'x-csrf-token':me.csrf},body:JSON.stringify({})
-   });
-   const status=progress.status==='already_accepted'?
-    'These order files were already accepted by WhatsApp.':
-    'Direct WhatsApp media transfer queued for User B. PDF, combined image and separate photos; no links.';
-   const box=modal('WhatsApp file transfer',status);
-   const result=el('p','flyxj-muted','Preparing actual attachments for +971 56 752 7192...');
-   box.append(result);
-   let checks=0;
-   const check=async()=>{
-    if(!document.contains(result)||checks++>18)return;
-    try{
-     const info=await request('/api/orders/'+id+'/whatsapp');
-     if(info.status==='accepted_by_provider'){
-      result.textContent='Meta accepted '+info.accepted_files+' actual file messages. Delivery on the phone is not yet confirmed.';
-      return;
-     }
-     if(info.status==='failed'){
-      result.textContent='Transfer stopped after '+info.accepted_files+' files. Tap Send Files again to retry the remaining files.';
-      return;
-     }
-     result.textContent='Files accepted by Meta: '+info.accepted_files+'/'+info.total_files+'. Status: '+info.status;
-    }catch(e){result.textContent=e.message}
-    setTimeout(check,3500);
-   };
-   check();
-  }catch(e){alert(e.message||'WhatsApp Business file sending is not connected yet')}
+   const id=encodeURIComponent(order.id);
+   const box=modal('Share actual files to WhatsApp','Choose a file below. Your phone share menu opens: select WhatsApp and recipient. No order links are sent.');
+   const status=el('p','flyxj-action-status','Share the PDF and image separately to send both actual attachments.');
+   box.append(status);
+   const choices=[['Share original PDF','pdf'],['Share combined maker image (PNG)','maker']];
+   (order.photos||[]).forEach((_,i)=>choices.push(['Share reference photo '+(i+1),'photo',i]));
+   for(const [label,kind,index] of choices){
+    if(kind==='maker'&&me.role!=='staff')continue;
+    const button=el('button','flyxj-action-primary',label);button.type='button';
+    button.style.display='block';button.style.margin='10px 0';button.style.width='100%';
+    button.onclick=async()=>{
+     button.disabled=true;status.textContent='Preparing '+label+'...';
+     try{
+      if(!navigator.share)throw Error('This browser does not support direct file sharing. Open the order in Chrome on your phone.');
+      const prepared=await request('/api/orders/'+id+'/mobile-file',{
+       method:'POST',headers:{'x-csrf-token':me.csrf},body:JSON.stringify({kind,index})
+      });
+      const download=await fetch(prepared.url,{credentials:'same-origin'});
+      if(!download.ok)throw Error('Could not retrieve file for sharing');
+      const blob=await download.blob();
+      const file=new File([blob],prepared.filename,{type:blob.type||download.headers.get('content-type')||'application/octet-stream'});
+      if(navigator.canShare&&!navigator.canShare({files:[file]}))
+       throw Error('Your browser cannot share this file. Use Download, then send it from WhatsApp attachments.');
+      await navigator.share({files:[file]});
+      status.textContent='File passed to the phone share menu. Confirm sending inside WhatsApp.';
+     }catch(e){status.textContent=e.name==='AbortError'?'Sharing cancelled.':e.message;}
+     finally{button.disabled=false;}
+    };
+    box.append(button);
+   }
+  }catch(e){alert(e.message||'Cannot open file sharing')}
  }
  function dismiss(){
   const box=$('flyxjActionOverlay');
@@ -130,6 +132,11 @@
    const colourLabel=el('label','flyxj-action-field'),colourText=el('span','','Color');
    const colour=el('input');colour.name='colour';colour.value=order.colour;colour.required=true;colour.maxLength=80;
    colourLabel.append(colourText,colour);widths.append(sizeLabel,colourLabel);form.append(widths);
+   const shoeLabel=el('label','flyxj-action-field');shoeLabel.append(el('span','','Shoes size (optional)'));
+   const shoeSelect=el('select');shoeSelect.name='shoe_size';const emptyShoe=el('option','','No shoes');emptyShoe.value='';shoeSelect.append(emptyShoe);
+   for(const option of shoeSizes){const opt=el('option','',option);opt.value=option;shoeSelect.append(opt)}
+   if(order.shoe_size&&!shoeSizes.includes(order.shoe_size)){const opt=el('option','',order.shoe_size);opt.value=order.shoe_size;shoeSelect.append(opt)}
+   shoeSelect.value=order.shoe_size||'';shoeLabel.append(shoeSelect);form.append(shoeLabel);
    const row=el('div','flyxj-action-pair');
    const qty=el('label','flyxj-action-field'),qInput=el('input');qInput.type='number';qInput.name='quantity';qInput.min=1;qInput.max=1000;qInput.required=true;qInput.value=order.quantity;
    qty.append(el('span','','Quantity'),qInput);
@@ -150,9 +157,9 @@
     event.preventDefault();submit.disabled=true;note(box,'Saving updated order and attachments...');
     try{
      const body={updated_at:order.updated_at,title:form.elements.title.value,
-      colour:colour.value.trim(),size:size.value.trim(),quantity:Number(qInput.value),
+      colour:colour.value.trim(),size:size.value.trim(),shoe_size:shoeSelect.value,quantity:Number(qInput.value),
       priority:pSel.value,expected_date:deadline.value,comments:notes.value};
-     if(!values.includes(body.size)&&!body.size.startsWith('CUSTOM:')){
+     if(!values.includes(body.size)&&!shoeSizes.includes(body.size)&&!body.size.startsWith('CUSTOM:')){
       body.size='CUSTOM:'+body.size;
      }
      const measures={};
