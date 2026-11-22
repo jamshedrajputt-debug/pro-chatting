@@ -190,13 +190,28 @@ function renderOrders(){
       if(o.shipping.courier)tracking.append(node('div','tiny muted',o.shipping.courier));
     }else tracking.append(node('span','muted','Not added'));
     const arrow=node('td','table-arrow');
+    const actions=node('div','flyxj-order-row-actions');
     if(state.me?.role==='staff'){
-      const maker=node('a','order-sheet-link order-maker-image','↓ Download Image');
+      const maker=node('a','order-sheet-link order-maker-image','↓ Image');
       maker.href='/order/'+o.id+'?download=1';
-      maker.title='Download one PNG image with four photos, size and color';
+      maker.title='Download one image with four photos, size and color';
       maker.addEventListener('click',e=>e.stopPropagation());
-      arrow.append(maker);
-    }else arrow.textContent='›';
+      actions.append(maker);
+    }
+    const trigger=node('button','flyxj-actions-trigger','⋯');
+    trigger.type='button';trigger.title='Edit, delete or WhatsApp order';trigger.setAttribute('aria-label','Order actions');
+    const menu=node('div','flyxj-actions-menu hidden');
+    for(const [label,action] of [['✎ Edit order','edit'],['WhatsApp forward','share'],['Delete order','delete']]){
+      const item=node('button','flyxj-actions-menu-item',label);
+      item.type='button';
+      item.onclick=e=>{e.stopPropagation();menu.classList.add('hidden');if(window.FlyxjOrderActions)window.FlyxjOrderActions[action](action==='share'?o:o.id)};
+      menu.append(item);
+    }
+    trigger.onclick=e=>{
+      e.stopPropagation();document.querySelectorAll('.flyxj-actions-menu').forEach(n=>{if(n!==menu)n.classList.add('hidden')});
+      menu.classList.toggle('hidden');
+    };
+    actions.append(trigger,menu);arrow.append(actions);
     tr.append(first,customer,date,st,tracking,arrow);
     tr.addEventListener('click',()=>openDetail(o.id));
     tr.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openDetail(o.id)}});
@@ -293,6 +308,7 @@ async function submitOrder(event){
     await refresh({silent:true});
     navigate('orders');toast('Order '+data.order.reference+' created successfully');
     openDetail(data.order.id);
+    if(window.FlyxjOrderActions)window.FlyxjOrderActions.newOrderCreated(data.order,data.whatsapp_auto_enabled);
   }catch(ex){toast(ex.message,true)}
   finally{btn.disabled=false;btn.textContent='Submit order →'}
 }
@@ -351,6 +367,15 @@ function renderDetail(o){
     appendDetail('Order reference',o.reference),appendDetail('Created',time(o.created_at))
   );
   $('detailComments').textContent=o.comments||'No custom instructions added.';
+  const orderActions=$('flyxjDetailActions');
+  if(orderActions){
+    orderActions.replaceChildren();
+    for(const [label,action] of [['✎ Edit order','edit'],['WhatsApp forward','share'],['Delete order','delete']]){
+      const button=node('button','btn btn-soft',label);button.type='button';
+      button.onclick=()=>{if(window.FlyxjOrderActions)window.FlyxjOrderActions[action](action==='share'?o:o.id)};
+      orderActions.append(button);
+    }
+  }
   const gallery=$('detailPhotos');gallery.replaceChildren();
   for(let i=0;i<(o.photos||[]).length;i++){
     const img=node('img');img.src=o.photos[i];img.alt='Dress reference photo '+(i+1);
