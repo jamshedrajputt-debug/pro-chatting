@@ -47,7 +47,7 @@ test('FLYXJ V3: authenticated PDF orders, approval, shipment, profit, chat, back
   }
   assert.ok(ready,'server started: '+logs);
   const health=await (await api('/api/health')).json();
-  assert.equal(health.version,'3.0');
+  assert.equal(health.version,'4.0');
   assert.equal((await api('/api/orders')).status,401,'require login');
   const page=await api('/chat');
   assert.equal(page.status,200,'Mobile chat route is accessible');
