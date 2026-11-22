@@ -1,0 +1,37 @@
+/* FlyXJ small order actions: works in desktop browsers and Android WebView. */
+.flyxj-order-row-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px}
+.flyxj-actions-trigger{border:1px solid #d2deeb;border-radius:10px;background:#f0f5fc;color:#264878;min-width:37px;height:37px;font-size:22px;cursor:pointer}
+.flyxj-actions-menu{position:fixed;z-index:220;min-width:174px;max-width:calc(100vw - 30px);background:#fff;box-shadow:0 10px 32px #132b4747;border:1px solid #d7e1ee;padding:5px;border-radius:11px;display:grid;gap:2px}
+.flyxj-actions-menu.hidden{display:none!important}
+.flyxj-actions-menu-item{padding:11px 12px;text-align:left;border:none;border-radius:7px;background:transparent;font:600 13px system-ui,Arial,sans-serif;color:#193b68;cursor:pointer;white-space:nowrap}
+.flyxj-actions-menu-item:hover{background:#edf3fb}
+.flyxj-actions-menu-item:last-child{color:#af3849}
+.flyxj-detail-actions,.flyxj-trash-toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 17px}
+.flyxj-trash-toolbar{justify-content:flex-end}
+.flyxj-trash-toolbar button{font-size:12px}
+.flyxj-action-open{overflow:hidden!important}
+.flyxj-action-overlay{position:fixed;z-index:1300;inset:0;background:#0f2139b3;display:flex;justify-content:center;align-items:center;padding:12px}
+.flyxj-action-panel{background:#fff;color:#172b46;width:min(620px,100%);max-height:94dvh;overflow:auto;border-radius:15px;box-shadow:0 18px 55px #091d3360}
+.flyxj-action-header{display:flex;gap:10px;justify-content:space-between;align-items:flex-start;background:#152747;color:#fff;padding:17px 20px}
+.flyxj-action-header h2{margin:0 0 5px;font-size:19px}
+.flyxj-action-header p{font-size:12px;line-height:1.55;color:#c6d5ee;margin:0}
+.flyxj-x{font-size:26px;border:0;border-radius:8px;background:#344f75;color:#fff;padding:3px 11px;cursor:pointer}
+.flyxj-action-content{padding:17px 20px 24px}
+.flyxj-action-content form{display:grid;gap:12px}
+.flyxj-action-field{display:grid;gap:5px;min-width:0;font-size:12px;font-weight:650;color:#405a7e}
+.flyxj-action-field>input,.flyxj-action-field>textarea,.flyxj-action-field>select{width:100%;font:14px system-ui,Arial,sans-serif;padding:11px;border-radius:8px;border:1px solid #d4deeb;background:#fff;color:#122742;min-height:41px}
+.flyxj-action-pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.flyxj-action-buttons{display:flex;gap:9px;justify-content:flex-end;flex-wrap:wrap;margin-top:14px}
+.flyxj-action-primary,.flyxj-action-secondary,.flyxj-action-danger{font:700 13px system-ui,Arial,sans-serif;border-radius:9px;min-height:42px;border:0;padding:10px 15px;cursor:pointer}
+.flyxj-action-primary{background:#2d58a5;color:#fff}
+.flyxj-action-secondary{background:#e9eff7;color:#274973}
+.flyxj-action-danger{background:#ba3547;color:#fff}
+.flyxj-action-primary:disabled,.flyxj-action-danger:disabled{opacity:.55;cursor:wait}
+.flyxj-delete-warning{border-radius:9px;background:#fff4e5;color:#885f25;padding:10px;font-size:13px;line-height:1.6}
+.flyxj-action-status,.flyxj-muted{font-size:13px;color:#65738a;line-height:1.6}
+.flyxj-action-status.is-error{color:#af3445}
+.flyxj-trash-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid #e8edf4;font-size:13px}
+.flyxj-sheet-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:13px}
+.flyxj-sheet-actions button{border:1px solid #d7e2f1;background:#eaf1fd;color:#204878;border-radius:9px;padding:10px 12px;font-size:13px;cursor:pointer}
+.flyxj-sheet-actions button:last-child{background:#f9e9ec;color:#aa3442}
+@media(max-width:490px){.flyxj-action-overlay{padding:0;align-items:flex-end}.flyxj-action-panel{border-radius:14px 14px 0 0;max-height:95dvh}.flyxj-action-content{padding:13px 15px 22px}.flyxj-action-pair{gap:8px}.flyxj-order-row-actions{justify-content:flex-start}}
