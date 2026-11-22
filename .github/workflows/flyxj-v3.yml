@@ -20,8 +20,7 @@ jobs:
       - name: Check JavaScript syntax
         run: |
           node --check flyxj-server/v3/server.js
-          node --check flyxj-server/v3/maker-extract.js
-          node --check flyxj-server/v3/maker-pack.js
+          node --check flyxj-server/v3/assets/maker-collage.js
           node --check flyxj-server/v3/assets/order-sheet.js
           node --check flyxj-server/v3/pdf.js
           node --check flyxj-server/v3/assets/app.js
@@ -37,5 +36,5 @@ jobs:
         run: node --test flyxj-server/v3/tests/chat-ui.test.js
       - name: Test staff order pack and PDF address extraction
         run: node --test flyxj-server/v3/tests/order-sheet.test.js
-      - name: Test maker PDF AI extraction, TXT CSV and ZIP integrity
-        run: node --test flyxj-server/v3/tests/maker.test.js
+      - name: Test one combined PNG with four photos, Size and Color
+        run: node --test flyxj-server/v3/tests/maker-collage.test.js
