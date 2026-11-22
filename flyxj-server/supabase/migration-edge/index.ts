@@ -45,7 +45,7 @@ async function getData(req:Request,max=12000000){
  if(raw.length>max)throw Error('Request exceeds migration size limit');
  return JSON.parse(raw);
 }
-Deno.serve(async(req)=>{
+async function migrationHandler(req:Request):Promise<Response>{
  try{
   const pathname=new URL(req.url).pathname;
   const op=pathname.split('/').filter(Boolean).at(-1);
@@ -104,4 +104,28 @@ Deno.serve(async(req)=>{
   console.error('FlyXJ import failure',String((e as Error)?.message||e).slice(0,150));
   return fail('Migration failed: '+String((e as Error)?.message||e).slice(0,140),503);
  }
+}
+
+// Supabase Edge Functions disallow rendering HTML on the default .supabase.co URL.
+// The upload form is served as static HTML on Render; allow that exact origin to call
+// this authenticated JSON endpoint and support its browser preflight requests.
+const MIGRATION_UI_ORIGIN='https://flyxj-secure-backup-import.onrender.com';
+Deno.serve(async(req:Request)=>{
+ const origin=req.headers.get('origin');
+ if(req.method==='OPTIONS'){
+  if(origin!==MIGRATION_UI_ORIGIN)return new Response(null,{status:403});
+  return new Response(null,{status:204,headers:{
+   'Access-Control-Allow-Origin':MIGRATION_UI_ORIGIN,
+   'Access-Control-Allow-Methods':'POST, OPTIONS',
+   'Access-Control-Allow-Headers':'authorization, content-type',
+   'Access-Control-Max-Age':'3600',
+   'Vary':'Origin'
+  }});
+ }
+ const result=await migrationHandler(req);
+ if(origin===MIGRATION_UI_ORIGIN){
+  result.headers.set('Access-Control-Allow-Origin',MIGRATION_UI_ORIGIN);
+  result.headers.set('Vary','Origin');
+ }
+ return result;
 });
