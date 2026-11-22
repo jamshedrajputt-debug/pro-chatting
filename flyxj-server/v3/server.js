@@ -354,7 +354,7 @@ app.post('/api/orders/:id/messages',auth,csrf,async(req,res)=>{
   if(!Array.isArray(o.messages))o.messages=[];
   o.messages.push({id:crypto.randomUUID(),at:now(),by:req.user.username,role:req.user.role,text:message});
   history(o,req.user.username,'New message added','message');
-  try{await await save();pushOrder(o,'message','New order conversation message');res.json({order:publicOrder(o)})}catch{err(res,500,'Message could not be saved')}
+  try{await save();pushOrder(o,'message','New order conversation message');res.json({order:publicOrder(o)})}catch{err(res,500,'Message could not be saved')}
 });
 app.patch('/api/orders/:id/status',auth,csrf,async(req,res)=>{
   if(req.user.role!=='staff')return err(res,403,'Staff only');
@@ -384,7 +384,7 @@ app.patch('/api/orders/:id/status',auth,csrf,async(req,res)=>{
   if(status==='shipped'&&!o.shipped_at)o.shipped_at=now();
   o.completed_at=['delivered','completed'].includes(status)?now():null;
   history(o,req.user.username,'Status changed to '+status.replaceAll('_',' ')+(note?' · '+note:''),'status');
-  try{await await save();pushOrder(o,'status','Order stage updated');if(isShipped(o))notifyCustomerTracking(o);res.json({order:publicOrder(o)})}catch{err(res,500,'Status could not be saved')}
+  try{await save();pushOrder(o,'status','Order stage updated');if(isShipped(o))notifyCustomerTracking(o);res.json({order:publicOrder(o)})}catch{err(res,500,'Status could not be saved')}
 });
 app.patch('/api/orders/:id/shipping',auth,csrf,async(req,res)=>{
   if(req.user.role!=='staff')return err(res,403,'Staff only');
@@ -407,7 +407,7 @@ app.post('/api/orders/:id/return',auth,csrf,async(req,res)=>{
   if(!tracking_id||!courier)return err(res,400,'Enter return courier and tracking ID');
   o.return_shipping={courier,tracking_id,tracking_url:'',note,updated_at:now()};
   history(o,req.user.username,'Return tracking submitted','return');
-  try{await await save();pushOrder(o,'return','Return tracking received');res.json({order:publicOrder(o)})}catch{err(res,500,'Return tracking could not be saved')}
+  try{await save();pushOrder(o,'return','Return tracking received');res.json({order:publicOrder(o)})}catch{err(res,500,'Return tracking could not be saved')}
 });
 
 app.get('/api/orders/:id/address',auth,async(req,res)=>{
@@ -463,7 +463,7 @@ app.post('/api/orders/:id/request-approval',auth,csrf,async(req,res)=>{
  o.approval={status:'requested',note:text(req.body?.note,1000),updated_at:now(),by:req.user.username};
  o.status='awaiting_approval';
  history(o,req.user.username,'Design approval requested','approval');
- try{await await save();pushOrder(o,'approval','Design approval needed');res.json({order:publicOrder(o)})}catch{err(res,500,'Approval save failed')}
+ try{await save();pushOrder(o,'approval','Design approval needed');res.json({order:publicOrder(o)})}catch{err(res,500,'Approval save failed')}
 });
 app.post('/api/orders/:id/approve',auth,csrf,async(req,res)=>{
  if(req.user.role!=='customer')return err(res,403,'Customer only');
@@ -474,7 +474,7 @@ app.post('/api/orders/:id/approve',auth,csrf,async(req,res)=>{
  o.approval={status:decision,note:text(req.body?.note,1000),updated_at:now(),by:req.user.username};
  o.status=decision==='approved'?'confirmed':'pending';
  history(o,req.user.username,decision==='approved'?'Design approved':'Customer requested changes','approval');
- try{await await save();pushOrder(o,'approval',decision==='approved'?'Design approved':'Changes requested');res.json({order:publicOrder(o)})}catch{err(res,500,'Approval save failed')}
+ try{await save();pushOrder(o,'approval',decision==='approved'?'Design approved':'Changes requested');res.json({order:publicOrder(o)})}catch{err(res,500,'Approval save failed')}
 });
 app.patch('/api/orders/:id/finance',auth,csrf,async(req,res)=>{
  if(req.user.role!=='staff')return err(res,403,'Staff only');
@@ -484,7 +484,7 @@ app.patch('/api/orders/:id/finance',auth,csrf,async(req,res)=>{
  if(isShipped(o)&&!f.recognized_at)f.recognized_at=now();
  o.finance=f;
  history(o,req.user.username,'Sale/making/shipping costs updated','finance');
- try{await await save();pushOrder(o,'finance','Order pricing updated');res.json({order:publicOrder(o)})}catch{err(res,500,'Pricing save failed')}
+ try{await save();pushOrder(o,'finance','Order pricing updated');res.json({order:publicOrder(o)})}catch{err(res,500,'Pricing save failed')}
 });
 
 
