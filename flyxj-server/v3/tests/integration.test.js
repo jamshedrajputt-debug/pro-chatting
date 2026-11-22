@@ -96,8 +96,8 @@ test('FLYXJ V3: authenticated PDF orders, approval, shipment, profit, chat, back
   assert.equal(whats.recipient,'971567527192');
   assert.match(whats.url,/^https:\/\/wa.me\/971567527192\?text=/);
   const decoded=decodeURIComponent(whats.url.split('?text=')[1]);
-  assert.match(decoded,/api\/orders\/1\/pdf/);
-  assert.match(decoded,/api\/orders\/1\/photos\/0/);
+  assert.ok(decoded.includes('/api/orders/'+order.id+'/pdf'));
+  assert.ok(decoded.includes('/api/orders/'+order.id+'/photos/0'));
   assert.equal(whats.automatic_enabled,false,'WhatsApp cannot auto-send without configured Business API');
   assert.equal((await api('/api/orders/deleted',a)).status,200);
   const changed=await api('/api/orders/'+order.id+'/edit',a,'PATCH',{
