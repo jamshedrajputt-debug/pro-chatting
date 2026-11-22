@@ -624,14 +624,16 @@ app.get('/api/orders/:id/summary.pdf',auth,(req,res)=>{
 // Free-hosting backup and recovery. Export sensitive private data only to authenticated staff.
 app.get('/api/backup.json',auth,async(req,res)=>{
  if(req.user.role!=='staff')return err(res,403,'Staff only');
- const collect=(dir,names)=>[...new Set(names.filter(Boolean))].map(name=>{
-  const file=path.join(dir,name);
-  return {name,data:fs.existsSync(file)?fs.readFileSync(file).toString('base64'):null};
- });
+ const collect=async(dir,names,category)=>Promise.all([...new Set(names.filter(Boolean))].map(async name=>{
+  try{
+   const bytes=await persistent.retrieveOrLocal(dir,name,category);
+   return {name,data:bytes?bytes.toString('base64'):null};
+  }catch(e){console.warn('Backup missing file:',name);return {name,data:null}}
+ }));
  const archive={format:'flyxj-backup-v3',created_at:now(),orders,directChat,
-  additionalStaff,photos:collect(PHOTO_DIR,orders.flatMap(o=>[...(o.image_files||[]),...(o.finished_files||[])])),
-  pdfs:collect(PDF_DIR,orders.map(o=>o.pdf_file)),
-  chat_photos:collect(CHAT_PHOTO_DIR,directChat.map(m=>m.photo_file))};
+  additionalStaff,photos:await collect(PHOTO_DIR,orders.flatMap(o=>[...(o.image_files||[]),...(o.finished_files||[])]),'photos'),
+  pdfs:await collect(PDF_DIR,orders.map(o=>o.pdf_file),'pdfs'),
+  chat_photos:await collect(CHAT_PHOTO_DIR,directChat.map(m=>m.photo_file),'chat-images')};
  res.set('Content-Type','application/json');
  res.set('Content-Disposition','attachment; filename="FLYXJ-PRIVATE-backup.json"');
  res.json(archive);
@@ -651,8 +653,12 @@ app.post('/api/restore',auth,csrf,async(req,res)=>{
   }
  }
  try{
-  for(const [key,dir] of [['photos',PHOTO_DIR],['pdfs',PDF_DIR],['chat_photos',CHAT_PHOTO_DIR]]){
-   for(const file of b[key])if(file.data)fs.writeFileSync(path.join(dir,file.name),Buffer.from(file.data,'base64'));
+  for(const [key,dir,category] of [['photos',PHOTO_DIR,'photos'],['pdfs',PDF_DIR,'pdfs'],['chat_photos',CHAT_PHOTO_DIR,'chat-images']]){
+   for(const file of b[key])if(file.data){
+    const bytes=Buffer.from(file.data,'base64');
+    fs.writeFileSync(path.join(dir,file.name),bytes);
+    if(persistent.enabled)await persistent.upload(category,file.name,bytes);
+   }
   }
   orders=b.orders;directChat=b.directChat;additionalStaff=b.additionalStaff;
   await save();await saveAtomic(CHAT_FILE,directChat);await saveAtomic(STAFF_FILE,additionalStaff);
