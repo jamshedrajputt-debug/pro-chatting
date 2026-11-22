@@ -385,6 +385,24 @@ app.post('/api/orders/:id/return',auth,csrf,(req,res)=>{
   try{save();pushOrder(o,'return','Return tracking received');res.json({order:publicOrder(o)})}catch{err(res,500,'Return tracking could not be saved')}
 });
 
+app.get('/api/orders/:id/address',auth,(req,res)=>{
+ const order=loadOrder(req,res);if(!order)return;
+ // Prefer a customer-confirmed address, otherwise use a best-effort searchable PDF extraction.
+ if(typeof order.delivery_address==='string'&&order.delivery_address.trim())
+   return res.json({address:order.delivery_address.trim(),source:'confirmed_address',reliable:true});
+ if(!order.pdf_file||!/^[a-f0-9-]{36}\.pdf$/.test(order.pdf_file))
+   return res.json({address:null,source:'no_pdf',reliable:false});
+ const fullPath=path.join(PDF_DIR,order.pdf_file);
+ if(!fs.existsSync(fullPath))return res.json({address:null,source:'pdf_missing',reliable:false});
+ try{
+  const pdf=fs.readFileSync(fullPath);
+  const parsed=require('./pdf-address.js').extractDeliveryAddress(pdf);
+  return res.json(parsed);
+ }catch(e){
+  console.warn('PDF address extraction unavailable:',e.message);
+  return res.json({address:null,source:'unavailable',reliable:false});
+ }
+});
 app.get('/api/orders/:id/pdf',auth,(req,res)=>{
  const o=loadOrder(req,res);if(!o)return;
  return storedAttachment(req,res,PDF_DIR,o.pdf_file,'application/pdf',true);
@@ -617,6 +635,7 @@ app.use('/assets',(req,res,next)=>{res.set('Cache-Control','no-store, max-age=0'
 app.use('/assets',express.static(path.join(__dirname,'assets'),{index:false,maxAge:'5m'}));
 app.use('/assets',express.static(path.join(__dirname,'../v2/assets'),{index:false,maxAge:'5m'}));
 app.get('/chat',(req,res)=>{res.set('Cache-Control','no-store, max-age=0');res.sendFile(path.join(__dirname,'mobile-chat.html'))});
+app.get('/order/:id',(req,res)=>{if(!/^[1-9]\d{0,8}$/.test(req.params.id))return err(res,404,'Invalid order');res.set('Cache-Control','no-store, max-age=0');res.sendFile(path.join(__dirname,'order-sheet.html'))});
 app.get('/',(req,res)=>{res.set('Cache-Control','no-store, max-age=0');res.sendFile(path.join(__dirname,'index.html'))});
 app.use((req,res)=>err(res,404,'Not found'));
 app.use((error,req,res,next)=>{
