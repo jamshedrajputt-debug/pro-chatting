@@ -1,7 +1,7 @@
 'use strict';
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const {parsePdfFields,localPdfFields,aiPdfFields}=require('../maker-extract.js');
+const {localPdfFields,aiPdfFields}=require('../maker-extract.js');
 const {makeZip,crc32,sheetTxt,sheetCsv}=require('../maker-pack.js');
 const inputPdf=Buffer.from(
  '%PDF-1.7\nstream\n'+
@@ -46,7 +46,7 @@ test('PDF extraction identifies recipient, full shipping address, email, size, c
 });
 test('Unscannable image-only PDF does not invent an address or email',()=>{
  const imgPdf=Buffer.from('%PDF-1.4\n% Image only\n%%EOF');
- const data=parsePdfFields(imgPdf,order);
+ const data=localPdfFields(imgPdf,order);
  assert.equal(data.source,'scanned_pdf_unreadable');
  assert.equal(data.fields.address,null);
  assert.equal(data.fields.email,null);
