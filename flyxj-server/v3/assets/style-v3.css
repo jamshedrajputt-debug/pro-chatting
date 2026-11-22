@@ -6,3 +6,8 @@
 #floatingChatPanel.floating-chat-panel{z-index:102;pointer-events:auto;isolation:isolate;min-height:250px}
 #floatingChatPanel.floating-chat-panel:not(.hidden){display:flex!important;visibility:visible!important;opacity:1!important}
 #floatingChatPanel .chat-widget-messages{overscroll-behavior:contain}
+
+/* Order sheet action in staff dashboard: a single tap opens the 4-photo pack. */
+.order-sheet-link{display:inline-flex;align-items:center;justify-content:center;background:#e8efff;color:#28529b;text-decoration:none;font-weight:750;font-size:11px;padding:9px 10px;border:1px solid #cfdcf6;border-radius:9px;white-space:nowrap;min-height:36px;touch-action:manipulation}
+.order-sheet-link:hover,.order-sheet-link:focus-visible{background:#d8e6ff;color:#173e85}
+@media(max-width:680px){.order-sheet-link{padding:8px 9px;min-height:36px}}
