@@ -642,11 +642,11 @@ app.post('/api/orders/:id/return',auth,csrf,async(req,res)=>{
 // the eventual file GET works in a normal mobile browser without cookies.
 // The token is private, never included in WhatsApp messages or public pages.
 const mobileFileTickets=new Map();
-function cleanMobileFileTickets(){
+function cleanMobileFileTickets(forInsert=false){
  const current=Date.now();
  for(const [ticket,entry] of mobileFileTickets)
   if(entry.expires<=current)mobileFileTickets.delete(ticket);
- while(mobileFileTickets.size>=8)mobileFileTickets.delete(mobileFileTickets.keys().next().value);
+ while(mobileFileTickets.size>(forInsert?7:8))mobileFileTickets.delete(mobileFileTickets.keys().next().value);
 }
 app.post('/api/orders/:id/mobile-file',auth,csrf,async(req,res)=>{
  const o=loadOrder(req,res);if(!o)return;
@@ -682,7 +682,7 @@ app.post('/api/orders/:id/mobile-file',auth,csrf,async(req,res)=>{
    if(bytes.length>12*1024*1024)throw Error('Combined image is too large for mobile download');
    filename=ref(o)+'-MAKER-IMAGE.png';mime='image/png';
   }
-  cleanMobileFileTickets();
+  cleanMobileFileTickets(true);
   const token=crypto.randomBytes(32).toString('hex');
   mobileFileTickets.set(token,{orderId:o.id,kind,filename,mime,bytes,
    pdfFile:kind==='pdf'?o.pdf_file:null,expires:Date.now()+10*60*1000});
