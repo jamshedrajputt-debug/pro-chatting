@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#172a50"><title>FlyXJ — Private Backup Migration</title>
+<style>
+*{box-sizing:border-box}html{font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif;background:#f3f6fa;color:#20304c}body{margin:0}header{background:#152849;color:#fff;padding:24px 22px}header div{max-width:810px;margin:auto}header h1{font-size:24px;margin:0 0 6px}header p{margin:0;color:#c1d0e6;font-size:13px}main{max-width:810px;margin:26px auto 60px;padding:0 16px}.card{background:#fff;border:1px solid #e1e8f2;padding:24px;border-radius:15px;box-shadow:0 7px 30px #23365f0d;margin:0 0 16px}.step{font-size:12px;font-weight:800;letter-spacing:.08em;color:#3d61ac;text-transform:uppercase}.card h2{font-size:19px;margin:9px 0}.muted{font-size:13px;line-height:1.7;color:#62718a}.field{margin:18px 0}.field label{display:block;font-weight:700;font-size:13px;margin:0 0 8px}.field input[type=password],.field input[type=file]{display:block;width:100%;border:1px solid #d7e0ed;border-radius:10px;padding:13px;background:#fbfcff;font:inherit;font-size:14px}.field input[type=file]{padding:10px}.row{display:flex;gap:12px;flex-wrap:wrap}.btn{border:none;border-radius:10px;background:#2c53a1;color:#fff;padding:12px 18px;font-weight:700;font-size:14px;min-height:44px;cursor:pointer}.btn:disabled{opacity:.5;cursor:not-allowed}.secondary{background:#e8effe;color:#2f55a1}.summary{background:#f7f9fd;border:1px solid #e7edf6;border-radius:12px;padding:12px 16px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.metric{font-size:12px;color:#61708b}.metric b{display:block;font-size:22px;color:#1c355f}.warning{background:#fff7e5;border:1px solid #f4dfab;color:#815d16;padding:13px;border-radius:10px;font-size:12px;line-height:1.7;margin-top:14px}.error{background:#fff0f1;border:1px solid #eec6cd;color:#9a2239;padding:12px;border-radius:10px;font-size:13px;line-height:1.6;margin:10px 0}.success{background:#eaf8f0;border:1px solid #b9e2ca;color:#236546;padding:16px;border-radius:10px;font-size:14px;line-height:1.8}.hidden{display:none!important}.progress{height:11px;border-radius:999px;background:#e4eaf4;overflow:hidden;margin:12px 0 6px}.progress>div{height:100%;background:#31866b;width:0;transition:width .2s}.filename{font-weight:700;word-break:break-word}.safe{color:#46617d;font-size:12px}.checkbox{display:flex;gap:10px;align-items:flex-start;font-size:12px;color:#6b4f20;margin:12px 0}.checkbox input{margin-top:3px}a{color:#315cac}@media(max-width:540px){.card{padding:19px}.summary{grid-template-columns:repeat(2,1fr)}header h1{font-size:21px}}
+</style></head>
+<body><header><div><h1>FLYXJ · Secure Data Migration</h1><p>Move your saved order history, dress photos, PDFs and chat into permanent Supabase storage.</p></div></header>
+<main>
+<section class="card"><div class="step">Step 1 of 3</div><h2>Choose your private backup</h2>
+<p class="muted">Select the <b>FLYXJ-PRIVATE-backup.json</b> file you downloaded from the User B dashboard. This file is handled locally first, then sent only to your Supabase project's private storage.</p>
+<div class="field"><label for="backup">Your private backup JSON</label><input id="backup" type="file" accept=".json,application/json"></div>
+<div class="hidden" id="fileSummary"><div class="filename" id="filename"></div><div class="summary" style="margin-top:12px">
+<div class="metric">Orders<b id="ordersCount">0</b></div><div class="metric">Chat messages<b id="chatCount">0</b></div><div class="metric">Attachments<b id="filesCount">0</b></div>
+</div><p id="missingNotice" class="muted"></p></div></section>
+<section class="card"><div class="step">Step 2 of 3</div><h2>Authorize your import</h2>
+<p class="muted">Enter the one-time migration code provided in your ChatGPT conversation. It is not your staff password. The code expires, and after a successful import it cannot be reused.</p>
+<div class="field"><label for="secret">One-time migration code</label><input id="secret" type="password" placeholder="Enter migration code" autocomplete="off"></div>
+<div class="row"><button class="btn secondary" id="verify" type="button">Check destination</button></div><div id="destination" class="muted" style="margin-top:12px"></div>
+<div class="warning">Important: Stop creating or editing orders in the old live app while migrating. Keep your offline backup. The original Render app will not be deleted by this process.</div></section>
+<section class="card"><div class="step">Step 3 of 3</div><h2>Transfer and verify</h2><p class="muted">The importer uploads existing photos/PDFs first, verifies their presence, then writes orders, chat and staff records together. Repeated attempts skip already-uploaded files.</p>
+<label class="checkbox hidden" id="missingConsent"><input type="checkbox" id="allowMissing">My backup already has missing photo/PDF data, and I understand those particular files cannot be restored automatically.</label>
+<div class="row"><button class="btn" id="start" disabled>Import backup securely</button></div>
+<div class="progress hidden" id="progress"><div id="bar"></div></div><p class="muted" id="progressText" role="status"></p><div class="hidden" id="finalResult"></div>
+</section>
+<div id="error" class="error hidden" role="alert"></div>
+<p class="safe">Customer information remains private. This page does not request your User B password. For support, return to the ChatGPT conversation without sharing the backup's contents.</p>
+</main>
+<script>
+(function(){
+'use strict';
+const el=id=>document.getElementById(id);
+let backup=null,files=[],missing=[],busy=false;
+const base=location.pathname.replace(/\/$/,'');
+const valid=/^(photos|pdfs|chat-images)\/[a-f0-9-]{36}\.(jpg|png|webp|pdf)$/;
+function showError(error){el('error').textContent=String(error&&error.message||error);el('error').classList.remove('hidden');el('progressText').textContent='Import stopped. No existing Supabase records were overwritten.'}
+function clearError(){el('error').classList.add('hidden');el('error').textContent=''}
+function getCode(){const c=el('secret').value.trim();if(c.length<32)throw Error('Enter your one-time migration code.');return c}
+async function call(route,data){
+ const resp=await fetch(base+'/'+route,{method:'POST',headers:{Authorization:'Bearer '+getCode(),'content-type':'application/json'},body:JSON.stringify(data||{})});
+ const result=await resp.json().catch(()=>({}));
+ if(!resp.ok)throw Error(result.error||'Import service returned '+resp.status);
+ return result;
+}
+function references(b){
+ const needed=new Set();
+ for(const o of b.orders){
+  for(const n of [...(o.image_files||[]),...(o.finished_files||[])])if(typeof n==='string')needed.add('photos/'+n);
+  if(typeof o.pdf_file==='string')needed.add('pdfs/'+o.pdf_file);
+ }
+ for(const msg of b.directChat)if(msg.photo_file)needed.add('chat-images/'+msg.photo_file);
+ return needed;
+}
+function parseFile(doc){
+ if(doc.format!=='flyxj-backup-v3'||!Array.isArray(doc.orders)||!Array.isArray(doc.directChat)||!Array.isArray(doc.additionalStaff))throw Error('This is not a supported FlyXJ private backup file.');
+ const all=[];
+ for(const [key,prefix] of [['photos','photos'],['pdfs','pdfs'],['chat_photos','chat-images']]){
+  if(!Array.isArray(doc[key]))throw Error('Backup does not contain the '+key+' manifest.');
+  for(const item of doc[key]){
+   const object=prefix+'/'+item.name;
+   if(!valid.test(object))throw Error('Invalid backup attachment filename.');
+   all.push({path:object,data:item.data});
+  }
+ }
+ const refs=references(doc),given=new Set(all.map(x=>x.path));
+ for(const x of refs)if(!given.has(x))all.push({path:x,data:null});
+ if(new Set(all.map(x=>x.path)).size!==all.length)throw Error('This backup lists duplicate attachment filenames.');
+ files=all.filter(x=>typeof x.data==='string'&&x.data.length>0);
+ missing=all.filter(x=>!x.data).map(x=>x.path);
+ return doc;
+}
+el('backup').addEventListener('change',async e=>{
+ clearError();backup=null;el('fileSummary').classList.add('hidden');el('start').disabled=true;
+ const file=e.target.files&&e.target.files[0];if(!file)return;
+ try{
+  if(file.size>250*1024*1024)throw Error('Backup exceeds 250 MB; contact support for a staged import.');
+  backup=parseFile(JSON.parse(await file.text()));
+  el('filename').textContent=file.name;
+  el('ordersCount').textContent=backup.orders.length;
+  el('chatCount').textContent=backup.directChat.length;
+  el('filesCount').textContent=files.length;
+  el('missingNotice').textContent=missing.length?'Missing files already in this backup: '+missing.length+'. They cannot be recovered automatically.':'All '+files.length+' backup attachments include file data.';
+  el('missingConsent').classList.toggle('hidden',!missing.length);
+  el('fileSummary').classList.remove('hidden');el('start').disabled=false;
+ }catch(err){showError(err)}
+});
+el('verify').addEventListener('click',async()=>{
+ clearError();el('destination').textContent='Checking destination...';
+ try{
+  const data=await call('status',{});
+  el('destination').textContent=data.complete?'This database was already migrated. Do not re-import.':Object.keys(data.counts||{}).length?'Database already contains records; import will refuse to overwrite them.':'Supabase destination is empty and ready for migration.';
+ }catch(err){el('destination').textContent='';showError(err)}
+});
+function bytesOf(encoded){
+ const raw=atob(encoded),buf=new Uint8Array(raw.length);
+ for(let i=0;i<raw.length;i++)buf[i]=raw.charCodeAt(i);
+ return buf;
+}
+async function upload(item){
+ const answer=await call('sign',{path:item.path});
+ const signed=answer.signedUrl;
+ const uri=new URL(signed,location.href);
+ if(uri.protocol!=='https:'||!uri.hostname.endsWith('.supabase.co'))throw Error('Unexpected private upload destination');
+ const ext=item.path.split('.').pop();
+ const mime=ext==='pdf'?'application/pdf':ext==='jpg'?'image/jpeg':'image/'+ext;
+ const res=await fetch(uri.toString(),{method:'PUT',headers:{'content-type':mime},body:bytesOf(item.data)});
+ if(!res.ok)throw Error('Could not upload '+item.path+': '+res.status+' '+(await res.text()).slice(0,130));
+}
+el('start').addEventListener('click',async()=>{
+ if(busy)return;clearError();
+ try{
+  getCode();
+  if(!backup)throw Error('Choose your backup JSON file first.');
+  if(missing.length&&!el('allowMissing').checked)throw Error('Confirm that the already-missing attachments cannot be recovered.');
+  busy=true;el('start').disabled=true;el('verify').disabled=true;
+  el('progress').classList.remove('hidden');
+  const status=await call('status',{});
+  if(status.complete||Object.keys(status.counts||{}).length)throw Error('Destination contains records; refusing to overwrite them.');
+  const existing=(await call('existing',{paths:files.map(f=>f.path)})).existing;
+  const already=new Set(existing);
+  let done=0;
+  const total=files.filter(f=>!already.has(f.path)).length;
+  for(const item of files){
+   if(!already.has(item.path)){await upload(item);done++}
+   el('bar').style.width=(files.length?Math.round(100*(already.size+done)/files.length):100)+'%';
+   el('progressText').textContent='Private files: '+(already.size+done)+' / '+files.length+' uploaded. '+(total-done)+' remaining.';
+  }
+  const verified=(await call('existing',{paths:files.map(f=>f.path)})).existing;
+  if(verified.length!==files.length)throw Error('Not all attachments verified; please retry.');
+  el('progressText').textContent='All files verified. Committing database records...';
+  const result=await call('commit',{format:backup.format,orders:backup.orders,directChat:backup.directChat,additionalStaff:backup.additionalStaff,uploaded:files.map(f=>f.path),missing:missing,confirmMissing:missing.length===0||el('allowMissing').checked});
+  if(!result.complete)throw Error('Import did not complete.');
+  el('finalResult').className='success';
+  el('finalResult').textContent='Import COMPLETE: '+result.orders+' orders, '+result.chat+' chat messages, '+result.staff+' additional staff accounts and '+result.files+' private files. Keep your offline backup. Return to ChatGPT and say “Import complete” for the final safe live switch.';
+  el('progressText').textContent='Data successfully saved and verified in Supabase.';
+ }catch(err){showError(err);el('start').disabled=false}
+ finally{busy=false;el('verify').disabled=false}
+});
+})();
+</script></body></html>
