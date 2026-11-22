@@ -39,12 +39,15 @@ test('Staff one-click order sheet shows four dress pictures, size, colour, PDF, 
    measurements:{bust:'36 in'},shipping:{courier:'',tracking_id:''}
   }})};
   if(url==='/api/orders/42/address')return {ok:true,status:200,json:async()=>({address:'12 King Street\nLondon SW1A 1AA\nUK',source:'searchable_pdf',reliable:false})};
-  if(url==='/api/orders/42/maker')return {ok:true,status:200,json:async()=>({maker:{
-   fields:{recipient:'Jane Example',address:'12 King Street\\nLondon SW1A 1AA\\nUK',email:'jane@example.uk',phone:'+44 7700 900123',colour:'Brown',size:'L',quantity:'2',measurements:'Bust 36 in',notes:null},
-   selected:{colour:'Black',size:'M',quantity:'2'},conflicts:['colour','size'],missing:[],source:'pdf_text_labels',review_required:true
-  },ai_configured:false})};
+  if(url==='/api/me')return {ok:true,status:200,json:async()=>({role:'staff',username:'userb',csrf:'test-csrf'})};
   return {ok:false,status:404,json:async()=>({detail:'Unknown route'})};
  };
+ let imageDownloadCalls=0;
+ window.FlyxjMakerCollage={download:async(o,csrf)=>{
+  imageDownloadCalls++;
+  assert.equal(o.size,'M');assert.equal(o.colour,'Black');
+  assert.equal(csrf,'test-csrf');
+ }};
  vm.runInContext(fs.readFileSync(path.join(directory,'assets/order-sheet.js'),'utf8'),dom.getInternalVMContext(),{filename:'order-sheet.js'});
  try{
   await delay(130);
@@ -54,12 +57,15 @@ test('Staff one-click order sheet shows four dress pictures, size, colour, PDF, 
   assert.equal(document.querySelectorAll('#photoGrid img').length,4,'exactly four images in one screen');
   assert.match(document.getElementById('addressText').textContent,/King Street/);
   assert.equal(document.getElementById('pdfLink').getAttribute('href'),'/api/orders/42/pdf');
-  assert.equal(document.getElementById('makerDownload').getAttribute('href'),'/api/orders/42/maker.zip');
-  assert.equal(document.getElementById('makerTextDownload').getAttribute('href'),'/api/orders/42/maker.txt');
-  assert.match(document.getElementById('makerRows').textContent,/jane@example.uk/);
-  assert.match(document.getElementById('makerRows').textContent,/MISMATCH/);
-  assert.match(document.getElementById('makerStatus').textContent,/mismatch/i);
+  assert.equal(document.querySelectorAll('#makerDownload').length,1,'one maker image button');
+  assert.match(document.getElementById('makerDownload').textContent,/Download Maker Image/);
+  assert.equal(document.querySelector('#makerRows'),null,'complex PDF table removed');
+  assert.equal(document.querySelector('#makerTextDownload'),null,'TXT and CSV links removed');
   assert.equal(document.getElementById('backOrders').getAttribute('href'),'/#orders');
+  document.getElementById('makerDownload').click();
+  await delay(70);
+  assert.equal(imageDownloadCalls,1,'one click invokes one maker PNG download');
+  assert.match(document.getElementById('makerStatus').textContent,/one PNG image/i);
   const first=document.querySelector('#photoGrid button');
   first.click();
   assert.equal(document.getElementById('viewer').classList.contains('hidden'),false);
