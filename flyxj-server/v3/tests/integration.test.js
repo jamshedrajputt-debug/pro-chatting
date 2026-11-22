@@ -97,14 +97,17 @@ test('FLYXJ V3: authenticated PDF orders, approval, shipment, profit, chat, back
   assert.equal((await api(order.photos[0],a)).status,200,'customer photo');
   assert.equal((await api('/api/orders/'+order.id+'/whatsapp',a)).status,403,'User A cannot access WhatsApp forwarding API');
   const whatsResponse=await api('/api/orders/'+order.id+'/whatsapp',b);
-  assert.equal(whatsResponse.status,200,'User B can access WhatsApp forwarding API');
+  assert.equal(whatsResponse.status,200,'User B can inspect WhatsApp direct-file status');
   const whats=await whatsResponse.json();
   assert.equal(whats.recipient,'971567527192');
-  assert.match(whats.url,/^https:\/\/wa.me\/971567527192\?text=/);
-  const decoded=decodeURIComponent(whats.url.split('?text=')[1]);
-  assert.ok(decoded.includes('/api/orders/'+order.id+'/pdf'));
-  assert.ok(decoded.includes('/api/orders/'+order.id+'/photos/0'));
-  assert.equal(whats.automatic_enabled,false,'WhatsApp cannot auto-send without configured Business API');
+  assert.equal(whats.mode,'direct_media_only');
+  assert.equal(whats.links_sent,false,'WhatsApp attachments must never be secure-link text');
+  assert.equal(whats.automatic_enabled,false,'Auto-media requires Meta credentials and two approved media templates');
+  assert.equal(Object.prototype.hasOwnProperty.call(whats,'url'),false,'No WhatsApp URL provided');
+  assert.equal((await api('/api/orders/'+order.id+'/whatsapp/send-files',a,'POST',{})).status,403,
+    'User A cannot send media');
+  assert.equal((await api('/api/orders/'+order.id+'/whatsapp/send-files',b,'POST',{})).status,503,
+    'User B gets a clear not-connected response if Meta sender is absent');
   assert.equal((await api('/api/orders/deleted',a)).status,200);
   const changed=await api('/api/orders/'+order.id+'/edit',a,'PATCH',{
    updated_at:order.updated_at,title:'Custom revised leather dress',colour:'Dark brown',size:'L',
