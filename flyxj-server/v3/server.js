@@ -87,6 +87,7 @@ const err=(res,code,detail)=>res.status(code).json({detail});
 const text=(s,max=200)=>typeof s==='string'?s.trim().slice(0,max):'';
 const ref=o=>o.reference || ('FXJ-'+String(o.id).padStart(6,'0'));
 const canView=(u,o)=>u.role==='staff'||(o.customer||o.ordered_by)===u.username;
+const canActive=(u,o)=>canView(u,o)&&!o.deleted_at;
 const shipDefault=()=>({courier:'',tracking_id:'',tracking_url:'',updated_at:null});
 const financeDefault=()=>({sale_pkr:null,making_pkr:null,shipping_pkr:null,fx_pkr_per_usd:null,updated_at:null,recognized_at:null});
 const isShipped=o=>['shipped','delivered','completed'].includes(o.status);
@@ -193,7 +194,7 @@ function csrf(req,res,next){if(req.get('x-csrf-token')!==req.user.csrf)return er
 function loadOrder(req,res){
   const id=Number(req.params.id);
   const o=Number.isInteger(id)&&orders.find(x=>x.id===id);
-  if(!o||!canView(req.user,o)){err(res,404,'Order not found');return null;}
+  if(!o||!canActive(req.user,o)){err(res,404,'Order not found');return null;}
   return o;
 }
 function history(o,actor,label,kind='updated'){
@@ -210,7 +211,7 @@ function slimStats(list) {
   return {total:list.length,active,shipped,completed:by_status.completed+by_status.delivered,this_week,by_status};
 }
 
-app.get('/api/health',(req,res)=>res.json({ok:true,version:'4.0',storage:persistent.enabled?'supabase-private':'ephemeral',orders:orders.length}));
+app.get('/api/health',(req,res)=>res.json({ok:true,version:'4.1',storage:persistent.enabled?'supabase-private':'ephemeral',orders:orders.filter(o=>!o.deleted_at).length}));
 app.post('/api/login',(req,res)=>{
   const username=text(req.body&&req.body.username,100);
   const password=req.body&&req.body.password;
@@ -258,12 +259,145 @@ app.get('/api/events',auth,(req,res)=>{
   res.on('close',()=>{clearInterval(heartbeat);trackingClients.delete(client);pushPresence()});
 });
 app.get('/api/dashboard',auth,(req,res)=>{
-  const allowed=orders.filter(o=>canView(req.user,o));
+  const allowed=orders.filter(o=>canActive(req.user,o));
   res.json({stats:slimStats(allowed),recent:allowed.slice(-5).reverse().map(publicOrder),statuses:STATUSES});
 });
 app.get('/api/orders',auth,(req,res)=>{
-  const allowed=orders.filter(o=>canView(req.user,o));
+  const allowed=orders.filter(o=>canActive(req.user,o));
   res.json({orders:allowed.slice().reverse().map(publicOrder)});
+});
+// Recoverable deletion means previous orders, PDFs and photos remain in the private backup.
+// Both original customer and staff can edit, delete and restore an order.
+app.get('/api/orders/deleted',auth,(req,res)=>{
+ const deleted=orders.filter(o=>o.deleted_at&&canView(req.user,o)).slice().reverse().map(publicOrder);
+ return res.json({orders:deleted});
+});
+const editFields=['title','colour','size','quantity','comments','priority','expected_date','measurements'];
+function normalizeEditable(v,order){
+ if(!v||typeof v!=='object'||Array.isArray(v))return null;
+ const updated={...order};
+ if(Object.hasOwn(v,'title')){
+  if(typeof v.title!=='string'||v.title.trim().length<2||v.title.trim().length>120)return null;
+  updated.title=text(v.title,120);
+ }
+ if(Object.hasOwn(v,'colour')){
+  if(typeof v.colour!=='string'||!v.colour.trim()||v.colour.trim().length>80)return null;
+  updated.colour=text(v.colour,80);
+ }
+ if(Object.hasOwn(v,'size')){
+  const value=text(v.size,80);
+  if(!SIZES.includes(value)&&!(value.startsWith('CUSTOM:')&&value.length<=80))return null;
+  updated.size=value;
+ }
+ if(Object.hasOwn(v,'quantity')){
+  const q=Number(v.quantity);
+  if(!Number.isInteger(q)||q<1||q>1000)return null;
+  updated.quantity=q;
+ }
+ if(Object.hasOwn(v,'comments')){
+  if(typeof v.comments!=='string'||v.comments.length>2500)return null;
+  updated.comments=text(v.comments,2500);
+ }
+ if(Object.hasOwn(v,'priority')){
+  if(!['normal','high','urgent'].includes(v.priority))return null;
+  updated.priority=v.priority;
+ }
+ if(Object.hasOwn(v,'expected_date')){
+  if(typeof v.expected_date!=='string'||v.expected_date&&!/^\d{4}-\d{2}-\d{2}$/.test(v.expected_date))return null;
+  updated.expected_date=v.expected_date;
+ }
+ if(Object.hasOwn(v,'measurements')){
+  if(!v.measurements||typeof v.measurements!=='object'||Array.isArray(v.measurements))return null;
+  const measures={...order.measurements};
+  for(const [key,value] of Object.entries(v.measurements)){
+   if(!['bust','waist','hips','shoulder','sleeve','length','inseam','neck','other'].includes(key))return null;
+   if(typeof value!=='string'||value.length>90)return null;
+   measures[key]=text(value,90);
+  }
+  updated.measurements=measures;
+ }
+ return updated;
+}
+app.patch('/api/orders/:id/edit',auth,csrf,async(req,res)=>{
+ const original=loadOrder(req,res);if(!original)return;
+ const v=req.body||{};
+ if(!v.updated_at||v.updated_at!==original.updated_at)return err(res,409,'Order changed. Refresh before editing.');
+ const patch=normalizeEditable(v,original);
+ if(!patch)return err(res,400,'Invalid order details, colour, size or measurements');
+ if(!Object.keys(v).some(k=>editFields.includes(k)||k==='images'||k==='pdf'))return err(res,400,'Nothing to edit');
+ const images=[],newFiles=[],newPdf=[];
+ try{
+  if(Object.hasOwn(v,'images')){
+   if(!Array.isArray(v.images)||!v.images.length||v.images.length>MAX_IMAGES)return err(res,400,'Choose 1–8 photos');
+   let bytes=0;
+   for(const raw of v.images){
+    const pic=imageData(raw);
+    if(!pic)return err(res,400,'Each picture must be JPG, PNG or WebP under 2.5 MB');
+    bytes+=pic.bytes.length;
+    if(bytes>MAX_TOTAL_BYTES)return err(res,400,'Photos must total under 16 MB');
+    images.push(pic);
+   }
+  }
+  let pdf=null;
+  if(Object.hasOwn(v,'pdf')){
+   pdf=parsePdf(v.pdf);
+   if(!pdf)return err(res,400,'Invalid PDF (maximum 30 MB)');
+  }
+  if(pdf){
+   const name=crypto.randomUUID()+'.pdf';
+   fs.writeFileSync(path.join(PDF_DIR,name),pdf,{flag:'wx'});newPdf.push(name);
+   if(persistent.enabled)await persistent.uploadLocalFile(PDF_DIR,name,'pdfs');
+   patch.pdf_file=name;
+  }
+  if(images.length){
+   for(const pic of images){
+    const name=crypto.randomUUID()+'.'+pic.ext;
+    fs.writeFileSync(path.join(PHOTO_DIR,name),pic.bytes,{flag:'wx'});
+    newFiles.push(name);
+    if(persistent.enabled)await persistent.uploadLocalFile(PHOTO_DIR,name,'photos');
+   }
+   patch.image_files=newFiles.slice();
+  }
+  // Preserve production approvals, finance and conversations; changes to design
+  // after approval require renewed approval before cutting or stitching.
+  if(patch.pdf_file!==original.pdf_file||patch.size!==original.size||
+     patch.colour!==original.colour||patch.image_files!==original.image_files){
+    if(original.approval?.status==='approved')
+       patch.approval={status:'not_requested',note:'Order design updated; approval needs renewal',updated_at:now()};
+  }
+  history(patch,req.user.username,'Order edited'+(newFiles.length?' (reference photos replaced)':'')+(newPdf.length?' (PDF replaced)':''),'edited');
+  const index=orders.indexOf(original);orders[index]=patch;
+  try{await save()}catch(e){orders[index]=original;throw e}
+  pushOrder(patch,'order','Order details updated');
+  return res.json({order:publicOrder(patch)});
+ }catch(e){
+  for(const name of newFiles){try{fs.unlinkSync(path.join(PHOTO_DIR,name))}catch{}}
+  for(const name of newPdf){try{fs.unlinkSync(path.join(PDF_DIR,name))}catch{}}
+  console.warn('Order edit failed:',e.message);
+  return err(res,503,'Order update could not be saved');
+ }
+});
+app.delete('/api/orders/:id',auth,csrf,async(req,res)=>{
+ const current=loadOrder(req,res);if(!current)return;
+ if(req.body?.updated_at!==current.updated_at)return err(res,409,'Order changed. Refresh before deleting.');
+ const index=orders.indexOf(current);
+ const next={...current,deleted_at:now(),deleted_by:req.user.username};
+ history(next,req.user.username,'Order moved to Recently Deleted','deleted');
+ orders[index]=next;
+ try{await save()}catch(e){orders[index]=current;return err(res,503,'Could not delete order safely')}
+ pushOrder(next,'order','Order moved to Recently Deleted');
+ return res.json({ok:true,recoverable:true});
+});
+app.post('/api/orders/:id/restore',auth,csrf,async(req,res)=>{
+ const id=Number(req.params.id),current=orders.find(o=>o.id===id);
+ if(!current||!canView(req.user,current)||!current.deleted_at)return err(res,404,'Deleted order not found');
+ const index=orders.indexOf(current);
+ const next={...current,deleted_at:null,deleted_by:null};
+ history(next,req.user.username,'Order restored from Recently Deleted','restored');
+ orders[index]=next;
+ try{await save()}catch(e){orders[index]=current;return err(res,503,'Could not restore order')}
+ pushOrder(next,'order','Order restored');
+ return res.json({order:publicOrder(next)});
 });
 app.get('/api/orders/:id',auth,(req,res)=>{
   const o=loadOrder(req,res);if(o)res.json({order:publicOrder(o)});
@@ -530,7 +664,7 @@ app.patch('/api/orders/:id/finance',auth,csrf,async(req,res)=>{
 
 
 function financialReport(req){
- const list=orders.filter(o=>canView(req.user,o)&&isShipped(o)).map(financeRow).filter(Boolean)
+ const list=orders.filter(o=>canActive(req.user,o)&&isShipped(o)).map(financeRow).filter(Boolean)
    .sort((a,b)=>new Date(a.date).getTime()-new Date(b.date).getTime());
  const keys=['sale_pkr','making_pkr','shipping_pkr','cost_pkr','profit_pkr','sale_usd','making_usd','shipping_usd','cost_usd','profit_usd'];
  const sum=(rows,k)=>Math.round(rows.reduce((n,o)=>n+(Number(o[k])||0),0)*100)/100;
