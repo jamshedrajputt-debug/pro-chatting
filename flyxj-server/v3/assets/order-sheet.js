@@ -178,6 +178,12 @@
     try{
       const data=await api('/api/orders/'+id);
       renderOrder(data.order);showAddress();
+      const actions=window.FlyxjOrderActions;
+      if(actions){
+        $('sheetEdit').onclick=()=>actions.edit(data.order.id);
+        $('sheetDelete').onclick=()=>actions.delete(data.order.id);
+        $('sheetWhatsApp').onclick=()=>actions.share(data.order);
+      }
       if(new URLSearchParams(location.search).has('download')){
         downloadMakerImage();
       }
