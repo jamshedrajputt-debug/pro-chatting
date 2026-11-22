@@ -403,7 +403,7 @@ app.post('/api/orders/:id/restore',auth,csrf,async(req,res)=>{
 app.get('/api/orders/:id/whatsapp',auth,(req,res)=>{
  if(req.user.role!=='staff')return err(res,403,'WhatsApp forwarding is available only to User B');
  const o=loadOrder(req,res);if(!o)return;
- return res.json({url:whatsapp.waLink(o),recipient:whatsapp.RECIPIENT,note:'User B must review the order and tap Send in WhatsApp. PDF and photo links require FlyXJ login.'});
+ return res.json({url:whatsapp.waLink(o),recipient:whatsapp.RECIPIENT,automatic_enabled:whatsapp.whatsappConfigured(),note:'User B controls manual forwarding. Automatic notification requires connected Meta WhatsApp Business API credentials and approved template; PDF/photo links require FlyXJ login.'});
 });
 app.get('/api/orders/:id',auth,(req,res)=>{
   const o=loadOrder(req,res);if(o)res.json({order:publicOrder(o)});
@@ -479,8 +479,15 @@ app.post('/api/orders',auth,csrf,async(req,res)=>{
     orders.push(o);
     try{await save()}catch(ex){orders.pop();throw ex;}
     pushOrder(o,'order','New dress order submitted');
-    // Only User B may open and forward to WhatsApp; submitting as User A
-    // never sends or exposes a WhatsApp message.
+    // No WhatsApp controls or link are exposed to User A.
+    // If User B has connected a Meta WhatsApp Business account and an
+    // approved template, the server automatically notifies the configured
+    // User B destination on successful order creation.
+    if(whatsapp.whatsappConfigured()){
+      whatsapp.notifyViaBusinessApi(o).then(result=>{
+        if(result.status!=='accepted_by_provider')console.warn('WhatsApp User B notification:',result.status);
+      }).catch(e=>console.warn('WhatsApp User B notification failed:',e.message));
+    }
     res.status(201).json({order:publicOrder(o)});
   }catch(ex){
     image_files.forEach(f=>{try{fs.unlinkSync(path.join(PHOTO_DIR,f))}catch{}});
