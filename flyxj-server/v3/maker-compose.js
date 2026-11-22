@@ -33,7 +33,7 @@ async function makerCollage(photoBuffers,{size,colour}={}){
  const tileBackground=Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="'+TILE+'" height="'+TILE+'">'+
   '<rect width="100%" height="100%" fill="#ffffff" stroke="#dce3ed" stroke-width="3"/></svg>');
  for(let i=0;i<4;i++){
-  const x=MARGIN+(i%2)*(TILE+G),y=MARGIN+Math.floor(i/2)*(TILE+G);
+  const x=MARGIN+(i%2)*(TILE+GAP),y=MARGIN+Math.floor(i/2)*(TILE+GAP);
   layers.push({input:tileBackground,left:x,top:y});
   if(i<photoBuffers.length){
    const image=await sharp(photoBuffers[i],{limitInputPixels:40_000_000,failOn:'error'})
