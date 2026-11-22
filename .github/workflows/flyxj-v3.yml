@@ -38,5 +38,7 @@ jobs:
         run: node --test flyxj-server/v3/tests/chat-ui.test.js
       - name: Test staff order pack and PDF address extraction
         run: node --test flyxj-server/v3/tests/order-sheet.test.js
+      - name: Verify order edit/delete/restore and WhatsApp mobile controls
+        run: node --test flyxj-server/v3/tests/order-actions.test.js
       - name: Test one combined PNG with four photos, Size and Color
         run: node --test flyxj-server/v3/tests/maker-collage.test.js
