@@ -1,3 +1,40 @@
+## Quick setup after connecting +92 number through 360dialog (recommended)
+
+This FlyXJ installation now supports **360dialog directly**. Do **not** try to use the 360dialog API key as a Meta Cloud API bearer token: the endpoint and authorization header are different.
+
+**Step 1 — Generate your private channel key**
+
+1. Sign in to [360dialog Hub](https://hub.360dialog.com/).
+2. Open the channel for **+92 370 7360673** (make sure the number is correct), then **Manage / API settings / Generate API Key**. The exact navigation may vary.
+3. Copy the key somewhere private. **Do not send an API key, OTP or password in a chat.** The generated key is displayed only once and generating a new one revokes the old key. If the button is disabled, check 360dialog's partner/payment permission settings.
+
+**Step 2 — Add the secret in FlyXJ's Render service**
+
+Open the FlyXJ Render service dashboard, choose **Environment**, then add or set:
+
+```text
+WHATSAPP_PROVIDER=360dialog
+D360_API_KEY=(your private phone-specific 360dialog channel API key)
+WHATSAPP_MEDIA_IMAGE_TEMPLATE=flyxj_photo_media
+WHATSAPP_MEDIA_DOCUMENT_TEMPLATE=flyxj_pdf_document
+WHATSAPP_TEMPLATE_LANGUAGE=en
+```
+
+Save and allow a service deploy/restart. Only `D360_API_KEY` is sensitive; enter it directly into Render, never GitHub, an issue tracker, a screenshot or ChatGPT. This account key must belong to **+92 370 7360673** to send from that phone number.
+
+**Step 3 — Approve two media templates in 360dialog Hub or Meta WhatsApp Manager**
+
+- `flyxj_photo_media` — category Utility, image header, four body variables: order reference, dress name, size, color.
+- `flyxj_pdf_document` — category Utility, document header, the same four body variables.
+
+Example body for both: `Order {{1}} - {{2}}. Size: {{3}}. Color: {{4}}.` Use English `en` and wait for Meta's **APPROVED** status. This application sends each media file as a template message (one PDF, one combined 2×2 Size/Color JPEG and up to four individual JPEG photos), to **+971 56 752 7192**. No links are sent. Each template message may be billed; the recipient must meet Meta consent/messaging requirements.
+
+The backend uses the official 360dialog messaging endpoints `https://waba-v2.360dialog.io/media` and `/messages` with the `D360-API-KEY` HTTP header. Existing Meta direct Cloud API variables still work if `WHATSAPP_PROVIDER=meta` is configured instead.
+
+**Important:** 360dialog showing "number connected" is not enough: its phone-specific API key must be installed privately on Render, templates approved, and actual delivery confirmed. We will not change any customer orders or send test messages until the sender is authorized.
+
+---
+
 # FlyXJ — User B WhatsApp Direct PDF + Photo Messages
 
 ## Expected live behavior
