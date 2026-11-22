@@ -65,6 +65,7 @@
     if(!pictures.length)return;
     $('viewerImage').src=pictures[viewIndex];
     $('viewerCount').textContent='Photo '+(viewIndex+1)+' of '+pictures.length;
+    const download=$('viewerDownload');if(download){download.href='#';download.dataset.index=String(viewIndex);}
   }
   function openPhoto(index){
     if(!order?.photos?.length)return;
@@ -172,7 +173,7 @@
     mobileDownloads[kind]=file;
     anchor.href=file.url;
     anchor.download=file.filename;
-    anchor.target='_blank';
+    anchor.target='_self';
     anchor.rel='noopener noreferrer';
     anchor.setAttribute('aria-disabled','false');
     anchor.textContent=kind==='maker'?'↓ Download Maker Image (PNG)':'↓ Download Original PDF';
@@ -219,6 +220,22 @@
     if(!id)return fail('Invalid order link. Return to orders and open a valid order.');
     $('morePhotos').onclick=()=>{allPhotos=!allPhotos;showThumbs()};
     $('viewerClose').onclick=closePhoto;
+    $('viewerDownload').onclick=async e=>{
+      e.preventDefault();
+      const btn=$('viewerDownload');btn.textContent='Preparing…';
+      try{
+       const me=await api('/api/me');
+       const response=await fetch('/api/orders/'+id+'/mobile-file',{
+        method:'POST',credentials:'same-origin',headers:{'content-type':'application/json','x-csrf-token':me.csrf},
+        body:JSON.stringify({kind:'photo',index:Number(btn.dataset.index)})
+       });
+       const data=await response.json().catch(()=>({}));
+       if(!response.ok||!data.url)throw Error(data.detail||'Photo download unavailable');
+       const link=document.createElement('a');link.href=data.url;link.download=data.filename;
+       document.body.append(link);link.click();link.remove();
+       btn.textContent='↓ Download photo';
+      }catch(error){btn.textContent='Retry photo download';alert(error.message)}
+    };
     $('viewerPrev').onclick=()=>stepPhoto(-1);
     $('viewerNext').onclick=()=>stepPhoto(1);
     window.addEventListener('popstate',e=>{
