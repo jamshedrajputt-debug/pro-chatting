@@ -202,7 +202,7 @@ function renderOrders(){
     trigger.type='button';trigger.title='Order actions';trigger.setAttribute('aria-label','Order actions');
     const menu=node('div','flyxj-actions-menu hidden');
     const menuItems=[['✎ Edit order','edit'],['Delete order','delete']];
-    if(state.me?.role==='staff')menuItems.splice(1,0,['Send PDF + Photos','share']);
+    if(state.me?.role==='staff')menuItems.splice(1,0,['Share actual files','share']);
     for(const [label,action] of menuItems){
       const item=node('button','flyxj-actions-menu-item',label);
       item.type='button';
@@ -303,7 +303,7 @@ async function submitOrder(event){
   try{
     const images=await Promise.all(state.files.map(compress));
     const body={
-      title:$('dressTitle').value,size:$('dressSize').value,colour:$('dressColour').value,
+      title:$('dressTitle').value,size:$('dressSize').value,shoe_size:$('shoeSize').value,customer_earning_pkr:$('customerEarning').value,colour:$('dressColour').value,
       quantity:Number($('dressQty').value),comments:$('dressComments').value,images,
       pdf:await readRequiredPdf(),priority:$('orderPriority').value,expected_date:$('orderDeadline').value,
       measurements:readMeasurements()
@@ -366,7 +366,7 @@ function renderDetail(o){
   $('detailStatus').className='status-pill status-'+o.status;
   $('detailUpdated').textContent='Updated '+day(o.updated_at);
   const grid=$('detailGrid');grid.replaceChildren(
-    appendDetail('Size',o.size),appendDetail('Colour',o.colour),
+    appendDetail('Size',o.size),appendDetail('Shoes size',o.shoe_size||'—'),appendDetail('User A earning (PKR)',o.customer_earning_pkr??'Not entered'),appendDetail('Colour',o.colour),
     appendDetail('Quantity',o.quantity),appendDetail('Submitted by',o.customer),
     appendDetail('Order reference',o.reference),appendDetail('Created',time(o.created_at))
   );
@@ -389,6 +389,7 @@ function renderDetail(o){
     gallery.append(img);
   }
   renderShipping(o);renderMessages(o);renderHistory(o);renderExtraDetails(o);
+  const earning=$('customerEarningEdit');if(earning)earning.value=o.customer_earning_pkr??0;
   if(state.me.role==='staff'){
     $('detailStatusSelect').value=o.status;
     $('staffNote').value=o.staff_note||'';
@@ -478,6 +479,11 @@ async function init(){
     renderImagePreview();
   };
   $('newOrderForm').onsubmit=submitOrder;
+  $('earningForm').onsubmit=async e=>{
+    e.preventDefault();
+    if(state.me?.role!=='customer')return toast('Only User A can edit earning',true);
+    await saveAndRefresh('/customer-earning','PATCH',{customer_earning_pkr:$('customerEarningEdit').value},'User A earning saved for User B');
+  };
   $('statusForm').onsubmit=async e=>{
     e.preventDefault();
     const status=$('detailStatusSelect').value;
