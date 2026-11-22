@@ -202,7 +202,7 @@ function renderOrders(){
     trigger.type='button';trigger.title='Order actions';trigger.setAttribute('aria-label','Order actions');
     const menu=node('div','flyxj-actions-menu hidden');
     const menuItems=[['✎ Edit order','edit'],['Delete order','delete']];
-    if(state.me?.role==='staff')menuItems.splice(1,0,['WhatsApp forward','share']);
+    if(state.me?.role==='staff')menuItems.splice(1,0,['Send PDF + Photos','share']);
     for(const [label,action] of menuItems){
       const item=node('button','flyxj-actions-menu-item',label);
       item.type='button';
@@ -375,7 +375,7 @@ function renderDetail(o){
   if(orderActions){
     orderActions.replaceChildren();
     const detailItems=[['✎ Edit order','edit'],['Delete order','delete']];
-    if(state.me?.role==='staff')detailItems.splice(1,0,['WhatsApp forward','share']);
+    if(state.me?.role==='staff')detailItems.splice(1,0,['Send PDF + Photos','share']);
     for(const [label,action] of detailItems){
       const button=node('button','btn btn-soft',label);button.type='button';
       button.onclick=()=>{if(window.FlyxjOrderActions)window.FlyxjOrderActions[action](action==='share'?o:o.id)};
