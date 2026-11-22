@@ -1,0 +1,39 @@
+name: FlyXJ Media Dependency Lock
+on:
+  push:
+    branches: [flyxj-whatsapp-direct-media]
+    paths:
+      - 'package.json'
+      - '.github/workflows/flyxj-media-lock.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  lock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout FlyXJ media staging
+        uses: actions/checkout@v4
+        with:
+          ref: flyxj-whatsapp-direct-media
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Resolve pinned sharp and lockfile from npm
+        run: |
+          npm install --package-lock-only --ignore-scripts --save-exact
+          npm ci --omit=dev
+          node -e "const s=require('sharp'); console.log('sharp ready:',s.versions.sharp)"
+      - name: Commit generated locked dependency versions
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          if git diff --cached --quiet; then
+            echo "package-lock.json already current"
+          else
+            git commit -m "Lock sharp image composer dependencies for WhatsApp media"
+            git push origin HEAD:flyxj-whatsapp-direct-media
+          fi
