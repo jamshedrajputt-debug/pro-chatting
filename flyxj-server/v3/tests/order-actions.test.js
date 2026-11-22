@@ -59,7 +59,7 @@ test('Delete asks for confirmation before API mutation and deleted orders can be
  try{
   await dom.window.FlyxjOrderActions.delete(23);
   assert.match(d.querySelector('.flyxj-action-header').textContent,/Delete/);
-  assert.match(d.querySelector('.flyxj-delete-warning').textContent,/Recently Deleted/);
+  assert.match(d.querySelector('.flyxj-action-header').textContent,/Recently Deleted/);
   assert.equal(requests.filter(x=>x.opts.method==='DELETE').length,0,'No delete on opening dialog');
   const button=d.querySelector('.flyxj-action-danger');
   assert.match(button.textContent,/Recently Deleted/);
