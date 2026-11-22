@@ -18,6 +18,7 @@ function mount(){
   const response=body=>({ok:true,status:200,json:async()=>body});
   if(url==='/api/orders/23')return response({order});
   if(url==='/api/me')return response({username:'usera',role:'customer',csrf:'secure-csrf'});
+  if(url==='/api/orders/23/whatsapp')return {ok:false,status:403,json:async()=>({detail:'WhatsApp forwarding is available only to User B'})};
   if(url==='/api/orders/deleted')return response({orders:[{...order,deleted_at:'2026-11-22T06:00:00Z'}]});
   if(url==='/api/orders/23/edit')return response({order});
   if(url==='/api/orders/23/restore')return response({order});
@@ -27,18 +28,16 @@ function mount(){
  vm.runInContext(script,dom.getInternalVMContext(),{filename:'order-actions.js'});
  return {dom,d,requests,order};
 }
-test('WhatsApp draft goes only to requested UAE number with protected PDF and photo URLs',()=>{
- const {dom,order}=mount();
+test('User A has no WhatsApp link generator and cannot forward via authenticated backend',async()=>{
+ const {dom,order,requests}=mount();
  try{
-  const url=dom.window.FlyxjOrderActions.link(order);
-  assert.match(url,/^https:\/\/wa.me\/971567527192\?text=/);
-  const text=decodeURIComponent(url.split('?text=')[1]);
-  assert.match(text,/Custom leather jacket/);
-  assert.match(text,/Size: M/);
-  assert.match(text,/Color: Black/);
-  assert.match(text,/api\/orders\/23\/pdf/);
-  assert.match(text,/api\/orders\/23\/photos\/0/);
-  assert.match(text,/Log in to FlyXJ/);
+  const alerts=[];dom.window.alert=msg=>alerts.push(String(msg));
+  assert.equal(dom.window.FlyxjOrderActions.link,undefined,'No client-side link generation available');
+  assert.equal(dom.window.FlyxjOrderActions.newOrderCreated,undefined,'No post-submit WhatsApp popup');
+  await dom.window.FlyxjOrderActions.share(order);
+  const attempted=requests.find(x=>x.url==='/api/orders/23/whatsapp');
+  assert.ok(attempted,'forward action uses secure server authorization');
+  assert.ok(alerts.some(x=>x.includes('User B')),'blocked customer sees permission warning');
  }finally{dom.window.close()}
 });
 test('Order Edit modal appears for either account and contains replacement PDF/photos',async()=>{
