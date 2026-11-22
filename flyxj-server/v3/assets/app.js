@@ -199,9 +199,11 @@ function renderOrders(){
       actions.append(maker);
     }
     const trigger=node('button','flyxj-actions-trigger','⋯');
-    trigger.type='button';trigger.title='Edit, delete or WhatsApp order';trigger.setAttribute('aria-label','Order actions');
+    trigger.type='button';trigger.title='Order actions';trigger.setAttribute('aria-label','Order actions');
     const menu=node('div','flyxj-actions-menu hidden');
-    for(const [label,action] of [['✎ Edit order','edit'],['WhatsApp forward','share'],['Delete order','delete']]){
+    const menuItems=[['✎ Edit order','edit'],['Delete order','delete']];
+    if(state.me?.role==='staff')menuItems.splice(1,0,['WhatsApp forward','share']);
+    for(const [label,action] of menuItems){
       const item=node('button','flyxj-actions-menu-item',label);
       item.type='button';
       item.onclick=e=>{e.stopPropagation();menu.classList.add('hidden');if(window.FlyxjOrderActions)window.FlyxjOrderActions[action](action==='share'?o:o.id)};
@@ -311,7 +313,6 @@ async function submitOrder(event){
     await refresh({silent:true});
     navigate('orders');toast('Order '+data.order.reference+' created successfully');
     openDetail(data.order.id);
-    if(window.FlyxjOrderActions)window.FlyxjOrderActions.newOrderCreated(data.order,data.whatsapp_auto_enabled);
   }catch(ex){toast(ex.message,true)}
   finally{btn.disabled=false;btn.textContent='Submit order →'}
 }
@@ -373,7 +374,9 @@ function renderDetail(o){
   const orderActions=$('flyxjDetailActions');
   if(orderActions){
     orderActions.replaceChildren();
-    for(const [label,action] of [['✎ Edit order','edit'],['WhatsApp forward','share'],['Delete order','delete']]){
+    const detailItems=[['✎ Edit order','edit'],['Delete order','delete']];
+    if(state.me?.role==='staff')detailItems.splice(1,0,['WhatsApp forward','share']);
+    for(const [label,action] of detailItems){
       const button=node('button','btn btn-soft',label);button.type='button';
       button.onclick=()=>{if(window.FlyxjOrderActions)window.FlyxjOrderActions[action](action==='share'?o:o.id)};
       orderActions.append(button);
