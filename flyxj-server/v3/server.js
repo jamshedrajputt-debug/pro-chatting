@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
+const persistent = require('./persistent.js');
 
 const app = express();
 app.disable('x-powered-by');
@@ -25,7 +26,13 @@ for(const dir of [PDF_DIR,CHAT_PHOTO_DIR])fs.mkdirSync(dir,{recursive:true});
 const STAFF_FILE=path.join(DATA_DIR,'staff-accounts.json'),CHAT_FILE=path.join(DATA_DIR,'direct-chat.json');
 function readArray(file){try{const data=JSON.parse(fs.readFileSync(file,'utf8'));return Array.isArray(data)?data:[]}catch{return []}}
 let additionalStaff=readArray(STAFF_FILE),directChat=readArray(CHAT_FILE);
-function saveAtomic(file,data){fs.writeFileSync(file+'.tmp',JSON.stringify(data));fs.renameSync(file+'.tmp',file)}
+function writeLocalAtomic(file,data){fs.writeFileSync(file+'.tmp',JSON.stringify(data));fs.renameSync(file+'.tmp',file)}
+async function saveAtomic(file,data){
+ const namespace=file===CHAT_FILE?'direct_chat':file===STAFF_FILE?'staff_accounts':null;
+ if(!namespace)throw Error('Unsupported FlyXJ state file');
+ if(persistent.enabled)await persistent.save(namespace,data);
+ writeLocalAtomic(file,data);
+}
 
 const FILE = path.join(DATA_DIR,'orders.json');
 let orders = [];
@@ -132,10 +139,9 @@ function storedAttachment(req,res,folder,filename,mime,download=false){
 }
 
 const safeUrl=url=>{const v=text(url,600);if(!v)return '';try{const u=new URL(v);return u.protocol==='https:'?u.toString():null;}catch{return null;}};
-function save(){
-  const temp=FILE+'.tmp';
-  fs.writeFileSync(temp,JSON.stringify(orders));
-  fs.renameSync(temp,FILE);
+async function save(){
+ if(persistent.enabled)await persistent.save('orders',orders);
+ writeLocalAtomic(FILE,orders);
 }
 function imageData(raw) {
   if(typeof raw!=='string'||raw.length>Math.ceil(MAX_IMAGE_BYTES*4/3)+256)return null;
@@ -196,7 +202,7 @@ function slimStats(list) {
   return {total:list.length,active,shipped,completed:by_status.completed+by_status.delivered,this_week,by_status};
 }
 
-app.get('/api/health',(req,res)=>res.json({ok:true,version:'3.0',storage:'ephemeral',orders:orders.length}));
+app.get('/api/health',(req,res)=>res.json({ok:true,version:'4.0',storage:persistent.enabled?'supabase-private':'ephemeral',orders:orders.length}));
 app.post('/api/login',(req,res)=>{
   const username=text(req.body&&req.body.username,100);
   const password=req.body&&req.body.password;
@@ -644,4 +650,29 @@ app.use((error,req,res,next)=>{
  return err(res,400,'Invalid upload data. Please retry with a valid PDF.');
 });
 const PORT=Number(process.env.PORT)||10000;
-app.listen(PORT,'0.0.0.0',()=>console.log('FlyXJ dashboard v3 listening on '+PORT));
+async function startFlyxj(){
+ if(persistent.enabled){
+  const status=await persistent.health();
+  if(!status.ok)throw Error('Private storage bridge unavailable');
+  const [remoteOrders,remoteChat,remoteStaff]=await Promise.all([
+   persistent.load('orders'),persistent.load('direct_chat'),persistent.load('staff_accounts')
+  ]);
+  const localStates={orders,direct_chat:directChat,staff_accounts:additionalStaff};
+  const remoteStates={orders:remoteOrders,direct_chat:remoteChat,staff_accounts:remoteStaff};
+  for(const [namespace,entries] of Object.entries(remoteStates)){
+   if(entries===null){
+    if(localStates[namespace].length)throw Error('Local '+namespace+' data needs explicit backup and migration; refusing unsafe startup');
+    if(process.env.FLYXJ_ALLOW_EMPTY_BOOTSTRAP!=='1')throw Error('Missing '+namespace+' dataset. Import old backup first.');
+    await persistent.save(namespace,[]);
+   }else if(!Array.isArray(entries))throw Error('Invalid database state '+namespace);
+   else{
+    if(namespace==='orders')orders=entries;
+    else if(namespace==='direct_chat')directChat=entries;
+    else additionalStaff=entries;
+   }
+  }
+  console.log('Supabase persistence ready: orders',orders.length,'chat',directChat.length);
+ }
+ app.listen(PORT,'0.0.0.0',()=>console.log('FlyXJ dashboard v4 listening on '+PORT));
+}
+startFlyxj().catch(error=>{console.error('Refusing unsafe FlyXJ startup:',error.message);process.exit(1)});
