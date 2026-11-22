@@ -5,8 +5,6 @@ const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
 const persistent = require('./persistent.js');
-const makerExtract = require('./maker-extract.js');
-const makerPack = require('./maker-pack.js');
 
 const app = express();
 app.disable('x-powered-by');
@@ -326,10 +324,7 @@ app.post('/api/orders',auth,csrf,async(req,res)=>{
       fs.writeFileSync(path.join(PHOTO_DIR,filename),p.bytes,{flag:'wx'});
       image_files.push(filename);
     }
-    // Process the PDF automatically when User A submits the order.
-    // Optional AI vision only runs if a private server API key is configured.
-    const maker_fields=await makerExtract.extractMakerFields(pdfBytes,{colour,size,quantity:qty});
-    const o={id,reference,title,colour,size,quantity:qty,comments,status:'pending',maker_fields,
+    const o={id,reference,title,colour,size,quantity:qty,comments,status:'pending',
       pdf_file:pdfName,measurements,finished_files:[],finance:financeDefault(),
       approval:{status:'not_requested',note:'',updated_at:null},
       expected_date:/^\d{4}-\d{2}-\d{2}$/.test(v.expected_date||'')?v.expected_date:'',
@@ -415,71 +410,46 @@ app.post('/api/orders/:id/return',auth,csrf,async(req,res)=>{
   try{await save();pushOrder(o,'return','Return tracking received');res.json({order:publicOrder(o)})}catch{err(res,500,'Return tracking could not be saved')}
 });
 
-// User B maker-ready sheet. Existing orders are parsed on demand (read-only).
-async function resolveMakerData(order){
- if(order.maker_fields&&order.maker_fields.fields)return order.maker_fields;
- if(!order.pdf_file)throw Error('Original PDF missing from order');
- const pdf=await persistent.retrieveOrLocal(PDF_DIR,order.pdf_file,'pdfs');
- if(!pdf)throw Error('Original PDF file is unavailable');
- return makerExtract.extractMakerFields(pdf,order,{allowAi:false});
+// Temporary maker image is not business data: never changes orders or Supabase.
+// Browser combines photos into one PNG; this route supports Android downloads.
+const makerImageTickets=new Map();
+function purgeMakerTickets(){
+ const time=Date.now();
+ for(const [key,entry] of makerImageTickets)if(entry.expires<time)makerImageTickets.delete(key);
+ while(makerImageTickets.size>=5)makerImageTickets.delete(makerImageTickets.keys().next().value);
 }
-app.get('/api/orders/:id/maker',auth,async(req,res)=>{
- if(req.user.role!=='staff')return err(res,403,'User B / staff only');
+app.post('/api/orders/:id/maker-image',auth,csrf,(req,res)=>{
+ if(req.user.role!=='staff')return err(res,403,'Staff only');
  const o=loadOrder(req,res);if(!o)return;
- try{
-  const maker=await resolveMakerData(o);
-  res.json({maker,reference:ref(o),photos:(o.image_files||[]).length,ai_configured:!!process.env.OPENAI_API_KEY});
- }catch(e){console.warn('Maker summary read error:',e.message);err(res,503,'Maker summary unavailable. Verify original PDF.')}
+ const raw=req.body?.png;
+ if(typeof raw!=='string'||raw.length>14*1024*1024)return err(res,400,'Invalid combined image');
+ const match=/^data:image\/png;base64,([A-Za-z0-9+/]+={0,2})$/.exec(raw);
+ if(!match)return err(res,400,'Upload a PNG image');
+ const buffer=Buffer.from(match[1],'base64');
+ const pngSignature=Buffer.from('89504e470d0a1a0a','hex');
+ if(buffer.length<70||buffer.length>10*1024*1024||
+    !buffer.subarray(0,8).equals(pngSignature)||
+    buffer.toString('ascii',12,16)!=='IHDR'||
+    buffer.readUInt32BE(16)!==1200||buffer.readUInt32BE(20)!==1400||
+    buffer.readUInt32BE(buffer.length-8)!==0x49454e44)
+    return err(res,400,'Invalid collage PNG dimensions or structure');
+ purgeMakerTickets();
+ const ticket=crypto.randomUUID();
+ makerImageTickets.set(ticket,{orderId:o.id,username:req.user.username,bytes:buffer,expires:Date.now()+3*60*1000});
+ return res.json({url:'/api/orders/'+o.id+'/maker-image/'+ticket});
 });
-app.get('/api/orders/:id/maker.txt',auth,async(req,res)=>{
- if(req.user.role!=='staff')return err(res,403,'User B / staff only');
+app.get('/api/orders/:id/maker-image/:ticket',auth,(req,res)=>{
+ if(req.user.role!=='staff')return err(res,403,'Staff only');
  const o=loadOrder(req,res);if(!o)return;
- try{
-  const maker=await resolveMakerData(o);
-  res.set('Cache-Control','private,no-store');
-  res.set('Content-Type','text/plain; charset=utf-8');
-  res.set('Content-Disposition','attachment; filename="'+ref(o)+'-MAKER-ORDER.txt"');
-  return res.send(makerPack.sheetTxt(o,maker));
- }catch(e){console.warn('Maker text failed:',e.message);err(res,503,'Maker text unavailable')}
-});
-app.get('/api/orders/:id/maker.zip',auth,async(req,res)=>{
- if(req.user.role!=='staff')return err(res,403,'User B / staff only');
- const o=loadOrder(req,res);if(!o)return;
- try{
-  const maker=await resolveMakerData(o);
-  if(!o.pdf_file)throw Error('PDF file required for complete maker pack');
-  const pdf=await persistent.retrieveOrLocal(PDF_DIR,o.pdf_file,'pdfs');
-  if(!pdf)throw Error('Original PDF missing');
-  const entries=[
-   {name:'MAKER_ORDER.txt',data:Buffer.from(makerPack.sheetTxt(o,maker),'utf8')},
-   {name:'MAKER_ORDER.csv',data:Buffer.from(makerPack.sheetCsv(o,maker),'utf8')},
-   {name:'ORIGINAL_SPECIFICATION.pdf',data:pdf}
-  ];
-  const images=Array.isArray(o.image_files)?o.image_files:[];
-  for(let i=0;i<images.length;i++){
-   const filename=images[i];
-   if(!/^[a-f0-9-]{36}\.(jpg|png|webp)$/.test(filename))throw Error('Unsafe photo path');
-   const bytes=await persistent.retrieveOrLocal(PHOTO_DIR,filename,'photos');
-   if(!bytes)throw Error('Photo '+(i+1)+' missing, refusing incomplete maker ZIP');
-   const ext=filename.slice(filename.lastIndexOf('.')+1);
-   entries.push({name:'PHOTOS/REFERENCE_'+String(i+1).padStart(2,'0')+'.'+ext,data:bytes});
-  }
-  if(!images.length&&typeof o.image==='string'){
-   const oldImage=imageData(o.image);
-   if(!oldImage)throw Error('Legacy order photo is unreadable');
-   entries.push({name:'PHOTOS/REFERENCE_01.'+oldImage.ext,data:oldImage.bytes});
-  }
-  if(entries.length===3)throw Error('Order has no reference photos');
-  const zip=makerPack.makeZip(entries);
-  res.set('Cache-Control','private,no-store');
-  res.set('Content-Type','application/zip');
-  res.set('Content-Disposition','attachment; filename="'+ref(o)+'-MAKER-PACK.zip"');
-  res.set('Content-Length',String(zip.length));
-  return res.send(zip);
- }catch(e){
-  console.warn('Maker archive failed:',e.message);
-  return err(res,503,'Maker ZIP could not be completed. Please check all order files are available.');
- }
+ const ticket=req.params.ticket;
+ if(!/^[a-f0-9-]{36}$/.test(ticket))return err(res,404,'Maker image not found');
+ const found=makerImageTickets.get(ticket);
+ if(!found||found.expires<Date.now()||found.orderId!==o.id||found.username!==req.user.username)
+   return err(res,404,'Maker image expired. Tap Download Maker Image again.');
+ res.set('Cache-Control','private,no-store');
+ res.set('Content-Type','image/png');
+ res.set('Content-Disposition','attachment; filename="'+ref(o)+'-MAKER-IMAGE.png"');
+ return res.send(found.bytes);
 });
 app.get('/api/orders/:id/address',auth,async(req,res)=>{
  const order=loadOrder(req,res);if(!order)return;
