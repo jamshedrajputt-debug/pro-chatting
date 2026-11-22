@@ -63,7 +63,10 @@ test('FLYXJ V3: authenticated PDF orders, approval, shipment, profit, chat, back
   assert.equal((await api('/api/orders',b,'POST',{...baseOrder,pdf})).status,403,'staff cannot submit');
   const newResponse=await api('/api/orders',a,'POST',{...baseOrder,pdf});
   assert.equal(newResponse.status,201,'create order: '+await newResponse.clone().text());
-  const order=(await newResponse.json()).order;
+  const created=(await newResponse.json());
+  assert.equal(Object.prototype.hasOwnProperty.call(created,'whatsapp_url'),false,'User A never receives a WhatsApp link');
+  assert.equal(Object.prototype.hasOwnProperty.call(created,'whatsapp_auto_enabled'),false,'User A cannot control WhatsApp auto-forwarding');
+  const order=created.order;
   assert.equal(order.measurements.bust,'36 in');
   assert.ok(order.pdf_url);
   // One PNG image only: ZIP/CSV/TXT endpoints were intentionally removed.
@@ -92,7 +95,10 @@ test('FLYXJ V3: authenticated PDF orders, approval, shipment, profit, chat, back
   assert.equal((await api(order.pdf_url,a)).status,200,'customer can open own PDF');
   assert.equal((await api(order.pdf_url,b)).status,200,'staff can open PDF');
   assert.equal((await api(order.photos[0],a)).status,200,'customer photo');
-  const whats=(await (await api('/api/orders/'+order.id+'/whatsapp',a)).json());
+  assert.equal((await api('/api/orders/'+order.id+'/whatsapp',a)).status,403,'User A cannot access WhatsApp forwarding API');
+  const whatsResponse=await api('/api/orders/'+order.id+'/whatsapp',b);
+  assert.equal(whatsResponse.status,200,'User B can access WhatsApp forwarding API');
+  const whats=await whatsResponse.json();
   assert.equal(whats.recipient,'971567527192');
   assert.match(whats.url,/^https:\/\/wa.me\/971567527192\?text=/);
   const decoded=decodeURIComponent(whats.url.split('?text=')[1]);
