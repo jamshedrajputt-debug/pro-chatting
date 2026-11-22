@@ -29,7 +29,18 @@
     if(kind==='maker'&&me.role!=='staff')continue;
     const button=el('button','flyxj-action-primary',label);button.type='button';
     button.style.display='block';button.style.margin='10px 0';button.style.width='100%';
+    let ready=null;
     button.onclick=async()=>{
+     if(ready){
+      // Invoke the native share sheet directly inside the user's tap.
+      try{
+       const sharing=navigator.share({files:[ready]});
+       status.textContent='Confirm the recipient and Send inside WhatsApp.';
+       await sharing;
+       status.textContent='File shared with the selected app. WhatsApp delivery is not confirmed here.';
+      }catch(e){status.textContent=e.name==='AbortError'?'Sharing cancelled.':e.message}
+      return;
+     }
      button.disabled=true;status.textContent='Preparing '+label+'...';
      try{
       if(!navigator.share)throw Error('This browser does not support direct file sharing. Open the order in Chrome on your phone.');
@@ -42,9 +53,10 @@
       const file=new File([blob],prepared.filename,{type:blob.type||download.headers.get('content-type')||'application/octet-stream'});
       if(navigator.canShare&&!navigator.canShare({files:[file]}))
        throw Error('Your browser cannot share this file. Use Download, then send it from WhatsApp attachments.');
-      await navigator.share({files:[file]});
-      status.textContent='File passed to the phone share menu. Confirm sending inside WhatsApp.';
-     }catch(e){status.textContent=e.name==='AbortError'?'Sharing cancelled.':e.message;}
+      ready=file;
+      button.textContent='Tap to send '+label.toLowerCase();
+      status.textContent='File ready. Tap the button again to open WhatsApp from your phone sharing options.';
+     }catch(e){status.textContent=e.message;}
      finally{button.disabled=false;}
     };
     box.append(button);
