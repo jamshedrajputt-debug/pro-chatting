@@ -65,7 +65,13 @@
     if(!pictures.length)return;
     $('viewerImage').src=pictures[viewIndex];
     $('viewerCount').textContent='Photo '+(viewIndex+1)+' of '+pictures.length;
-    const download=$('viewerDownload');if(download){download.href='#';download.dataset.index=String(viewIndex);}
+    const download=$('viewerDownload');if(download){
+      const index=viewIndex;download.href='#';download.removeAttribute('download');download.textContent='Preparing download…';
+      api('/api/me').then(me=>prepareMobileFile('photo',me.csrf,index)).then(file=>{
+        if(viewIndex!==index)return;
+        download.href=file.url;download.download=file.filename;download.textContent='↓ Download photo';
+      }).catch(error=>{if(viewIndex===index)download.textContent='Photo unavailable';});
+    }
   }
   function openPhoto(index){
     if(!order?.photos?.length)return;
@@ -155,12 +161,12 @@
       window.prompt('Copy this private link and paste into Chrome within 10 minutes:',link);
     }
   }
-  async function prepareMobileFile(kind,csrf){
+  async function prepareMobileFile(kind,csrf,index){
     if(!order||!csrf)throw Error('Sign in again to download files.');
     const res=await fetch('/api/orders/'+encodeURIComponent(order.id)+'/mobile-file',{
       method:'POST',credentials:'same-origin',
       headers:{accept:'application/json','content-type':'application/json','x-csrf-token':csrf},
-      body:JSON.stringify({kind})
+      body:JSON.stringify({kind,index})
     });
     const body=await res.json().catch(()=>({}));
     if(!res.ok||!body.url)throw Error(body.detail||'File preparation failed. Try again.');
@@ -220,21 +226,10 @@
     if(!id)return fail('Invalid order link. Return to orders and open a valid order.');
     $('morePhotos').onclick=()=>{allPhotos=!allPhotos;showThumbs()};
     $('viewerClose').onclick=closePhoto;
-    $('viewerDownload').onclick=async e=>{
-      e.preventDefault();
-      const btn=$('viewerDownload');btn.textContent='Preparing…';
-      try{
-       const me=await api('/api/me');
-       const response=await fetch('/api/orders/'+id+'/mobile-file',{
-        method:'POST',credentials:'same-origin',headers:{'content-type':'application/json','x-csrf-token':me.csrf},
-        body:JSON.stringify({kind:'photo',index:Number(btn.dataset.index)})
-       });
-       const data=await response.json().catch(()=>({}));
-       if(!response.ok||!data.url)throw Error(data.detail||'Photo download unavailable');
-       const link=document.createElement('a');link.href=data.url;link.download=data.filename;
-       document.body.append(link);link.click();link.remove();
-       btn.textContent='↓ Download photo';
-      }catch(error){btn.textContent='Retry photo download';alert(error.message)}
+    $('viewerDownload').onclick=e=>{
+      if($('viewerDownload').getAttribute('href')==='#'){
+        e.preventDefault();alert('Photo file is still preparing. Tap Download again in a moment.');
+      }
     };
     $('viewerPrev').onclick=()=>stepPhoto(-1);
     $('viewerNext').onclick=()=>stepPhoto(1);
