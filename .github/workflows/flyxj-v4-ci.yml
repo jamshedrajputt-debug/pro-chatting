@@ -1,0 +1,31 @@
+name: FlyXJ V4 Safe Storage Verification
+on:
+  push:
+    branches: [flyxj-v4-safe-migration]
+    paths:
+      - 'flyxj-server/v3/**'
+      - 'flyxj-server/supabase/**'
+      - '.github/workflows/flyxj-v4-ci.yml'
+  workflow_dispatch:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --omit=dev
+      - name: Check syntax in all FlyXJ server and client scripts
+        run: |
+          find flyxj-server/v3 -name '*.js' -not -path '*/tests/*' -print0 | xargs -0 -n1 node --check
+      - name: Test persistent database and private file storage client
+        run: node --test flyxj-server/v3/tests/persistent.test.js
+      - name: Test all order, chat, PDF, approvals, finance and backup APIs
+        run: node --test flyxj-server/v3/tests/integration.test.js
+      - name: Prepare browser test runtime
+        run: npm install --no-save --package-lock=false --ignore-scripts jsdom@26
+      - name: Test Android chat and one-click staff order pack
+        run: node --test flyxj-server/v3/tests/chat-ui.test.js flyxj-server/v3/tests/order-sheet.test.js
