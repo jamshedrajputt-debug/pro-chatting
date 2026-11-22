@@ -6,15 +6,18 @@
 :root{font-family:system-ui,-apple-system,Arial,sans-serif;color:#172843;background:#f3f6fb}*{box-sizing:border-box}body{margin:0}button,a{font:inherit}button{cursor:pointer}.hidden{display:none!important}.bar{background:#142544;color:white;padding:14px 16px;display:flex;align-items:center;gap:11px;position:sticky;top:0;z-index:4}.bar a{color:#fff;text-decoration:none;background:#2b4472;padding:9px 12px;border-radius:9px;white-space:nowrap}.bar strong{display:block}.bar small{font-size:11px;color:#b2c3e4}.wrap{max-width:980px;margin:0 auto;padding:16px 14px 80px}.muted{font-size:13px;color:#6c7890}.card{background:#fff;border:1px solid #e3e9f1;border-radius:14px;padding:17px;margin-bottom:14px;box-shadow:0 3px 17px #26354d0b}.eyebrow{font-size:10px;letter-spacing:.14em;color:#526eb2;font-weight:800}.hero h1{font-size:24px;margin:5px 0 4px;line-height:1.2}.chips{display:flex;gap:8px;flex-wrap:wrap;margin:13px 0 4px}.chip{font-weight:700;background:#eaf0ff;color:#315395;border-radius:9px;padding:9px 12px;font-size:13px}.chip b{color:#142649}.section-title{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:13px}.section-title h2{font-size:17px;margin:0}.count{background:#f0f2f8;color:#566781;border-radius:9px;padding:4px 9px;font-size:11px}.four-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.image-card{margin:0;min-width:0;position:relative;border-radius:11px;overflow:hidden;background:#eef3fb;border:1px solid #e3eaf3;aspect-ratio:1 / 1;display:grid;place-items:center}.image-card img{width:100%;height:100%;object-fit:contain;display:block}.image-card button{position:absolute;inset:0;background:transparent;border:0;color:transparent}.image-card button:focus-visible{outline:3px solid #4075c8;outline-offset:-3px}.image-card figcaption{position:absolute;left:8px;bottom:8px;padding:4px 8px;background:#142643b8;color:white;font-size:11px;border-radius:6px;pointer-events:none}.more-button{margin-top:12px;border:1px solid #d6e2f2;border-radius:8px;background:#eef4ff;color:#2d518e;padding:10px 14px;font-weight:700;width:100%}.pdf-button{display:inline-flex;gap:8px;text-decoration:none;align-items:center;padding:11px 14px;border-radius:9px;background:#3157aa;color:white;font-weight:700;font-size:13px}.info-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}.info-grid div{background:#f7f9fd;border-radius:9px;padding:10px 12px;overflow-wrap:anywhere}.info-grid small{display:block;color:#78869b;font-size:11px}.info-grid strong{font-size:13px;display:block;margin-top:4px}.address{font:inherit;font-size:14px;white-space:pre-wrap;line-height:1.65;color:#1a304f;background:#f8fafc;padding:13px;border-radius:9px;border:1px solid #e4eaf3;overflow-wrap:anywhere}.hint{padding:10px;background:#fff9e9;border-radius:8px;border:1px solid #f5e6bd;color:#8a651d;font-size:12px;margin:12px 0}.order-note{white-space:pre-wrap;line-height:1.65}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:13px}.btn{background:#e9eef8;color:#294e90;border:0;border-radius:9px;padding:10px 14px;text-decoration:none;font-size:13px;font-weight:700}.error{color:#b03d45;font-size:14px;padding:12px}.viewer{position:fixed;inset:0;background:#091325f4;z-index:20;display:flex;flex-direction:column;color:white}.viewer-bar{display:flex;align-items:center;justify-content:space-between;padding:14px;flex-shrink:0}.viewer-bar button{background:#324467;color:#fff;border:0;border-radius:8px;padding:10px 13px}.viewer-main{flex:1;min-height:0;display:flex;align-items:center;justify-content:space-evenly;gap:8px}.viewer-main img{object-fit:contain;max-height:88%;max-width:calc(100% - 115px);min-width:0}.viewer-main button{background:#34486b;color:#fff;border:0;border-radius:40px;min-width:42px;height:45px;font-size:23px}.bottom-note{font-size:12px;text-align:center;padding:10px;color:#b8c6dd}.loader{padding:45px;text-align:center;color:#526280}@media(min-width:700px){.four-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.wrap{padding:24px}.hero h1{font-size:30px}}@media(max-width:360px){.info-grid{grid-template-columns:1fr}.bar{padding:10px}.bar a{padding:8px}} 
 
 
-/* Only one maker action — the image downloaded is a PNG collage. */
+/* Single combined maker PNG + mobile browser fallback for restricted WebViews. */
 .simple-maker{border-color:#cfdef4;background:#fbfdff}
 .maker-simple-button{display:flex;align-items:center;justify-content:center;width:100%;border:0;min-height:53px;font-size:15px;cursor:pointer;touch-action:manipulation}
 .maker-simple-button:disabled{opacity:.6;cursor:wait}
+a[aria-disabled="true"]{opacity:.55;pointer-events:none}
+#makerBackup,#pdfCopy{gap:10px}
+#makerStatus,#pdfStatus{line-height:1.5}
+
 </style>
 <link rel="stylesheet" href="/assets/order-actions.css?v=edit-delete-wa-2">
 <script defer src="/assets/order-actions.js?v=whatsapp-direct-media-20261122"></script>
-<script defer src="/assets/maker-collage.js?v=maker-simple-1"></script>
-<script defer src="/assets/order-sheet.js?v=whatsapp-direct-media-20261122"></script>
+<script defer src="/assets/order-sheet.js?v=mobile-download-20261122"></script>
 </head><body>
 <header class="bar"><a href="/#orders" id="backOrders">‹ Orders</a><div><strong>FLYXJ · Order Sheet</strong><small id="barRef">Staff quick view · all details together</small></div></header>
 <main class="wrap">
@@ -30,13 +33,18 @@
 <section class="card simple-maker">
 <div class="section-title"><h2>Download Maker Image</h2><span class="count">1 PNG image</span></div>
 <p class="muted">4 photos ek hi frame mein, aur image ke neeche Size + Color. No ZIP, no CSV.</p>
-<button class="pdf-button maker-simple-button" id="makerDownload" type="button">↓ Download Maker Image</button>
-<p id="makerStatus" class="muted" aria-live="polite"></p>
+<a class="pdf-button maker-simple-button" id="makerDownload" href="#" aria-disabled="true">Preparing Maker Image…</a>
+<div class="actions hidden" id="makerBackup">
+  <button class="btn" id="makerCopy" type="button">Copy link for Chrome</button>
+  <a class="btn" id="makerPreview" target="_blank" rel="noopener noreferrer">View image / Save photo</a>
+</div>
+<p id="makerStatus" class="muted" aria-live="polite">Making your combined image on the server…</p>
 </section>
 <section class="card"><div class="section-title"><h2>Dress reference photos</h2><span class="count" id="photoCount"></span></div><div class="four-grid" id="photoGrid"></div><button class="more-button hidden" id="morePhotos" type="button">View remaining photos</button><div class="hint">Tap any photo for full-screen zoom. Back closes photo without leaving this order.</div></section>
 <section class="card"><div class="section-title"><h2>PDF specification & delivery address</h2></div>
 <div id="addressText" class="address">Checking PDF for address…</div><div id="addressHint" class="hint">Always verify the complete delivery address in the attached PDF before shipping.</div>
-<div class="actions"><a class="pdf-button hidden" href="#" id="pdfLink" download>↓ Open / download original PDF</a><button id="copyAddress" class="btn hidden" type="button">Copy extracted address</button></div></section>
+<div class="actions"><a class="pdf-button hidden" href="#" id="pdfLink" aria-disabled="true">↓ Download Original PDF</a><button id="pdfCopy" class="btn hidden" type="button">Copy PDF link for Chrome</button><button id="copyAddress" class="btn hidden" type="button">Copy extracted address</button></div>
+<p id="pdfStatus" class="muted" aria-live="polite">Preparing private PDF download…</p></section>
 <section class="card"><div class="section-title"><h2>Order information</h2></div><div class="info-grid" id="information"></div><p id="notes" class="order-note"></p><div class="actions"><a href="/#orders" class="btn">← Back to Orders</a></div></section>
 </div>
 </main>
