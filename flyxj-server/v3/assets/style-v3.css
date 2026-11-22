@@ -12,9 +12,9 @@
 .order-sheet-link:hover,.order-sheet-link:focus-visible{background:#d8e6ff;color:#173e85}
 @media(max-width:680px){.order-sheet-link{padding:8px 9px;min-height:36px}}
 
-/* Staff action: order sheet and instant maker ZIP. */
-.order-maker-zip{background:#dcf4e8;border-color:#afdcc6;color:#156b48}
-.order-maker-zip:hover,.order-maker-zip:focus-visible{background:#c8e9d8;color:#12593d}
+/* One maker action only: single merged PNG with all four photos, size and color. */
+.order-maker-image{background:#dcf4e8;border-color:#afdcc6;color:#156b48}
+.order-maker-image:hover,.order-maker-image:focus-visible{background:#c8e9d8;color:#12593d}
 .table-arrow .order-sheet-link{margin:2px;vertical-align:middle}
 @media(max-width:680px){
  .table-arrow .order-sheet-link{font-size:10px;min-height:34px;padding:7px 8px}
