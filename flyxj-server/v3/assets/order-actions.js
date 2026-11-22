@@ -6,37 +6,23 @@
 (function(){
  const $=id=>document.getElementById(id);
  const el=(tag,cls,txt)=>{const x=document.createElement(tag);if(cls)x.className=cls;if(txt!==undefined)x.textContent=String(txt);return x};
- const NUMBER='971567527192';
- const BASE='https://flyxj-order-manager-free.onrender.com';
- let active=false;
  const values=['XXS','XS','S','M','L','XL','2XL','3XL','4XL','5XL','CUSTOM'];
- async function request(url,opts={}){
+ let active=false;
+ const request=async(url,opts={})=>{
   const headers={accept:'application/json',...(opts.body?{'content-type':'application/json'}:{}),...(opts.headers||{})};
   const res=await fetch(url,{credentials:'same-origin',...opts,headers});
   const payload=await res.json().catch(()=>({}));
   if(!res.ok)throw Error(payload.detail||'Could not complete action ('+res.status+')');
   return payload;
- }
- function whatsappLink(o){
-  const id=encodeURIComponent(o.id),total=Math.min(8,o.photos?.length||o.image_files?.length||0);
-  const lines=[
-   'FLYXJ New Order '+(o.reference||'FXJ-'+o.id),
-   'Dress: '+String(o.title||'').slice(0,95),
-   'Size: '+String(o.size||'').slice(0,80),
-   'Color: '+String(o.colour||'').slice(0,80),
-   'Quantity: '+String(o.quantity||1),
-   '',
-   'Order: '+BASE+'/order/'+id,
-   'PDF: '+BASE+'/api/orders/'+id+'/pdf'
-  ];
-  for(let i=0;i<total;i++)lines.push('Photo '+(i+1)+': '+BASE+'/api/orders/'+id+'/photos/'+i);
-  lines.push('Log in to FlyXJ to view PDFs and photos.');
-  return 'https://wa.me/'+NUMBER+'?text='+encodeURIComponent(lines.join('\n'));
- }
- function toWhatsApp(o){
-  const link=whatsappLink(o);
-  if(/Android/i.test(navigator.userAgent))window.location.assign(link);
-  else window.open(link,'_blank','noopener,noreferrer');
+ };
+ async function toWhatsApp(order){
+  try{
+   // This route enforces User B/staff permissions on the server.
+   const result=await request('/api/orders/'+encodeURIComponent(order.id)+'/whatsapp');
+   const url=new URL(result.url);
+   if(url.protocol!=='https:'||url.hostname!=='wa.me')throw Error('Invalid WhatsApp destination');
+   window.location.assign(url.toString());
+  }catch(e){alert(e.message||'WhatsApp forwarding is available only to User B')}
  }
  function dismiss(){
   const box=$('flyxjActionOverlay');
@@ -201,16 +187,7 @@
    }
   }catch(e){note(box,e.message,true)}
  }
- function newOrderCreated(order,autoEnabled){
-  if(autoEnabled)return;
-  const box=modal('Order saved successfully','WhatsApp forward is ready for +971 56 752 7192. WhatsApp will open with the order, PDF and photo links; tap Send to forward.');
-  box.append(el('p','flyxj-muted',(order.reference||'Order')+' · '+order.title));
-  const actions=el('div','flyxj-action-buttons'),button=el('button','flyxj-action-primary','Open WhatsApp'),later=el('button','flyxj-action-secondary','Later');
-  button.type='button';later.type='button';
-  button.onclick=()=>toWhatsApp(order);later.onclick=dismiss;
-  actions.append(button,later);box.append(actions);
- }
- window.FlyxjOrderActions={edit:editOrder,delete:deleteOrder,trash,newOrderCreated,share:toWhatsApp,link:whatsappLink};
+ window.FlyxjOrderActions={edit:editOrder,delete:deleteOrder,trash,share:toWhatsApp};
  const trashButton=$('flyxjTrashButton');
  if(trashButton)trashButton.onclick=trash;
 })();
