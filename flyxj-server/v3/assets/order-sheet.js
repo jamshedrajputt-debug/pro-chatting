@@ -182,7 +182,17 @@
       if(actions){
         $('sheetEdit').onclick=()=>actions.edit(data.order.id);
         $('sheetDelete').onclick=()=>actions.delete(data.order.id);
-        $('sheetWhatsApp').onclick=()=>actions.share(data.order);
+        const waButton=$('sheetWhatsApp');
+        // Staff role must be verified, never inferred from the page URL.
+        api('/api/me').then(me=>{
+          if(me.role==='staff'){
+            waButton.classList.remove('hidden');
+            waButton.onclick=()=>actions.share(data.order);
+          }else{
+            waButton.classList.add('hidden');
+            waButton.onclick=null;
+          }
+        }).catch(()=>{waButton.classList.add('hidden');waButton.onclick=null});
       }
       if(new URLSearchParams(location.search).has('download')){
         downloadMakerImage();
