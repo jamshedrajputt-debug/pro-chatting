@@ -7,8 +7,9 @@
 <meta name="description" content="FlyXJ order operations dashboard: dress orders, photos and shipment tracking.">
 <title>FLYXJ · Complete Order & Profit Dashboard</title>
 <link rel="stylesheet" href="/assets/style.css">
-<link rel="stylesheet" href="/assets/style-v3.css?v=one-maker-image-20261122">
-<script defer src="/assets/app.js?v=one-maker-image-20261122"></script>
+<link rel="stylesheet" href="/assets/style-v3.css?v=edit-delete-wa-20261122">
+<script defer src="/assets/app.js?v=edit-delete-wa-20261122"></script>
+<script defer src="/assets/order-actions.js?v=edit-delete-wa-20261122"></script>
 <script defer src="/assets/order-extra.js"></script>
 <script defer src="/assets/chat-extra.js?v=androidchat-20261116"></script>
 <script defer src="/assets/finance-extra.js"></script>
@@ -80,7 +81,7 @@
       <section class="content-layout" id="ordersContent">
         <div class="main-column">
           <div class="section-header"><div><h2 id="listHeading">Recent orders</h2><p class="muted" id="listSubtitle">Follow the latest order activity</p></div><div class="section-actions"><button type="button" class="btn btn-soft" id="showAllButton">View all orders</button></div></div>
-          <div class="filter-bar" id="filterBar"><div class="search-box"><span>⌕</span><input id="orderSearch" placeholder="Search ID, dress, colour, tracking..." aria-label="Search orders"></div><select id="statusFilter" aria-label="Filter by status">
+          <div class="flyxj-trash-toolbar"><button type="button" class="btn btn-soft" id="flyxjTrashButton">Recently Deleted</button></div><div class="filter-bar" id="filterBar"><div class="search-box"><span>⌕</span><input id="orderSearch" placeholder="Search ID, dress, colour, tracking..." aria-label="Search orders"></div><select id="statusFilter" aria-label="Filter by status">
             <option value="all">All statuses</option><option value="pending">Pending</option><option value="awaiting_approval">Awaiting approval</option><option value="confirmed">Confirmed</option><option value="cutting">Cutting</option><option value="stitching">Stitching</option><option value="in_progress">In progress</option><option value="quality_check">Quality check</option><option value="shipped">Shipped</option><option value="delivered">Delivered</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></div>
           <div class="order-table-wrap"><table class="order-table"><thead><tr><th>ORDER / DRESS</th><th>CUSTOMER</th><th>DATE</th><th>STATUS</th><th>TRACKING</th><th></th></tr></thead><tbody id="orderRows"></tbody></table><div id="emptyState" class="empty-state hidden"><div class="empty-icon">▤</div><h3>No orders found</h3><p>Try adjusting the filters or create a new order.</p></div></div>
           <div class="table-footer"><span id="resultCount" class="muted">0 orders</span><span class="muted">Click any order to view details</span></div>
@@ -112,6 +113,7 @@
     <div class="detail-status-row"><span class="status-pill" id="detailStatus">Pending</span><span class="tiny muted" id="detailUpdated"></span></div>
     <div class="photo-gallery" id="detailPhotos"></div>
     <div class="detail-grid" id="detailGrid"></div>
+    <div id="flyxjDetailActions" class="flyxj-detail-actions"></div>
     <div class="detail-section"><h3>Special instructions</h3><p class="detail-copy" id="detailComments">—</p></div>
     <div class="detail-section"><h3>PDF specification & measurements</h3><div id="orderPdfLink"></div><div class="measure-grid readonly-grid" id="detailMeasurements"></div><p class="muted tiny" id="detailDeadline"></p></div>
     <div class="detail-section"><h3>Finished dress gallery</h3><div class="photo-gallery" id="finishedGallery"></div><form class="staff-only hidden" id="finishedForm"><label>Upload completed dress photo (staff)</label><input type="file" id="finishedPhoto" accept="image/jpeg,image/png,image/webp" required><button type="submit" class="btn btn-soft">Upload photo</button></form></div>
