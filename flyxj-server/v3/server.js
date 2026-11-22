@@ -552,6 +552,7 @@ app.post('/api/orders',auth,csrf,async(req,res)=>{
       priority:['normal','high','urgent'].includes(v.priority)?v.priority:'normal',
       customer:req.user.username,ordered_by:req.user.username,created_at,updated_at:created_at,
       image_files,shipping:shipDefault(),return_shipping:shipDefault(),messages:[],
+      whatsapp_delivery:{status:whatsapp.whatsappConfigured()?'queued':'not_connected',sent:{},attempts:0,total:Math.min(4,image_files.length)+2},
       history:[{id:crypto.randomUUID(),at:created_at,by:req.user.username,kind:'created',label:'Order submitted'}]};
     if(persistent.enabled){
      await persistent.uploadLocalFile(PDF_DIR,pdfName,'pdfs');
