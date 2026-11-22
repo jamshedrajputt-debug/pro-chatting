@@ -82,6 +82,7 @@ function notifyCustomerTracking(order){
 }
 const STATUSES=['pending','awaiting_approval','confirmed','cutting','stitching','in_progress','quality_check','shipped','delivered','completed','cancelled'];
 const SIZES=['XXS','XS','S','M','L','XL','2XL','3XL','4XL','5XL','CUSTOM'];
+const SHOE_SIZES=['UK 2','UK 3','UK 4','UK 5','UK 6','UK 7','UK 8','UK 9','UK 10','UK 11','UK 12','UK 13','EU 35','EU 36','EU 37','EU 38','EU 39','EU 40','EU 41','EU 42','EU 43','EU 44','EU 45','EU 46','EU 47','EU 48','US 4','US 5','US 6','US 7','US 8','US 9','US 10','US 11','US 12','US 13','US 14','CUSTOM'];
 const MAX_IMAGES=8,MAX_IMAGE_BYTES=2500000,MAX_TOTAL_BYTES=16000000;
 const now=()=>new Date().toISOString();
 const err=(res,code,detail)=>res.status(code).json({detail});
@@ -91,6 +92,7 @@ const canView=(u,o)=>u.role==='staff'||(o.customer||o.ordered_by)===u.username;
 const canActive=(u,o)=>canView(u,o)&&!o.deleted_at;
 const shipDefault=()=>({courier:'',tracking_id:'',tracking_url:'',updated_at:null});
 const financeDefault=()=>({sale_pkr:null,making_pkr:null,shipping_pkr:null,fx_pkr_per_usd:null,updated_at:null,recognized_at:null});
+const validEarning=n=>n!==null&&n!==undefined&&n!==''&&Number.isFinite(Number(n))&&Number(n)>=0&&Number(n)<=1e9;
 const isShipped=o=>['shipped','delivered','completed'].includes(o.status);
 function validFinance(f) {
  return !!f&&['sale_pkr','making_pkr','shipping_pkr','fx_pkr_per_usd'].every(k=>f[k]!=null&&String(f[k]).trim()!==''&&Number.isFinite(Number(f[k]))&&Number(f[k])>=0&&Number(f[k])<=1e9)&&Number(f.sale_pkr)>0&&Number(f.fx_pkr_per_usd)>0;
@@ -105,13 +107,14 @@ function financeRow(o){
  const f=o.finance;if(!validFinance(f))return null;
  const round=n=>Math.round(n*100)/100, fx=Number(f.fx_pkr_per_usd);
  const sale=Number(f.sale_pkr),making=Number(f.making_pkr),shipping=Number(f.shipping_pkr);
- const cost=round(making+shipping),profit=round(sale-cost);
+ const earning=validEarning(o.customer_earning_pkr)?Number(o.customer_earning_pkr):0;
+ const cost=round(making+shipping+earning),profit=round(sale-cost);
  const usd=n=>round(n/fx);
  return {id:o.id,reference:ref(o),title:o.title,quantity:o.quantity||1,status:o.status,
  date:f.recognized_at||o.shipped_at||o.updated_at||o.created_at,courier:o.shipping?.courier||'',
- tracking_id:o.shipping?.tracking_id||'',sale_pkr:sale,making_pkr:making,shipping_pkr:shipping,
+ tracking_id:o.shipping?.tracking_id||'',sale_pkr:sale,making_pkr:making,shipping_pkr:shipping,customer_earning_pkr:earning,
  cost_pkr:cost,profit_pkr:profit,sale_usd:usd(sale),making_usd:usd(making),shipping_usd:usd(shipping),
- cost_usd:usd(cost),profit_usd:usd(profit),fx_pkr_per_usd:fx};
+ cost_usd:usd(cost),profit_usd:usd(profit),customer_earning_usd:usd(earning),fx_pkr_per_usd:fx};
 }
 const MAX_PDF_BYTES=30*1024*1024;
 function parsePdf(raw){
@@ -174,7 +177,7 @@ function publicOrder(o) {
     ...rest,reference:ref(o),
     customer:o.customer||o.ordered_by||'',
     shipping:o.shipping||shipDefault(),
-    finance:o.finance||financeDefault(),
+    finance:o.finance||financeDefault(),customer_earning_pkr:validEarning(o.customer_earning_pkr)?Number(o.customer_earning_pkr):null,
     measurements:o.measurements||{},expected_date:o.expected_date||'',priority:o.priority||'normal',
     approval:o.approval||{status:'not_requested',note:'',updated_at:null},
     pdf_url:o.pdf_file?'/api/orders/'+o.id+'/pdf':null,
@@ -273,7 +276,7 @@ app.get('/api/orders/deleted',auth,(req,res)=>{
  const deleted=orders.filter(o=>o.deleted_at&&canView(req.user,o)).slice().reverse().map(publicOrder);
  return res.json({orders:deleted});
 });
-const editFields=['title','colour','size','quantity','comments','priority','expected_date','measurements'];
+const editFields=['title','colour','size','shoe_size','quantity','comments','priority','expected_date','measurements'];
 function normalizeEditable(v,order){
  if(!v||typeof v!=='object'||Array.isArray(v))return null;
  const updated={...order};
@@ -287,8 +290,13 @@ function normalizeEditable(v,order){
  }
  if(Object.hasOwn(v,'size')){
   const value=text(v.size,80);
-  if(!SIZES.includes(value)&&!(value.startsWith('CUSTOM:')&&value.length<=80))return null;
+  if(!SIZES.includes(value)&&!SHOE_SIZES.includes(value)&&!(value.startsWith('CUSTOM:')&&value.length<=80))return null;
   updated.size=value;
+ }
+ if(Object.hasOwn(v,'shoe_size')){
+  const value=text(v.shoe_size,30);
+  if(value&&!SHOE_SIZES.includes(value)&&!(value.startsWith('CUSTOM:')&&value.length<=30))return null;
+  updated.shoe_size=value;
  }
  if(Object.hasOwn(v,'quantity')){
   const q=Number(v.quantity);
@@ -518,10 +526,12 @@ app.get('/api/orders/:id/photos/:index',auth,async(req,res)=>{
 app.post('/api/orders',auth,csrf,async(req,res)=>{
   if(req.user.role!=='customer')return err(res,403,'Only customers can submit orders');
   const v=req.body||{};
-  const title=text(v.title,120),colour=text(v.colour,80),size=text(v.size,80);
+  const title=text(v.title,120),colour=text(v.colour,80),size=text(v.size,80),shoe_size=text(v.shoe_size,30);
   const comments=text(v.comments,2500),qty=Number(v.quantity);
   const list=v.images|| (v.photo?[v.photo]:[]);
-  if(title.length<2||!colour||!SIZES.includes(size)&&!(size.startsWith('CUSTOM:')&&size.length<=80))return err(res,400,'Enter dress title, valid size and colour');
+  if(title.length<2||!colour||!SIZES.includes(size)&&!SHOE_SIZES.includes(size)&&!(size.startsWith('CUSTOM:')&&size.length<=80))return err(res,400,'Enter dress title, valid size and colour');
+  if(shoe_size&&!SHOE_SIZES.includes(shoe_size)&&!(shoe_size.startsWith('CUSTOM:')&&shoe_size.length<=30))return err(res,400,'Invalid shoes size');
+  if(!validEarning(v.customer_earning_pkr))return err(res,400,'Enter User A earning in PKR (0 or higher)');
   if(!Number.isInteger(qty)||qty<1||qty>1000)return err(res,400,'Quantity must be 1–1000');
   if(!Array.isArray(list)||list.length<1||list.length>MAX_IMAGES)return err(res,400,'Attach 1–8 dress pictures');
   let total=0;const parsed=[];
@@ -545,7 +555,7 @@ app.post('/api/orders',auth,csrf,async(req,res)=>{
       fs.writeFileSync(path.join(PHOTO_DIR,filename),p.bytes,{flag:'wx'});
       image_files.push(filename);
     }
-    const o={id,reference,title,colour,size,quantity:qty,comments,status:'pending',
+    const o={id,reference,title,colour,size,shoe_size,customer_earning_pkr:Math.round(Number(v.customer_earning_pkr)*100)/100,quantity:qty,comments,status:'pending',
       pdf_file:pdfName,measurements,finished_files:[],finance:financeDefault(),
       approval:{status:'not_requested',note:'',updated_at:null},
       expected_date:/^\d{4}-\d{2}-\d{2}$/.test(v.expected_date||'')?v.expected_date:'',
@@ -564,7 +574,7 @@ app.post('/api/orders',auth,csrf,async(req,res)=>{
     // User A cannot send anything to WhatsApp or obtain media credentials.
     // A configured Meta business sender automatically queues SIX actual
     // media files (PDF, combined image, first four separate photographs).
-    if(whatsapp.whatsappConfigured())queueWhatsApp(o);
+    // Manual WhatsApp sharing is initiated by the user from the order page.
     res.status(201).json({order:publicOrder(o)});
   }catch(ex){
     image_files.forEach(f=>{try{fs.unlinkSync(path.join(PHOTO_DIR,f))}catch{}});
@@ -651,7 +661,7 @@ function cleanMobileFileTickets(forInsert=false){
 app.post('/api/orders/:id/mobile-file',auth,csrf,async(req,res)=>{
  const o=loadOrder(req,res);if(!o)return;
  const kind=req.body?.kind;
- if(kind!=='pdf'&&kind!=='maker')return err(res,400,'Choose PDF or Maker Image');
+ if(kind!=='pdf'&&kind!=='maker'&&kind!=='photo')return err(res,400,'Choose PDF, reference photo or Maker Image');
  if(kind==='maker'&&req.user.role!=='staff')return err(res,403,'Maker Image download is User B only');
  try{
   let bytes=null,filename='',mime='';
@@ -661,6 +671,17 @@ app.post('/api/orders/:id/mobile-file',auth,csrf,async(req,res)=>{
    if(!pdf||!pdf.subarray(0,1024).includes(Buffer.from('%PDF-')))
     return err(res,404,'Original PDF unavailable. Ask the customer to replace the PDF.');
    filename=ref(o)+'-SPEC.pdf';mime='application/pdf';
+  }else if(kind==='photo'){
+   const index=Number(req.body?.index);
+   if(!Number.isInteger(index)||index<0||index>=8)return err(res,400,'Choose a valid photo');
+   const name=Array.isArray(o.image_files)?o.image_files[index]:null;
+   let photo=null;
+   if(name&&/^[a-f0-9-]{36}\.(jpg|png|webp)$/.test(name))photo=await persistent.retrieveOrLocal(PHOTO_DIR,name,'photos');
+   else if(index===0&&typeof o.image==='string')photo=imageData(o.image)?.bytes;
+   if(!photo)return err(res,404,'Reference photo unavailable');
+   const ext=name?.split('.').pop()||'jpg';
+   bytes=photo;filename=ref(o)+'-PHOTO-'+(index+1)+'.'+ext;
+   mime=ext==='jpg'?'image/jpeg':'image/'+ext;
   }else{
    const names=Array.isArray(o.image_files)?o.image_files.slice(0,4):[];
    const photos=[];
@@ -704,11 +725,11 @@ app.get('/api/mobile-file/:ticket',async(req,res)=>{
  const o=orders.find(o=>o.id===ticket.orderId&&!o.deleted_at);
  if(!o)return err(res,404,'This order is no longer available');
  try{
-  const bytes=ticket.kind==='maker'?ticket.bytes:
+  const bytes=ticket.kind!=='pdf'?ticket.bytes:
    await persistent.retrieveOrLocal(PDF_DIR,ticket.pdfFile,'pdfs');
   if(!Buffer.isBuffer(bytes)||!bytes.length)return err(res,404,'File unavailable. Prepare a new download link.');
   res.set('Content-Type',ticket.mime);
-  res.set('Content-Disposition',(ticket.kind==='maker'&&req.query.preview==='1'?'inline':'attachment')+
+  res.set('Content-Disposition',(ticket.kind!=='pdf'&&req.query.preview==='1'?'inline':'attachment')+
    '; filename="'+ticket.filename+'"');
   res.set('Cache-Control','private, no-store, max-age=0');
   res.set('Referrer-Policy','no-referrer');
@@ -825,6 +846,16 @@ app.post('/api/orders/:id/approve',auth,csrf,async(req,res)=>{
  history(o,req.user.username,decision==='approved'?'Design approved':'Customer requested changes','approval');
  try{await save();pushOrder(o,'approval',decision==='approved'?'Design approved':'Changes requested');res.json({order:publicOrder(o)})}catch{err(res,500,'Approval save failed')}
 });
+app.patch('/api/orders/:id/customer-earning',auth,csrf,async(req,res)=>{
+ if(req.user.role!=='customer')return err(res,403,'Only User A may edit their earning');
+ const o=loadOrder(req,res);if(!o)return;
+ if(!validEarning(req.body?.customer_earning_pkr))return err(res,400,'Enter a valid PKR earning');
+ const original=o.customer_earning_pkr;
+ o.customer_earning_pkr=Math.round(Number(req.body.customer_earning_pkr)*100)/100;
+ history(o,req.user.username,'User A earning updated','finance');
+ try{await save();pushOrder(o,'finance','User A earning updated');return res.json({order:publicOrder(o)})}
+ catch(e){o.customer_earning_pkr=original;return err(res,503,'Could not save earning')}
+});
 app.patch('/api/orders/:id/finance',auth,csrf,async(req,res)=>{
  if(req.user.role!=='staff')return err(res,403,'Staff only');
  const o=loadOrder(req,res);if(!o)return;
@@ -840,7 +871,7 @@ app.patch('/api/orders/:id/finance',auth,csrf,async(req,res)=>{
 function financialReport(req){
  const list=orders.filter(o=>canActive(req.user,o)&&isShipped(o)).map(financeRow).filter(Boolean)
    .sort((a,b)=>new Date(a.date).getTime()-new Date(b.date).getTime());
- const keys=['sale_pkr','making_pkr','shipping_pkr','cost_pkr','profit_pkr','sale_usd','making_usd','shipping_usd','cost_usd','profit_usd'];
+ const keys=['sale_pkr','making_pkr','shipping_pkr','customer_earning_pkr','cost_pkr','profit_pkr','sale_usd','making_usd','shipping_usd','customer_earning_usd','cost_usd','profit_usd'];
  const sum=(rows,k)=>Math.round(rows.reduce((n,o)=>n+(Number(o[k])||0),0)*100)/100;
  const totals=Object.fromEntries(keys.map(k=>[k,sum(list,k)]));
  const periods=(type,count)=>{
@@ -873,11 +904,11 @@ function financialReport(req){
   return {...o,cumulative_profit_pkr:runningPkr,cumulative_profit_usd:runningUsd};
  });
  return {rows,totals,count:rows.length,weekly:periods('weekly',10),monthly:periods('monthly',12),
- disclaimer:'Gross profit = selling price minus making cost minus shipping cost. Excludes marketplace fees, taxes, refunds and other expenses. USD uses each order’s entered PKR/USD rate.'};
+ disclaimer:'Gross profit = selling price minus making cost, shipping cost and User A earning. Excludes marketplace fees, taxes, refunds and other expenses. USD uses each order’s entered PKR/USD rate.'};
 }
 app.get('/api/finance',auth,(req,res)=>res.json(financialReport(req)));
 app.get('/api/finance.csv',auth,(req,res)=>{
- const data=financialReport(req),keys=['reference','title','date','status','courier','tracking_id','sale_pkr','making_pkr','shipping_pkr','cost_pkr','profit_pkr','sale_usd','making_usd','shipping_usd','cost_usd','profit_usd','cumulative_profit_pkr','cumulative_profit_usd','fx_pkr_per_usd'];
+ const data=financialReport(req),keys=['reference','title','date','status','courier','tracking_id','sale_pkr','making_pkr','shipping_pkr','customer_earning_pkr','cost_pkr','profit_pkr','sale_usd','making_usd','shipping_usd','customer_earning_usd','cost_usd','profit_usd','cumulative_profit_pkr','cumulative_profit_usd','fx_pkr_per_usd'];
  const cell=v=>'"'+String(v??'').replaceAll('"','""')+'"';
  res.set('Content-Type','text/csv; charset=utf-8');
  res.set('Content-Disposition','attachment; filename="FLYXJ-financial-report.csv"');
