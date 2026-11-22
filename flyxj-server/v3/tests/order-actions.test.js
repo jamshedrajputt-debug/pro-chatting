@@ -35,8 +35,8 @@ test('User A has no WhatsApp link generator and cannot forward via authenticated
   assert.equal(dom.window.FlyxjOrderActions.link,undefined,'No client-side link generation available');
   assert.equal(dom.window.FlyxjOrderActions.newOrderCreated,undefined,'No post-submit WhatsApp popup');
   await dom.window.FlyxjOrderActions.share(order);
-  const attempted=requests.find(x=>x.url==='/api/orders/23/whatsapp');
-  assert.ok(attempted,'forward action uses secure server authorization');
+  const attempted=requests.find(x=>x.url.includes('/whatsapp'));
+  assert.equal(attempted,undefined,'User A never makes a WhatsApp send request');
   assert.ok(alerts.some(x=>x.includes('User B')),'blocked customer sees permission warning');
  }finally{dom.window.close()}
 });

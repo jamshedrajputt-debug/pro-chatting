@@ -1,33 +1,61 @@
-# FlyXJ — WhatsApp Business automatic new-order alerts
+# FlyXJ — User B WhatsApp Direct PDF + Photo Messages
 
-**Recipient:** +971 56 752 7192 (User B). User A has **no** WhatsApp Forward action, no WhatsApp URL in their order-create response, and the WhatsApp API rejects their authenticated request with HTTP 403.
+## Expected live behavior
 
-## What's live after this change
+On each successful **new User A order**, if Meta credentials and media templates are configured, the server automatically sends **six independent WhatsApp media messages** to the one permitted recipient:
 
-- User A can submit and edit orders but cannot initiate WhatsApp forwarding in FlyXJ.
-- User B has WhatsApp Forward in the order action menu and the order sheet.
-- On a successful new order, FlyXJ automatically tries a Meta WhatsApp **approved template** to User B **only if** the following Render secrets are configured and valid.
-- No custom sender credentials, approved template or Meta delivery verification are currently documented as available. Without them, auto-send is **not connected** and no messages are actually sent.
+**+971 56 752 7192** (E.164 recipient `971567527192`).
 
-## Connect the sender in Meta WhatsApp Business Platform
+1. Original PDF, as a **document attachment**.
+2. One **combined JPEG image** with the first four product photos in a 2×2 grid and **Size / Color printed into the pixels**.
+3. Reference Photo 1, as a native JPEG image.
+4. Reference Photo 2, as a native JPEG image.
+5. Reference Photo 3, as a native JPEG image.
+6. Reference Photo 4, as a native JPEG image.
 
-Create or connect a Meta WhatsApp Business Account with an authorized sending phone number. Obtain a permanent supported access token, **Phone Number ID** for the sender (not the UAE destination number), and approved new-order message template. The recipient must meet WhatsApp messaging/opt-in requirements. Template category and charges are controlled by Meta.
+For fewer than four uploaded photos, the server sends only available photos plus the combined collage (empty collage slots stay white). For uploads of more than four photos, the first four reference photos are sent separately. **No file URLs or external links are sent to WhatsApp.** The server privately reads the source files from FlyXJ/Supabase and uploads them to Meta's WhatsApp Media API first; each approved message uses a Meta media ID.
 
-Set these Render service environment variables through a secure environment/settings interface (never commit values to GitHub):
+The backend records each message accepted by Meta in private Supabase state so retries do not knowingly re-send accepted files. **"Accepted by Meta" does not confirm delivered to the device**; delivery confirmation requires WhatsApp webhooks. User A cannot invoke the sending API, cannot open a WhatsApp draft from FlyXJ, and cannot access the staff media status. User B can retry a failed batch from **Send PDF + Photos**.
 
-- `WHATSAPP_CLOUD_ACCESS_TOKEN` — WhatsApp Business Cloud API access token.
-- `WHATSAPP_CLOUD_PHONE_NUMBER_ID` — authorized **sender** phone number ID.
-- `WHATSAPP_APPROVED_TEMPLATE` — approved Meta template name (lowercase letters, numbers and underscores).
-- `WHATSAPP_GRAPH_VERSION` — optional, defaults to `v23.0`.
+## Essential Meta WhatsApp Business setup (requires account owner)
 
-The body template must expect **five text placeholders, in order**: order reference, product title, size, colour and private FlyXJ order-page URL. The staff member must sign in to FlyXJ to access the original PDF and individual photos. Avoid displaying private customer data in public previews.
+You need a WhatsApp Business Account (WABA), an approved authorized sender phone, a long-lived/system-user access token with permissions, and opt-in for the recipient. Meta may charge fees for outbound template messages, especially six template messages per order.
 
-## Important: media delivery
+Create **two distinct Utility media templates** and wait for Meta to approve both:
 
-The automatic notification currently sends a **template notification with a private order link**, not the raw PDF or individual image files as WhatsApp media attachments. Direct automatic sending of photos and PDFs requires compatible Meta-approved media template(s), uploaded media IDs, and appropriate messaging permissions/conversation windows; this has **not** been configured or verified yet.
+**Image-header template**, example name `flyxj_photo_media`:
+- Header: **IMAGE** (dynamic media image).
+- Body: `Order {{1}} — {{2}}. Size: {{3}}. Color: {{4}}.`
+- Language: `en`.
 
-## How to verify
+**Document-header template**, example name `flyxj_pdf_document`:
+- Header: **DOCUMENT** (dynamic PDF document).
+- Body: `Order {{1}} — {{2}}. Size: {{3}}. Color: {{4}}.`
+- Language: `en`.
 
-Check Render logs for `User B WhatsApp Business automation: configured` versus `not connected`. The configured indicator only confirms environment variables exist; it **does not prove delivery**. Check the Meta WhatsApp Manager, API responses and delivery status webhooks for actual delivered messages.
+Both must match the exact **four** text body variables (order ref, title, size, color). The media header is an additional dynamic media parameter. Meta's approval is mandatory; the app cannot bypass it.
 
-The new order must always be saved in Supabase regardless of WhatsApp API availability.
+Set these **Render service environment variables** at `flyxj-order-manager-free` using secure Render settings (never paste tokens in GitHub/WhatsApp/chat):
+
+```text
+WHATSAPP_CLOUD_ACCESS_TOKEN=<long-lived Meta system-user token>
+WHATSAPP_CLOUD_PHONE_NUMBER_ID=<authorized sending phone number ID>
+WHATSAPP_MEDIA_IMAGE_TEMPLATE=flyxj_photo_media
+WHATSAPP_MEDIA_DOCUMENT_TEMPLATE=flyxj_pdf_document
+WHATSAPP_TEMPLATE_LANGUAGE=en
+WHATSAPP_GRAPH_VERSION=v23.0
+```
+
+These are **Meta sender** credentials, not the recipient mobile number. Once configured and valid, new orders automatically queue media. To inspect, check Render log `User B WhatsApp Direct Media: configured`; this checks settings only and **does not prove message delivery or template approval**. The recipient must be able to receive template messages and satisfy Meta's messaging rules.
+
+**When NOT configured:** orders still save securely in Supabase, but automatic WhatsApp transfer does not run. User B's manual file action returns a clear setup requirement. No insecure wa.me links or PDF/photo URLs are sent as an alternative.
+
+## Failure recovery and safety
+
+- Attachments are read from private Supabase storage only on the server.
+- A transfer sends one document plus five image messages. If Meta accepts some then fails, staff can retry the rest using the order actions menu.
+- The Supabase order persists per-file accepted message IDs to avoid intentional duplicates. Rare network failures between Meta accepting a message and saving its ID may require manual review before retrying.
+- This release does not include Meta delivery webhooks; sender-side API acknowledgements are not proof of delivery.
+- An order with one photo generates one reference-photo media message and one collage. For exactly 4 uploaded pictures it sends all six requested files.
+
+Meta official references: WhatsApp Business Platform Media API, media-based message templates, approved business-initiated templates.

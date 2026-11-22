@@ -4,6 +4,8 @@ on:
     branches: [flyxj-orders-render-free]
     paths:
       - 'flyxj-server/v3/**'
+      - 'package.json'
+      - 'package-lock.json'
       - '.github/workflows/flyxj-v3.yml'
   workflow_dispatch:
 jobs:
@@ -24,6 +26,8 @@ jobs:
           node --check flyxj-server/v3/assets/order-sheet.js
           node --check flyxj-server/v3/assets/order-actions.js
           node --check flyxj-server/v3/whatsapp.js
+          node --check flyxj-server/v3/maker-compose.js
+          node -e "console.log('WhatsApp image engine:',require('sharp').versions.sharp)"
           node --check flyxj-server/v3/pdf.js
           node --check flyxj-server/v3/assets/app.js
           node --check flyxj-server/v3/assets/order-extra.js
@@ -40,7 +44,7 @@ jobs:
         run: node --test flyxj-server/v3/tests/order-sheet.test.js
       - name: Verify order edit/delete/restore and WhatsApp mobile controls
         run: node --test flyxj-server/v3/tests/order-actions.test.js
-      - name: Verify automatic WhatsApp template is staff-only and requires credentials
+      - name: Test six real WhatsApp file media messages without links or customer access
         run: node --test flyxj-server/v3/tests/whatsapp.test.js
       - name: Test one combined PNG with four photos, Size and Color
         run: node --test flyxj-server/v3/tests/maker-collage.test.js

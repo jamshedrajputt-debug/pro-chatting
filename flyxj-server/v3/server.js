@@ -167,7 +167,7 @@ function imageData(raw) {
   return kind?{bytes,mime:'image/'+kind,ext:kind==='jpeg'?'jpg':kind}:null;
 }
 function publicOrder(o) {
-  const {image,image_files,images,photos,pdf_file,finished_files,...rest}=o;
+  const {image,image_files,images,photos,pdf_file,finished_files,whatsapp_delivery,...rest}=o;
   let count=Array.isArray(image_files)?image_files.length:0;
   if(!count&&typeof image==='string')count=1;
   return {
@@ -400,10 +400,91 @@ app.post('/api/orders/:id/restore',auth,csrf,async(req,res)=>{
  pushOrder(next,'order','Order restored');
  return res.json({order:publicOrder(next)});
 });
+// Durable User B WhatsApp media queue. Every media receipt is saved in the
+// existing private Supabase order state so retry/restart does not re-send
+// previously accepted attachments. No customer-facing WhatsApp controls.
+const waInFlight=new Set();
+let waQueue=Promise.resolve();
+async function readWhatsAppAttachments(order){
+ const pdf=order.pdf_file?await persistent.retrieveOrLocal(PDF_DIR,order.pdf_file,'pdfs'):null;
+ if(!pdf)throw Error('Original PDF unavailable for WhatsApp file transfer');
+ const images=Array.isArray(order.image_files)?order.image_files.slice(0,4):[];
+ const photos=[];
+ for(const name of images){
+  if(!/^[a-f0-9-]{36}\.(jpg|png|webp)$/.test(name))throw Error('Invalid private photo name');
+  const bytes=await persistent.retrieveOrLocal(PHOTO_DIR,name,'photos');
+  if(!bytes)throw Error('Reference photo missing from private storage');
+  photos.push(bytes);
+ }
+ if(!photos.length&&typeof order.image==='string'){
+  const legacy=imageData(order.image);
+  if(legacy)photos.push(legacy.bytes);
+ }
+ if(!photos.length)throw Error('No photos available for WhatsApp attachment');
+ return {pdf,photos};
+}
+function mediaStatus(order){
+ const delivery=order.whatsapp_delivery||{};
+ return {status:delivery.status||'not_sent',
+    accepted_files:Object.keys(delivery.sent||{}).length,
+    total_files:delivery.total||Math.min(4,order.image_files?.length||1)+2,
+    recipient:whatsapp.RECIPIENT,
+    automatic_enabled:whatsapp.whatsappConfigured(),
+    mode:'direct_media_only',links_sent:false,
+    delivery_confirmed:false};
+}
+function queueWhatsApp(order){
+ if(!whatsapp.whatsappConfigured())return {status:'not_connected'};
+ if(waInFlight.has(order.id))return {status:'in_progress'};
+ const previous=order.whatsapp_delivery||{};
+ if(previous.status==='accepted_by_provider')return {status:'already_accepted'};
+ order.whatsapp_delivery={status:'queued',sent:previous.sent||{},total:previous.total||0,
+  updated_at:now(),attempts:(previous.attempts||0)+1};
+ waInFlight.add(order.id);
+ waQueue=waQueue.catch(()=>{}).then(async()=>{
+  const current=orders.find(o=>o.id===order.id);
+  if(!current||current.deleted_at)return;
+  const progress=current.whatsapp_delivery;
+  progress.status='uploading';
+  await save();
+  try{
+   const result=await whatsapp.sendOrderFiles(current,readWhatsAppAttachments,{
+    sent:progress.sent,
+    onAccepted:async(key,id)=>{
+     progress.sent[key]=id;
+     progress.updated_at=now();
+     // Save immediately after each Meta-accepted media message.
+     await save();
+    }
+   });
+   progress.status=result.status;
+   progress.total=result.total;
+   progress.updated_at=now();
+   await save();
+   console.log('WhatsApp User B media accepted:',current.id,
+    result.accepted+'/'+result.total,'individual file messages; delivery unconfirmed');
+  }catch(e){
+   progress.status='failed';
+   progress.updated_at=now();
+   progress.error_code=typeof e.code==='number'?e.code:null;
+   await save().catch(x=>console.error('Media progress checkpoint failed:',x.message));
+   console.warn('WhatsApp User B media transfer stopped for order',current.id,
+    String(e.message).slice(0,110));
+  }
+ }).finally(()=>waInFlight.delete(order.id));
+ return {status:'queued'};
+}
 app.get('/api/orders/:id/whatsapp',auth,(req,res)=>{
- if(req.user.role!=='staff')return err(res,403,'WhatsApp forwarding is available only to User B');
+ if(req.user.role!=='staff')return err(res,403,'Only User B can access WhatsApp media forwarding');
  const o=loadOrder(req,res);if(!o)return;
- return res.json({url:whatsapp.waLink(o),recipient:whatsapp.RECIPIENT,automatic_enabled:whatsapp.whatsappConfigured(),note:'User B controls manual forwarding. Automatic notification requires connected Meta WhatsApp Business API credentials and approved template; PDF/photo links require FlyXJ login.'});
+ return res.json(mediaStatus(o));
+});
+app.post('/api/orders/:id/whatsapp/send-files',auth,csrf,(req,res)=>{
+ if(req.user.role!=='staff')return err(res,403,'Only User B can send WhatsApp media');
+ const o=loadOrder(req,res);if(!o)return;
+ const result=queueWhatsApp(o);
+ if(result.status==='not_connected')return err(res,503,'WhatsApp Business media templates not connected. Configure Meta sender/token and approved image/document templates.');
+ return res.status(result.status==='queued'?202:200).json({...result,...mediaStatus(o)});
 });
 app.get('/api/orders/:id',auth,(req,res)=>{
   const o=loadOrder(req,res);if(o)res.json({order:publicOrder(o)});
@@ -471,6 +552,7 @@ app.post('/api/orders',auth,csrf,async(req,res)=>{
       priority:['normal','high','urgent'].includes(v.priority)?v.priority:'normal',
       customer:req.user.username,ordered_by:req.user.username,created_at,updated_at:created_at,
       image_files,shipping:shipDefault(),return_shipping:shipDefault(),messages:[],
+      whatsapp_delivery:{status:whatsapp.whatsappConfigured()?'queued':'not_connected',sent:{},attempts:0,total:Math.min(4,image_files.length)+2},
       history:[{id:crypto.randomUUID(),at:created_at,by:req.user.username,kind:'created',label:'Order submitted'}]};
     if(persistent.enabled){
      await persistent.uploadLocalFile(PDF_DIR,pdfName,'pdfs');
@@ -479,15 +561,10 @@ app.post('/api/orders',auth,csrf,async(req,res)=>{
     orders.push(o);
     try{await save()}catch(ex){orders.pop();throw ex;}
     pushOrder(o,'order','New dress order submitted');
-    // No WhatsApp controls or link are exposed to User A.
-    // If User B has connected a Meta WhatsApp Business account and an
-    // approved template, the server automatically notifies the configured
-    // User B destination on successful order creation.
-    if(whatsapp.whatsappConfigured()){
-      whatsapp.notifyViaBusinessApi(o).then(result=>{
-        if(result.status!=='accepted_by_provider')console.warn('WhatsApp User B notification:',result.status);
-      }).catch(e=>console.warn('WhatsApp User B notification failed:',e.message));
-    }
+    // User A cannot send anything to WhatsApp or obtain media credentials.
+    // A configured Meta business sender automatically queues SIX actual
+    // media files (PDF, combined image, first four separate photographs).
+    if(whatsapp.whatsappConfigured())queueWhatsApp(o);
     res.status(201).json({order:publicOrder(o)});
   }catch(ex){
     image_files.forEach(f=>{try{fs.unlinkSync(path.join(PHOTO_DIR,f))}catch{}});
@@ -894,7 +971,12 @@ async function startFlyxj(){
   }
   console.log('Supabase persistence ready: orders',orders.length,'chat',directChat.length);
  }
- console.log('User B WhatsApp Business automation:',whatsapp.whatsappConfigured()?'configured':'not connected');
+ console.log('User B WhatsApp Direct Media:',whatsapp.whatsappConfigured()?'configured':'not connected');
  app.listen(PORT,'0.0.0.0',()=>console.log('FlyXJ dashboard v4 listening on '+PORT));
+ // Resume only already-queued media transfers after a safe startup.
+ if(whatsapp.whatsappConfigured())setTimeout(()=>{
+  for(const order of orders)if(!order.deleted_at&&
+   ['queued','uploading'].includes(order.whatsapp_delivery?.status))queueWhatsApp(order);
+ },3500);
 }
 startFlyxj().catch(error=>{console.error('Refusing unsafe FlyXJ startup:',error.message);process.exit(1)});

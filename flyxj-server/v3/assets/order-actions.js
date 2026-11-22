@@ -17,12 +17,37 @@
  };
  async function toWhatsApp(order){
   try{
-   // This route enforces User B/staff permissions on the server.
-   const result=await request('/api/orders/'+encodeURIComponent(order.id)+'/whatsapp');
-   const url=new URL(result.url);
-   if(url.protocol!=='https:'||url.hostname!=='wa.me')throw Error('Invalid WhatsApp destination');
-   window.location.assign(url.toString());
-  }catch(e){alert(e.message||'WhatsApp forwarding is available only to User B')}
+   const id=encodeURIComponent(order.id);
+   const me=await request('/api/me');
+   if(me.role!=='staff')throw Error('Only User B can send WhatsApp order files.');
+   const progress=await request('/api/orders/'+id+'/whatsapp/send-files',{
+    method:'POST',headers:{'x-csrf-token':me.csrf},body:JSON.stringify({})
+   });
+   const status=progress.status==='already_accepted'?
+    'These order files were already accepted by WhatsApp.':
+    'Direct WhatsApp media transfer queued for User B. PDF, combined image and separate photos; no links.';
+   const box=modal('WhatsApp file transfer',status);
+   const result=el('p','flyxj-muted','Preparing actual attachments for +971 56 752 7192...');
+   box.append(result);
+   let checks=0;
+   const check=async()=>{
+    if(!document.contains(result)||checks++>18)return;
+    try{
+     const info=await request('/api/orders/'+id+'/whatsapp');
+     if(info.status==='accepted_by_provider'){
+      result.textContent='Meta accepted '+info.accepted_files+' actual file messages. Delivery on the phone is not yet confirmed.';
+      return;
+     }
+     if(info.status==='failed'){
+      result.textContent='Transfer stopped after '+info.accepted_files+' files. Tap Send Files again to retry the remaining files.';
+      return;
+     }
+     result.textContent='Files accepted by Meta: '+info.accepted_files+'/'+info.total_files+'. Status: '+info.status;
+    }catch(e){result.textContent=e.message}
+    setTimeout(check,3500);
+   };
+   check();
+  }catch(e){alert(e.message||'WhatsApp Business file sending is not connected yet')}
  }
  function dismiss(){
   const box=$('flyxjActionOverlay');

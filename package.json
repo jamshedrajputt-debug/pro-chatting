@@ -9,14 +9,21 @@
     "ngrok": "ngrok http 3000",
     "test": "echo \"No tests specified\" && exit 0"
   },
-  "keywords": ["chat", "encrypted", "real-time", "socket.io", "webcrypto"],
+  "keywords": [
+    "chat",
+    "encrypted",
+    "real-time",
+    "socket.io",
+    "webcrypto"
+  ],
   "author": "Jamshed Rajputt",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "express": "^5.2.1",
-    "socket.io": "^4.8.3"
+    "socket.io": "^4.8.3",
+    "sharp": "0.35.5"
   },
   "engines": {
     "node": ">=18.0.0"
