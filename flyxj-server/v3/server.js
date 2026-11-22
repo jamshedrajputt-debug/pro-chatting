@@ -280,7 +280,7 @@ app.get('/api/orders/:id/photos/:index',auth,(req,res)=>{
   }
   return err(res,404,'Photo not found');
 });
-app.post('/api/orders',auth,csrf,(req,res)=>{
+app.post('/api/orders',auth,csrf,async(req,res)=>{
   if(req.user.role!=='customer')return err(res,403,'Only customers can submit orders');
   const v=req.body||{};
   const title=text(v.title,120),colour=text(v.colour,80),size=text(v.size,80);
@@ -318,7 +318,7 @@ app.post('/api/orders',auth,csrf,(req,res)=>{
       image_files,shipping:shipDefault(),return_shipping:shipDefault(),messages:[],
       history:[{id:crypto.randomUUID(),at:created_at,by:req.user.username,kind:'created',label:'Order submitted'}]};
     orders.push(o);
-    try{save()}catch(ex){orders.pop();throw ex;}
+    try{await save()}catch(ex){orders.pop();throw ex;}
     pushOrder(o,'order','New dress order submitted');
     res.status(201).json({order:publicOrder(o)});
   }catch(ex){
@@ -328,16 +328,16 @@ app.post('/api/orders',auth,csrf,(req,res)=>{
     err(res,500,'Could not save order. Please try again');
   }
 });
-app.post('/api/orders/:id/messages',auth,csrf,(req,res)=>{
+app.post('/api/orders/:id/messages',auth,csrf,async(req,res)=>{
   const o=loadOrder(req,res);if(!o)return;
   const message=text(req.body&&req.body.message,1000);
   if(!message)return err(res,400,'Write a message');
   if(!Array.isArray(o.messages))o.messages=[];
   o.messages.push({id:crypto.randomUUID(),at:now(),by:req.user.username,role:req.user.role,text:message});
   history(o,req.user.username,'New message added','message');
-  try{save();pushOrder(o,'message','New order conversation message');res.json({order:publicOrder(o)})}catch{err(res,500,'Message could not be saved')}
+  try{await await save();pushOrder(o,'message','New order conversation message');res.json({order:publicOrder(o)})}catch{err(res,500,'Message could not be saved')}
 });
-app.patch('/api/orders/:id/status',auth,csrf,(req,res)=>{
+app.patch('/api/orders/:id/status',auth,csrf,async(req,res)=>{
   if(req.user.role!=='staff')return err(res,403,'Staff only');
   const o=loadOrder(req,res);if(!o)return;
   const status=text(req.body&&req.body.status,40),note=text(req.body&&req.body.staff_note,1000);
@@ -365,9 +365,9 @@ app.patch('/api/orders/:id/status',auth,csrf,(req,res)=>{
   if(status==='shipped'&&!o.shipped_at)o.shipped_at=now();
   o.completed_at=['delivered','completed'].includes(status)?now():null;
   history(o,req.user.username,'Status changed to '+status.replaceAll('_',' ')+(note?' · '+note:''),'status');
-  try{save();pushOrder(o,'status','Order stage updated');if(isShipped(o))notifyCustomerTracking(o);res.json({order:publicOrder(o)})}catch{err(res,500,'Status could not be saved')}
+  try{await await save();pushOrder(o,'status','Order stage updated');if(isShipped(o))notifyCustomerTracking(o);res.json({order:publicOrder(o)})}catch{err(res,500,'Status could not be saved')}
 });
-app.patch('/api/orders/:id/shipping',auth,csrf,(req,res)=>{
+app.patch('/api/orders/:id/shipping',auth,csrf,async(req,res)=>{
   if(req.user.role!=='staff')return err(res,403,'Staff only');
   const o=loadOrder(req,res);if(!o)return;
   const courier=text(req.body&&req.body.courier,100);
@@ -377,9 +377,9 @@ app.patch('/api/orders/:id/shipping',auth,csrf,(req,res)=>{
   if(!courier&&!tracking_id)return err(res,400,'Enter courier or tracking ID');
   o.shipping={courier,tracking_id,tracking_url,updated_at:now()};
   history(o,req.user.username,'Shipping tracking updated','shipping');
-  try{save();notifyCustomerTracking(o);pushOrder(o,'shipping','Courier tracking updated');res.json({order:publicOrder(o)})}catch{err(res,500,'Shipping details could not be saved')}
+  try{await save();notifyCustomerTracking(o);pushOrder(o,'shipping','Courier tracking updated');res.json({order:publicOrder(o)})}catch{err(res,500,'Shipping details could not be saved')}
 });
-app.post('/api/orders/:id/return',auth,csrf,(req,res)=>{
+app.post('/api/orders/:id/return',auth,csrf,async(req,res)=>{
   if(req.user.role!=='customer')return err(res,403,'Customer only');
   const o=loadOrder(req,res);if(!o)return;
   const courier=text(req.body&&req.body.courier,100);
@@ -388,10 +388,10 @@ app.post('/api/orders/:id/return',auth,csrf,(req,res)=>{
   if(!tracking_id||!courier)return err(res,400,'Enter return courier and tracking ID');
   o.return_shipping={courier,tracking_id,tracking_url:'',note,updated_at:now()};
   history(o,req.user.username,'Return tracking submitted','return');
-  try{save();pushOrder(o,'return','Return tracking received');res.json({order:publicOrder(o)})}catch{err(res,500,'Return tracking could not be saved')}
+  try{await await save();pushOrder(o,'return','Return tracking received');res.json({order:publicOrder(o)})}catch{err(res,500,'Return tracking could not be saved')}
 });
 
-app.get('/api/orders/:id/address',auth,(req,res)=>{
+app.get('/api/orders/:id/address',auth,async(req,res)=>{
  const order=loadOrder(req,res);if(!order)return;
  // Prefer a customer-confirmed address, otherwise use a best-effort searchable PDF extraction.
  if(typeof order.delivery_address==='string'&&order.delivery_address.trim())
@@ -420,7 +420,7 @@ app.get('/api/orders/:id/finished/:index',auth,(req,res)=>{
  const file=o.finished_files?.[ix];
  return storedAttachment(req,res,PHOTO_DIR,file,'image/'+(file?.endsWith('.jpg')?'jpeg':file?.split('.').pop()));
 });
-app.post('/api/orders/:id/finished',auth,csrf,(req,res)=>{
+app.post('/api/orders/:id/finished',auth,csrf,async(req,res)=>{
  if(req.user.role!=='staff')return err(res,403,'Staff only');
  const o=loadOrder(req,res);if(!o)return;
  const p=imageData(req.body?.photo);
@@ -431,20 +431,20 @@ app.post('/api/orders/:id/finished',auth,csrf,(req,res)=>{
   fs.writeFileSync(path.join(PHOTO_DIR,name),p.bytes,{flag:'wx'});
   o.finished_files=[...(o.finished_files||[]),name];
   history(o,req.user.username,'Finished-product photo uploaded','photo');
-  save();pushOrder(o,'photo','Finished photo uploaded');
+  await save();pushOrder(o,'photo','Finished photo uploaded');
   res.json({order:publicOrder(o)});
  } catch(e) {try{fs.unlinkSync(path.join(PHOTO_DIR,name))}catch{};err(res,500,'Photo save failed')}
 });
-app.post('/api/orders/:id/request-approval',auth,csrf,(req,res)=>{
+app.post('/api/orders/:id/request-approval',auth,csrf,async(req,res)=>{
  if(req.user.role!=='staff')return err(res,403,'Staff only');
  const o=loadOrder(req,res);if(!o)return;
  if(isShipped(o)||o.status==='cancelled')return err(res,400,'Order already closed');
  o.approval={status:'requested',note:text(req.body?.note,1000),updated_at:now(),by:req.user.username};
  o.status='awaiting_approval';
  history(o,req.user.username,'Design approval requested','approval');
- try{save();pushOrder(o,'approval','Design approval needed');res.json({order:publicOrder(o)})}catch{err(res,500,'Approval save failed')}
+ try{await await save();pushOrder(o,'approval','Design approval needed');res.json({order:publicOrder(o)})}catch{err(res,500,'Approval save failed')}
 });
-app.post('/api/orders/:id/approve',auth,csrf,(req,res)=>{
+app.post('/api/orders/:id/approve',auth,csrf,async(req,res)=>{
  if(req.user.role!=='customer')return err(res,403,'Customer only');
  const o=loadOrder(req,res);if(!o)return;
  if(o.approval?.status!=='requested')return err(res,400,'No approval requested');
@@ -453,9 +453,9 @@ app.post('/api/orders/:id/approve',auth,csrf,(req,res)=>{
  o.approval={status:decision,note:text(req.body?.note,1000),updated_at:now(),by:req.user.username};
  o.status=decision==='approved'?'confirmed':'pending';
  history(o,req.user.username,decision==='approved'?'Design approved':'Customer requested changes','approval');
- try{save();pushOrder(o,'approval',decision==='approved'?'Design approved':'Changes requested');res.json({order:publicOrder(o)})}catch{err(res,500,'Approval save failed')}
+ try{await await save();pushOrder(o,'approval',decision==='approved'?'Design approved':'Changes requested');res.json({order:publicOrder(o)})}catch{err(res,500,'Approval save failed')}
 });
-app.patch('/api/orders/:id/finance',auth,csrf,(req,res)=>{
+app.patch('/api/orders/:id/finance',auth,csrf,async(req,res)=>{
  if(req.user.role!=='staff')return err(res,403,'Staff only');
  const o=loadOrder(req,res);if(!o)return;
  const f=normalizeFinance(req.body,o.finance);
@@ -463,7 +463,7 @@ app.patch('/api/orders/:id/finance',auth,csrf,(req,res)=>{
  if(isShipped(o)&&!f.recognized_at)f.recognized_at=now();
  o.finance=f;
  history(o,req.user.username,'Sale/making/shipping costs updated','finance');
- try{save();pushOrder(o,'finance','Order pricing updated');res.json({order:publicOrder(o)})}catch{err(res,500,'Pricing save failed')}
+ try{await await save();pushOrder(o,'finance','Order pricing updated');res.json({order:publicOrder(o)})}catch{err(res,500,'Pricing save failed')}
 });
 
 
@@ -523,7 +523,7 @@ const presentPresence=()=>({staff_online:[...trackingClients].some(c=>c.role==='
 app.get('/api/chat',auth,(req,res)=>{
  res.json({messages:directChat.filter(m=>chatVisible(req.user,m)).slice(-300).map(presentChat),presence:presentPresence()});
 });
-app.post('/api/chat',auth,csrf,(req,res)=>{
+app.post('/api/chat',auth,csrf,async(req,res)=>{
  const body=text(req.body?.message,1500);
  const image=req.body?.photo,pic=image?imageData(image):null;
  if((image&&!pic)||(!body&&!pic))return err(res,400,'Enter a message or JPG/PNG/WebP photo under 2.5MB');
@@ -534,7 +534,7 @@ app.post('/api/chat',auth,csrf,(req,res)=>{
   const msg={id:crypto.randomUUID(),from:req.user.username,to,body,at:now(),photo_file:file,seen_by:[req.user.username]};
   directChat.push(msg);
   if(directChat.length>3000)directChat=directChat.slice(-3000);
-  saveAtomic(CHAT_FILE,directChat);
+  await saveAtomic(CHAT_FILE,directChat);
   const safe=presentChat(msg);
   pushEvent('chat',safe,c=>c.role==='staff'||c.username===msg.from||c.username===msg.to);
   res.status(201).json({message:safe});
@@ -549,19 +549,19 @@ app.get('/api/chat/:id/photo',auth,(req,res)=>{
  const ext=m.photo_file.split('.').pop();
  return storedAttachment(req,res,CHAT_PHOTO_DIR,m.photo_file,'image/'+(ext==='jpg'?'jpeg':ext));
 });
-app.post('/api/chat/read',auth,csrf,(req,res)=>{
+app.post('/api/chat/read',auth,csrf,async(req,res)=>{
  let changes=0;
  for(const m of directChat)if(chatVisible(req.user,m)&&!(m.seen_by||[]).includes(req.user.username)){
   m.seen_by=[...(m.seen_by||[]),req.user.username];changes++;
  }
- if(changes){saveAtomic(CHAT_FILE,directChat);pushEvent('chat_read',{username:req.user.username},()=>true)}
+ if(changes){await saveAtomic(CHAT_FILE,directChat);pushEvent('chat_read',{username:req.user.username},()=>true)}
  res.json({ok:true,marked:changes});
 });
 app.get('/api/staff',auth,(req,res)=>{
  if(req.user.role!=='staff')return err(res,403,'Staff only');
  res.json({staff:[{name:users[1].name,active:true},...additionalStaff.map(u=>({name:u.name,active:u.active!==false}))]});
 });
-app.post('/api/staff',auth,csrf,(req,res)=>{
+app.post('/api/staff',auth,csrf,async(req,res)=>{
  if(req.user.role!=='staff')return err(res,403,'Staff only');
  const username=text(req.body?.username,30),password=req.body?.password;
  if(!/^[a-zA-Z0-9_-]{3,30}$/.test(username)||typeof password!=='string'||password.length<12||password.length>200)return err(res,400,'Use a 3-30 character username and 12+ character password');
@@ -569,7 +569,7 @@ app.post('/api/staff',auth,csrf,(req,res)=>{
  if(additionalStaff.length>=15)return err(res,400,'Staff account limit reached');
  const salt=crypto.randomBytes(16).toString('hex'),hash=crypto.scryptSync(password,salt,32).toString('hex');
  additionalStaff.push({name:username,salt,hash,active:true,created_at:now(),created_by:req.user.username,role:'staff'});
- try{saveAtomic(STAFF_FILE,additionalStaff);res.status(201).json({username})}catch{err(res,500,'Could not create staff')}
+ try{await saveAtomic(STAFF_FILE,additionalStaff);res.status(201).json({username})}catch{err(res,500,'Could not create staff')}
 });
 
 
@@ -599,7 +599,7 @@ app.get('/api/orders/:id/summary.pdf',auth,(req,res)=>{
 
 
 // Free-hosting backup and recovery. Export sensitive private data only to authenticated staff.
-app.get('/api/backup.json',auth,(req,res)=>{
+app.get('/api/backup.json',auth,async(req,res)=>{
  if(req.user.role!=='staff')return err(res,403,'Staff only');
  const collect=(dir,names)=>[...new Set(names.filter(Boolean))].map(name=>{
   const file=path.join(dir,name);
@@ -613,7 +613,7 @@ app.get('/api/backup.json',auth,(req,res)=>{
  res.set('Content-Disposition','attachment; filename="FLYXJ-PRIVATE-backup.json"');
  res.json(archive);
 });
-app.post('/api/restore',auth,csrf,(req,res)=>{
+app.post('/api/restore',auth,csrf,async(req,res)=>{
  if(req.user.role!=='staff')return err(res,403,'Staff only');
  if(req.get('x-confirm-restore')!=='REPLACE_ALL_DATA')return err(res,400,'Restore requires explicit confirmation');
  const b=req.body;
@@ -632,7 +632,7 @@ app.post('/api/restore',auth,csrf,(req,res)=>{
    for(const file of b[key])if(file.data)fs.writeFileSync(path.join(dir,file.name),Buffer.from(file.data,'base64'));
   }
   orders=b.orders;directChat=b.directChat;additionalStaff=b.additionalStaff;
-  save();saveAtomic(CHAT_FILE,directChat);saveAtomic(STAFF_FILE,additionalStaff);
+  await save();await saveAtomic(CHAT_FILE,directChat);await saveAtomic(STAFF_FILE,additionalStaff);
   res.json({ok:true,orders:orders.length,chats:directChat.length});
  }catch(e){console.error('Restore error:',e.message);err(res,500,'Restore incomplete: check backup')}
 });
