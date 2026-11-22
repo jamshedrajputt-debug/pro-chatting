@@ -5,6 +5,8 @@ const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
 const persistent = require('./persistent.js');
+const makerExtract = require('./maker-extract.js');
+const makerPack = require('./maker-pack.js');
 
 const app = express();
 app.disable('x-powered-by');
@@ -324,7 +326,10 @@ app.post('/api/orders',auth,csrf,async(req,res)=>{
       fs.writeFileSync(path.join(PHOTO_DIR,filename),p.bytes,{flag:'wx'});
       image_files.push(filename);
     }
-    const o={id,reference,title,colour,size,quantity:qty,comments,status:'pending',
+    // Process the PDF automatically when User A submits the order.
+    // Optional AI vision only runs if a private server API key is configured.
+    const maker_fields=await makerExtract.extractMakerFields(pdfBytes,{colour,size,quantity:qty});
+    const o={id,reference,title,colour,size,quantity:qty,comments,status:'pending',maker_fields,
       pdf_file:pdfName,measurements,finished_files:[],finance:financeDefault(),
       approval:{status:'not_requested',note:'',updated_at:null},
       expected_date:/^\d{4}-\d{2}-\d{2}$/.test(v.expected_date||'')?v.expected_date:'',
@@ -410,6 +415,72 @@ app.post('/api/orders/:id/return',auth,csrf,async(req,res)=>{
   try{await save();pushOrder(o,'return','Return tracking received');res.json({order:publicOrder(o)})}catch{err(res,500,'Return tracking could not be saved')}
 });
 
+// User B maker-ready sheet. Existing orders are parsed on demand (read-only).
+async function resolveMakerData(order){
+ if(order.maker_fields&&order.maker_fields.fields)return order.maker_fields;
+ if(!order.pdf_file)throw Error('Original PDF missing from order');
+ const pdf=await persistent.retrieveOrLocal(PDF_DIR,order.pdf_file,'pdfs');
+ if(!pdf)throw Error('Original PDF file is unavailable');
+ return makerExtract.extractMakerFields(pdf,order,{allowAi:false});
+}
+app.get('/api/orders/:id/maker',auth,async(req,res)=>{
+ if(req.user.role!=='staff')return err(res,403,'User B / staff only');
+ const o=loadOrder(req,res);if(!o)return;
+ try{
+  const maker=await resolveMakerData(o);
+  res.json({maker,reference:ref(o),photos:(o.image_files||[]).length,ai_configured:!!process.env.OPENAI_API_KEY});
+ }catch(e){console.warn('Maker summary read error:',e.message);err(res,503,'Maker summary unavailable. Verify original PDF.')}
+});
+app.get('/api/orders/:id/maker.txt',auth,async(req,res)=>{
+ if(req.user.role!=='staff')return err(res,403,'User B / staff only');
+ const o=loadOrder(req,res);if(!o)return;
+ try{
+  const maker=await resolveMakerData(o);
+  res.set('Cache-Control','private,no-store');
+  res.set('Content-Type','text/plain; charset=utf-8');
+  res.set('Content-Disposition','attachment; filename="'+ref(o)+'-MAKER-ORDER.txt"');
+  return res.send(makerPack.sheetTxt(o,maker));
+ }catch(e){console.warn('Maker text failed:',e.message);err(res,503,'Maker text unavailable')}
+});
+app.get('/api/orders/:id/maker.zip',auth,async(req,res)=>{
+ if(req.user.role!=='staff')return err(res,403,'User B / staff only');
+ const o=loadOrder(req,res);if(!o)return;
+ try{
+  const maker=await resolveMakerData(o);
+  if(!o.pdf_file)throw Error('PDF file required for complete maker pack');
+  const pdf=await persistent.retrieveOrLocal(PDF_DIR,o.pdf_file,'pdfs');
+  if(!pdf)throw Error('Original PDF missing');
+  const entries=[
+   {name:'MAKER_ORDER.txt',data:Buffer.from(makerPack.sheetTxt(o,maker),'utf8')},
+   {name:'MAKER_ORDER.csv',data:Buffer.from(makerPack.sheetCsv(o,maker),'utf8')},
+   {name:'ORIGINAL_SPECIFICATION.pdf',data:pdf}
+  ];
+  const images=Array.isArray(o.image_files)?o.image_files:[];
+  for(let i=0;i<images.length;i++){
+   const filename=images[i];
+   if(!/^[a-f0-9-]{36}\.(jpg|png|webp)$/.test(filename))throw Error('Unsafe photo path');
+   const bytes=await persistent.retrieveOrLocal(PHOTO_DIR,filename,'photos');
+   if(!bytes)throw Error('Photo '+(i+1)+' missing, refusing incomplete maker ZIP');
+   const ext=filename.slice(filename.lastIndexOf('.')+1);
+   entries.push({name:'PHOTOS/REFERENCE_'+String(i+1).padStart(2,'0')+'.'+ext,data:bytes});
+  }
+  if(!images.length&&typeof o.image==='string'){
+   const oldImage=imageData(o.image);
+   if(!oldImage)throw Error('Legacy order photo is unreadable');
+   entries.push({name:'PHOTOS/REFERENCE_01.'+oldImage.ext,data:oldImage.bytes});
+  }
+  if(entries.length===3)throw Error('Order has no reference photos');
+  const zip=makerPack.makeZip(entries);
+  res.set('Cache-Control','private,no-store');
+  res.set('Content-Type','application/zip');
+  res.set('Content-Disposition','attachment; filename="'+ref(o)+'-MAKER-PACK.zip"');
+  res.set('Content-Length',String(zip.length));
+  return res.send(zip);
+ }catch(e){
+  console.warn('Maker archive failed:',e.message);
+  return err(res,503,'Maker ZIP could not be completed. Please check all order files are available.');
+ }
+});
 app.get('/api/orders/:id/address',auth,async(req,res)=>{
  const order=loadOrder(req,res);if(!order)return;
  // Prefer a customer-confirmed address, otherwise use a best-effort searchable PDF extraction.
