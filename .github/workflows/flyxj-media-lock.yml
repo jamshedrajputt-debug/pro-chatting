@@ -35,5 +35,7 @@ jobs:
             echo "package-lock.json already current"
           else
             git commit -m "Lock sharp image composer dependencies for WhatsApp media"
+            git fetch origin flyxj-whatsapp-direct-media
+            git rebase origin/flyxj-whatsapp-direct-media
             git push origin HEAD:flyxj-whatsapp-direct-media
           fi
