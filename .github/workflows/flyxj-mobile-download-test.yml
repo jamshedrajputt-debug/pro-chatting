@@ -1,0 +1,33 @@
+name: FlyXJ Mobile PDF + PNG Download Tests
+on:
+  push:
+    branches: [flyxj-mobile-download-fix]
+    paths:
+      - 'flyxj-server/v3/**'
+      - '.github/workflows/flyxj-mobile-download-test.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify-mobile-download:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked production deps
+        run: npm ci --omit=dev
+      - name: Check server and mobile scripts
+        run: |
+          node --check flyxj-server/v3/server.js
+          node --check flyxj-server/v3/assets/order-sheet.js
+          node -e "console.log('sharp',require('sharp').versions.sharp)"
+      - name: Confirm secure mobile PDF and PNG downloads
+        run: node --test flyxj-server/v3/tests/integration.test.js
+      - name: Install browser test runtime
+        run: npm install --no-save --package-lock=false --ignore-scripts jsdom@26
+      - name: Confirm Android WebView links, preview and clipboard fallback
+        run: node --test flyxj-server/v3/tests/order-sheet.test.js flyxj-server/v3/tests/maker-collage.test.js
