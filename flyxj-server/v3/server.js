@@ -129,13 +129,20 @@ function parsePdf(raw){
  if(offset<0||offset>1024)return null;
  return bytes;
 }
-function storedAttachment(req,res,folder,filename,mime,download=false){
+async function storedAttachment(req,res,folder,filename,mime,download=false){
  if(!filename||!/^[a-f0-9-]{36}\.(jpg|png|webp|pdf)$/.test(filename))return err(res,404,'Attachment missing');
  const absolute=path.join(folder,filename);
- if(!fs.existsSync(absolute))return err(res,404,'File unavailable on free hosting');
  res.set('Content-Type',mime);res.set('Cache-Control','private, no-store');
  if(download)res.set('Content-Disposition','attachment; filename="FLYXJ-'+req.params.id+'-spec.pdf"');
- return res.sendFile(absolute);
+ if(fs.existsSync(absolute))return res.sendFile(absolute);
+ if(persistent.enabled){
+  try{
+   const category=folder===PDF_DIR?'pdfs':folder===CHAT_PHOTO_DIR?'chat-images':'photos';
+   const bytes=await persistent.download(category,filename);
+   if(bytes)return res.send(bytes);
+  }catch(e){console.error('Attachment read error:',e.message);return err(res,503,'Private file storage temporarily unavailable')}
+ }
+ return err(res,404,'Attachment unavailable');
 }
 
 const safeUrl=url=>{const v=text(url,600);if(!v)return '';try{const u=new URL(v);return u.protocol==='https:'?u.toString():null;}catch{return null;}};
@@ -260,7 +267,7 @@ app.get('/api/orders',auth,(req,res)=>{
 app.get('/api/orders/:id',auth,(req,res)=>{
   const o=loadOrder(req,res);if(o)res.json({order:publicOrder(o)});
 });
-app.get('/api/orders/:id/photos/:index',auth,(req,res)=>{
+app.get('/api/orders/:id/photos/:index',auth,async(req,res)=>{
   const o=loadOrder(req,res);if(!o)return;
   const ix=Number(req.params.index);
   if(!Number.isInteger(ix)||ix<0)return err(res,404,'Photo not found');
@@ -269,8 +276,14 @@ app.get('/api/orders/:id/photos/:index',auth,(req,res)=>{
     const filename=files[ix];
     if(!/^[a-f0-9-]{36}\.(jpg|png|webp)$/.test(filename))return err(res,404,'Photo not found');
     const abs=path.join(PHOTO_DIR,filename);
-    if(!fs.existsSync(abs))return err(res,404,'Photo unavailable');
-    return res.sendFile(abs);
+    if(fs.existsSync(abs))return res.sendFile(abs);
+    if(persistent.enabled){
+     try{
+      const bytes=await persistent.download('photos',filename);
+      if(bytes){res.set('Content-Type','image/'+(filename.endsWith('.jpg')?'jpeg':filename.split('.').pop()));return res.send(bytes)}
+     }catch(e){return err(res,503,'Private photo storage unavailable')}
+    }
+    return err(res,404,'Photo unavailable');
   }
   if(ix===0&&typeof o.image==='string'){
     const parsed=imageData(o.image);
@@ -317,6 +330,10 @@ app.post('/api/orders',auth,csrf,async(req,res)=>{
       customer:req.user.username,ordered_by:req.user.username,created_at,updated_at:created_at,
       image_files,shipping:shipDefault(),return_shipping:shipDefault(),messages:[],
       history:[{id:crypto.randomUUID(),at:created_at,by:req.user.username,kind:'created',label:'Order submitted'}]};
+    if(persistent.enabled){
+     await persistent.uploadLocalFile(PDF_DIR,pdfName,'pdfs');
+     for(const filename of image_files)await persistent.uploadLocalFile(PHOTO_DIR,filename,'photos');
+    }
     orders.push(o);
     try{await save()}catch(ex){orders.pop();throw ex;}
     pushOrder(o,'order','New dress order submitted');
@@ -399,9 +416,10 @@ app.get('/api/orders/:id/address',auth,async(req,res)=>{
  if(!order.pdf_file||!/^[a-f0-9-]{36}\.pdf$/.test(order.pdf_file))
    return res.json({address:null,source:'no_pdf',reliable:false});
  const fullPath=path.join(PDF_DIR,order.pdf_file);
- if(!fs.existsSync(fullPath))return res.json({address:null,source:'pdf_missing',reliable:false});
+ if(!fs.existsSync(fullPath)&&!persistent.enabled)return res.json({address:null,source:'pdf_missing',reliable:false});
  try{
-  const pdf=fs.readFileSync(fullPath);
+  const pdf=await persistent.retrieveOrLocal(PDF_DIR,order.pdf_file,'pdfs');
+  if(!pdf)return res.json({address:null,source:'pdf_missing',reliable:false});
   const parsed=require('./pdf-address.js').extractDeliveryAddress(pdf);
   return res.json(parsed);
  }catch(e){
@@ -429,6 +447,7 @@ app.post('/api/orders/:id/finished',auth,csrf,async(req,res)=>{
  const name=crypto.randomUUID()+'.'+p.ext;
  try {
   fs.writeFileSync(path.join(PHOTO_DIR,name),p.bytes,{flag:'wx'});
+  if(persistent.enabled)await persistent.uploadLocalFile(PHOTO_DIR,name,'photos');
   o.finished_files=[...(o.finished_files||[]),name];
   history(o,req.user.username,'Finished-product photo uploaded','photo');
   await save();pushOrder(o,'photo','Finished photo uploaded');
@@ -530,7 +549,11 @@ app.post('/api/chat',auth,csrf,async(req,res)=>{
  const to=req.user.role==='staff'?users[0].name:users[1].name;
  let file=null;
  try{
-  if(pic){file=crypto.randomUUID()+'.'+pic.ext;fs.writeFileSync(path.join(CHAT_PHOTO_DIR,file),pic.bytes,{flag:'wx'})}
+  if(pic){
+   file=crypto.randomUUID()+'.'+pic.ext;
+   fs.writeFileSync(path.join(CHAT_PHOTO_DIR,file),pic.bytes,{flag:'wx'});
+   if(persistent.enabled)await persistent.uploadLocalFile(CHAT_PHOTO_DIR,file,'chat-images');
+  }
   const msg={id:crypto.randomUUID(),from:req.user.username,to,body,at:now(),photo_file:file,seen_by:[req.user.username]};
   directChat.push(msg);
   if(directChat.length>3000)directChat=directChat.slice(-3000);
