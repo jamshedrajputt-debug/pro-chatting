@@ -11,6 +11,8 @@
 .maker-simple-button{display:flex;align-items:center;justify-content:center;width:100%;border:0;min-height:53px;font-size:15px;cursor:pointer;touch-action:manipulation}
 .maker-simple-button:disabled{opacity:.6;cursor:wait}
 </style>
+<link rel="stylesheet" href="/assets/order-actions.css?v=edit-delete-wa-2">
+<script defer src="/assets/order-actions.js?v=edit-delete-wa-2"></script>
 <script defer src="/assets/maker-collage.js?v=maker-simple-1"></script>
 <script defer src="/assets/order-sheet.js?v=maker-simple-1"></script>
 </head><body>
@@ -18,7 +20,13 @@
 <main class="wrap">
 <div id="message" class="loader">Loading order details…</div>
 <div id="content" class="hidden">
-<section class="card hero"><span class="eyebrow">CUSTOM ORDER DETAILS</span><h1 id="title"></h1><div id="ref" class="muted"></div><div class="chips" id="chips"></div></section>
+<section class="card hero"><span class="eyebrow">CUSTOM ORDER DETAILS</span><h1 id="title"></h1><div id="ref" class="muted"></div><div class="chips" id="chips"></div>
+<div class="flyxj-sheet-actions">
+<button id="sheetEdit" type="button">✎ Edit order</button>
+<button id="sheetWhatsApp" type="button">WhatsApp forward</button>
+<button id="sheetDelete" type="button">Delete order</button>
+</div>
+</section>
 <section class="card simple-maker">
 <div class="section-title"><h2>Download Maker Image</h2><span class="count">1 PNG image</span></div>
 <p class="muted">4 photos ek hi frame mein, aur image ke neeche Size + Color. No ZIP, no CSV.</p>
