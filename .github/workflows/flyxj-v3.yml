@@ -22,6 +22,8 @@ jobs:
           node --check flyxj-server/v3/server.js
           node --check flyxj-server/v3/assets/maker-collage.js
           node --check flyxj-server/v3/assets/order-sheet.js
+          node --check flyxj-server/v3/assets/order-actions.js
+          node --check flyxj-server/v3/whatsapp.js
           node --check flyxj-server/v3/pdf.js
           node --check flyxj-server/v3/assets/app.js
           node --check flyxj-server/v3/assets/order-extra.js
