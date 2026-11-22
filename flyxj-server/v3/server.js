@@ -894,6 +894,7 @@ async function startFlyxj(){
   }
   console.log('Supabase persistence ready: orders',orders.length,'chat',directChat.length);
  }
+ console.log('User B WhatsApp Business automation:',whatsapp.whatsappConfigured()?'configured':'not connected');
  app.listen(PORT,'0.0.0.0',()=>console.log('FlyXJ dashboard v4 listening on '+PORT));
 }
 startFlyxj().catch(error=>{console.error('Refusing unsafe FlyXJ startup:',error.message);process.exit(1)});
