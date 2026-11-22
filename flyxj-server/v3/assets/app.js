@@ -217,7 +217,7 @@ function renderOrders(){
     actions.append(trigger,menu);arrow.append(actions);
     tr.append(first,customer,date,st,tracking,arrow);
     tr.addEventListener('click',()=>openDetail(o.id));
-    tr.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openDetail(o.id)}});
+    tr.addEventListener('keydown',e=>{if(e.target===tr&&(e.key==='Enter'||e.key===' ')){e.preventDefault();openDetail(o.id)}});
     tbody.append(tr);
   }
 }
