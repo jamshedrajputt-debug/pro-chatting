@@ -211,4 +211,6 @@
   actions.append(button,later);box.append(actions);
  }
  window.FlyxjOrderActions={edit:editOrder,delete:deleteOrder,trash,newOrderCreated,share:toWhatsApp,link:whatsappLink};
+ const trashButton=$('flyxjTrashButton');
+ if(trashButton)trashButton.onclick=trash;
 })();
