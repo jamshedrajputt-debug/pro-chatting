@@ -57,8 +57,11 @@ test('FLYXJ V3: authenticated PDF orders, approval, shipment, profit, chat, back
   assert.match(await script.text(),/function initialize/);
   const a=await login('usera','TestingCustomerPass!123');
   const b=await login('userb','TestingStaffPass!123');
+  const testImageBuffer=await require('sharp')({create:{width:36,height:36,channels:3,background:'#994433'}}).png().toBuffer();
+  const validPicture='data:image/png;base64,'+testImageBuffer.toString('base64');
   const baseOrder={title:'Custom leather dress',size:'M',colour:'Black',quantity:1,comments:'Made to size',
-   images:[picture],measurements:{bust:'36 in',waist:'28 in'},expected_date:'2026-12-30',priority:'high'};
+   images:[validPicture,validPicture,validPicture,validPicture],
+   measurements:{bust:'36 in',waist:'28 in'},expected_date:'2026-12-30',priority:'high'};
   assert.equal((await api('/api/orders',a,'POST',baseOrder)).status,400,'PDF required');
   assert.equal((await api('/api/orders',b,'POST',{...baseOrder,pdf})).status,403,'staff cannot submit');
   const newResponse=await api('/api/orders',a,'POST',{...baseOrder,pdf});
@@ -114,7 +117,7 @@ test('FLYXJ V3: authenticated PDF orders, approval, shipment, profit, chat, back
   assert.equal(mobilePdf.headers.get('cache-control'),'private, no-store, max-age=0');
   assert.equal((await api('/api/mobile-file/'+('a'.repeat(64)))).status,404,'Random ticket never grants access');
   const makerTicketResponse=await api(pdfPrepPath,b,'POST',{kind:'maker'});
-  assert.equal(makerTicketResponse.status,200,'Staff can generate the combined PNG on the server');
+  assert.equal(makerTicketResponse.status,200,'Staff can generate the combined PNG on the server: '+await makerTicketResponse.clone().text()+' '+logs.slice(-350));
   const makerTicket=await makerTicketResponse.json();
   assert.match(makerTicket.url,/^\/api\/mobile-file\/[a-f0-9]{64}$/);
   assert.match(makerTicket.filename,/MAKER-IMAGE\.png$/);
