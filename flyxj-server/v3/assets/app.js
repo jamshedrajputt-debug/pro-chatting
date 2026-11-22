@@ -191,11 +191,15 @@ function renderOrders(){
     }else tracking.append(node('span','muted','Not added'));
     const arrow=node('td','table-arrow');
     if(state.me?.role==='staff'){
-      const pack=node('a','order-sheet-link','▦ 4 Photos + PDF');
+      const pack=node('a','order-sheet-link','▦ View Sheet');
       pack.href='/order/'+o.id;
-      pack.title='Open the full order pack with photos, size, colour and shipping PDF';
+      pack.title='See the photos, extracted address, colour and size in one table';
       pack.addEventListener('click',e=>e.stopPropagation());
-      arrow.append(pack);
+      const maker=node('a','order-sheet-link order-maker-zip','↓ Maker ZIP');
+      maker.href='/api/orders/'+o.id+'/maker.zip';
+      maker.title='One-click download: TXT + CSV maker sheet, original PDF, and all reference photos';
+      maker.addEventListener('click',e=>e.stopPropagation());
+      arrow.append(pack,maker);
     }else arrow.textContent='›';
     tr.append(first,customer,date,st,tracking,arrow);
     tr.addEventListener('click',()=>openDetail(o.id));
