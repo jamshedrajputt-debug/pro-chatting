@@ -36,6 +36,7 @@ async function saveAtomic(file,data){
 
 const FILE = path.join(DATA_DIR,'orders.json');
 let orders = [];
+let reservedOrderId=0;
 try {
   const raw=JSON.parse(fs.readFileSync(FILE,'utf8'));
   if(Array.isArray(raw))orders=raw;
@@ -306,7 +307,8 @@ app.post('/api/orders',auth,csrf,async(req,res)=>{
   for(const raw of list){const p=imageData(raw);if(!p)return err(res,400,'Each picture must be JPG, PNG or WebP under 2.5 MB');total+=p.bytes.length;parsed.push(p);}
   if(total>MAX_TOTAL_BYTES)return err(res,400,'Combined photos must be under 16 MB');
   if(orders.length>=1500)return err(res,507,'Order storage limit reached; contact staff');
-  const id=orders.reduce((n,o)=>Math.max(n,Number(o.id)||0),0)+1;
+  const id=Math.max(reservedOrderId,orders.reduce((n,o)=>Math.max(n,Number(o.id)||0),0))+1;
+   reservedOrderId=id;
   const created_at=now(),reference='FXJ-'+new Date().getUTCFullYear()+'-'+String(id).padStart(6,'0');
   const pdfBytes=parsePdf(v.pdf);
   if(!pdfBytes)return err(res,400,'Attach a valid PDF under 30 MB. Auto-compressed upload is supported.');
