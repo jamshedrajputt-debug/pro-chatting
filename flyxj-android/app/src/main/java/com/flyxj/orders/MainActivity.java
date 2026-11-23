@@ -30,6 +30,7 @@ public class MainActivity extends Activity {
     private WebView webView;
     private android.webkit.ValueCallback<Uri[]> fileCallback;
     private String[] pendingDownload;
+    private UpdateManager updateManager;
 
     @Override public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -112,7 +113,8 @@ public class MainActivity extends Activity {
         });
         if(savedInstanceState!=null) webView.restoreState(savedInstanceState);
         else webView.loadUrl(HOME);
-        new UpdateManager(this).check();
+        updateManager = new UpdateManager(this);
+        updateManager.check();
     }
 
     private void download(String url,String agent,String disposition,String mime){
@@ -163,6 +165,10 @@ public class MainActivity extends Activity {
             fileCallback.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode,data));
             fileCallback=null;
         }
+    }
+    @Override protected void onResume(){
+        super.onResume();
+        if(updateManager!=null)updateManager.onResume();
     }
     @Override protected void onSaveInstanceState(Bundle outState){
         webView.saveState(outState);super.onSaveInstanceState(outState);
