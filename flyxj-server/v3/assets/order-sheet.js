@@ -77,7 +77,7 @@
       api('/api/me').then(me=>prepareMobileFile('photo',me.csrf,index)).then(file=>{
         if(viewIndex!==index)return;
         download.href=downloadHref(file.url);
-        if(isAndroid)download.removeAttribute('download');else download.download=file.filename;
+        download.download=file.filename;download.target='_blank';download.rel='noopener noreferrer';
         download.textContent='↓ Download photo';
       }).catch(error=>{if(viewIndex===index)download.textContent='Photo unavailable';});
     }
@@ -195,6 +195,8 @@
     const name=kind==='maker'?'combined image':'PDF';
     status.textContent='Ready — tap Download. If your app blocks file downloads, use Open in Browser below (no copy/paste).';
     copy.classList.add('hidden');
+    const openBrowser=$(kind==='maker'?'makerOpenBrowser':'pdfOpenBrowser');
+    if(openBrowser){openBrowser.href=downloadHref(file.url);openBrowser.classList.remove('hidden');}
     if(kind==='maker'){
       $('makerBackup').classList.remove('hidden');
       $('makerPreview').href=file.preview_url;
