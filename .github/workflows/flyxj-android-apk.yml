@@ -32,7 +32,21 @@ jobs:
           gradle-version: '8.10.2'
       - name: Build installable debug APK
         working-directory: flyxj-android
-        run: gradle --no-daemon --stacktrace assembleDebug
+        run: gradle --no-daemon --stacktrace assembleDebug assembleRelease
+      - name: Upload unsigned production APK for secure offline signing
+        uses: actions/upload-artifact@v4
+        with:
+          name: FlyXJ-Unsigned-Release-APK
+          path: flyxj-android/app/build/outputs/apk/release/app-release-unsigned.apk
+          if-no-files-found: error
+      - name: Upload official Android apksigner for secure offline signing
+        uses: actions/upload-artifact@v4
+        with:
+          name: Android-APK-Signer-Tool
+          path: |
+            ${{ env.ANDROID_HOME }}/build-tools/35.0.0/apksigner
+            ${{ env.ANDROID_HOME }}/build-tools/35.0.0/lib/apksigner.jar
+          if-no-files-found: error
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
