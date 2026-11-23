@@ -5,6 +5,16 @@
   const id=match?match[1]:null;
   let order=null,viewIndex=0,allPhotos=false;
   const mobileDownloads={maker:null,pdf:null};
+  const isAndroid=/Android/i.test(navigator.userAgent);
+  // Android intent URLs ask the operating system to open the short-lived,
+  // HTTPS attachment in Chrome. Fallback is the same download URL.
+  function downloadHref(url){
+    const full=new URL(url,location.origin);
+    if(!isAndroid)return full.href;
+    const fallback=encodeURIComponent(full.href);
+    return 'intent://'+full.host+full.pathname+full.search+
+      '#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url='+fallback+';end';
+  }
   function el(tag,className,text){
     const n=document.createElement(tag);
     if(className)n.className=className;
@@ -69,7 +79,9 @@
       const index=viewIndex;download.href='#';download.removeAttribute('download');download.textContent='Preparing download…';
       api('/api/me').then(me=>prepareMobileFile('photo',me.csrf,index)).then(file=>{
         if(viewIndex!==index)return;
-        download.href=file.url;download.download=file.filename;download.textContent='↓ Download photo';
+        download.href=downloadHref(file.url);
+        if(isAndroid)download.removeAttribute('download');else download.download=file.filename;
+        download.textContent=isAndroid?'↓ Open Chrome & Download':'↓ Download photo';
       }).catch(error=>{if(viewIndex===index)download.textContent='Photo unavailable';});
     }
   }
@@ -177,15 +189,16 @@
     const status=$(kind==='maker'?'makerStatus':'pdfStatus');
     const copy=$(kind==='maker'?'makerCopy':'pdfCopy');
     mobileDownloads[kind]=file;
-    anchor.href=file.url;
-    anchor.download=file.filename;
+    anchor.href=downloadHref(file.url);
+    if(isAndroid)anchor.removeAttribute('download');
+    else anchor.download=file.filename;
     anchor.target='_self';
     anchor.rel='noopener noreferrer';
     anchor.setAttribute('aria-disabled','false');
     anchor.textContent=kind==='maker'?'↓ Download Maker Image (PNG)':'↓ Download Original PDF';
     const name=kind==='maker'?'combined image':'PDF';
-    status.textContent='Your '+name+' is ready. Tap Download. If nothing happens in the app, tap Copy link for Chrome and paste it into Chrome within 10 minutes.';
-    copy.classList.remove('hidden');
+    status.textContent=isAndroid?'Ready — tap Download to open Chrome and start saving your '+name+'.':'Ready — tap Download to save your '+name+'.';
+    copy.classList.add('hidden');
     if(kind==='maker'){
       $('makerBackup').classList.remove('hidden');
       $('makerPreview').href=file.preview_url;
@@ -216,7 +229,7 @@
         readyDownload('maker',file,csrf);
         if(new URLSearchParams(location.search).has('download')){
           $('makerDownload').focus();
-          $('makerStatus').textContent='Maker image ready — tap the blue Download Maker Image button. If the app blocks downloads, copy the link into Chrome.';
+          $('makerStatus').textContent='Maker image ready — tap the blue button. Chrome will open and download your PNG directly.';
         }
       }).catch(e=>{$('makerStatus').textContent=e.message}));
     }else $('makerDownload').closest('.simple-maker')?.classList.add('hidden');
