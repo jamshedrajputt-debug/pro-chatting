@@ -4,7 +4,7 @@ on:
     branches:
       - flyxj-android-apk-build-20261123
     paths:
-      - 'flyxj-android/releases/*.apk.b64'
+      - 'flyxj-android/releases/*.ready'
   workflow_dispatch:
 permissions:
   contents: write
@@ -20,12 +20,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          COUNT=$(find flyxj-android/releases -maxdepth 1 -name 'FLYXJ-v*.apk.b64' | wc -l)
-          test "$COUNT" -ge 1
-          SRC=$(find flyxj-android/releases -maxdepth 1 -name 'FLYXJ-v*.apk.b64' | sort -V | tail -1)
-          VERSION=$(basename "$SRC" | sed -n -E 's/^FLYXJ-v([0-9]+)\.apk\.b64$/\1/p')
+          SRC=$(find flyxj-android/releases -maxdepth 1 -name 'FLYXJ-v*.ready' | sort -V | tail -1)
+          test -n "$SRC"
+          VERSION=$(basename "$SRC" | sed -n -E 's/^FLYXJ-v([0-9]+)\.ready$/\1/p')
           test -n "$VERSION"
-          base64 --decode "$SRC" > signed-app.apk
+          cat flyxj-android/releases/FLYXJ-v"$VERSION".apk.gz.b64.part* | base64 --decode | gzip -dc > signed-app.apk
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose signed-app.apk
           BADGING=$("$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging signed-app.apk | head -n 1)
           echo "$BADGING"
