@@ -112,6 +112,7 @@ public class MainActivity extends Activity {
         });
         if(savedInstanceState!=null) webView.restoreState(savedInstanceState);
         else webView.loadUrl(HOME);
+        new UpdateManager(this).check();
     }
 
     private void download(String url,String agent,String disposition,String mime){
