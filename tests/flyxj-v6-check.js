@@ -1,0 +1,33 @@
+'use strict';
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const vm=require('node:vm');
+const root=path.join(__dirname,'../flyxj-server/v3');
+const read=p=>fs.readFileSync(path.join(root,p),'utf8');
+for(const filename of ['server.js','assets/app.js','assets/v6-professional.js','assets/init-extra.js','assets/finance-extra.js']){
+ const contents=read(filename);
+ assert.doesNotThrow(()=>new vm.Script(contents,{filename}),filename+' syntax');
+ console.log('PASS syntax:',filename);
+}
+const server=read('server.js'),ui=read('assets/app.js'),enhance=read('assets/v6-professional.js'),html=read('index.html');
+assert.match(server,/app\.patch\('\/api\/orders\/:id\/assign',auth,csrf/);
+assert.match(server,/if\(req\.user\.role!=='staff'\)return err\(res,403,'Staff only'\)/);
+assert.match(server,/const allowed=\[users\[1\]\.name,\.\.\.additionalStaff/);
+assert.match(server,/req\.body\?\.updated_at!==existing\.updated_at/);
+assert.match(server,/orders\[index\]=previous;err\(res,503/);
+assert.match(server,/const isOwner=u=>u\.role==='staff'&&u\.username===users\[1\]\.name/);
+assert.match(server,/app\.get\('\/api\/backup\.json',auth,async\(req,res\)=>\{\n if\(!isOwner\(req\.user\)\)/);
+assert.match(server,/app\.post\('\/api\/restore',auth,csrf,async\(req,res\)=>\{\n if\(!isOwner\(req\.user\)\)/);
+assert.match(server,/app\.post\('\/api\/staff',auth,csrf,async\(req,res\)=>\{\n if\(!isOwner\(req\.user\)\)/);
+assert.match(server,/app\.get\('\/api\/orders\/:id\/summary\.pdf',auth,\(req,res\)=>\{\n if\(req\.user\.role!=='staff'\)/);
+assert.match(ui,/window\.flyxjV6Filters/);
+assert.match(ui,/window\.flyxjV6Assign/);
+assert.match(ui,/window\.flyxjV6Notify/);
+assert.match(enhance,/window\.flyxjV6Refresh/);
+assert.match(html,/v6-professional\.js/);
+assert.match(html,/v6-professional\.css/);
+assert.ok(server.includes("if(persistent.enabled)await persistent.save('orders',orders)"),'durable order writes retained');
+assert.ok(server.includes("app.post('/api/restore',auth,csrf"),'backup restores still require CSRF');
+assert.ok(server.includes("original.updated_at"),'optimistic order edit conflict protection retained');
+console.log('PASS V6 assignment, auth, recovery, finance, compatibility contracts');
