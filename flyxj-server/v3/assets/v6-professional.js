@@ -45,7 +45,8 @@
    card.append(n('span','v6-metric-icon',icon),n('strong','v6-metric-count','—'),n('small','',label));
    card.onclick=()=>{
     navigate('orders');
-    window.flyxjV6Filters.priority=key==='priority'?'urgent':'all';
+    window.flyxjV6Filters.priority='all';
+    if(key==='priority')window.flyxjV6Filters.sort='priority';
     window.flyxjV6Filters.due=key==='overdue'?'overdue':key==='due_soon'?'soon':'all';
     window.flyxjV6Filters.assignee=key==='unassigned'?'unassigned':'all';
     for(const selector of document.querySelectorAll('#v6Filters select')){
@@ -64,7 +65,15 @@
   grid.insertAdjacentElement('afterend',wrap);
  }
  function notificationCenter(){
-  if($v('v6NotificationPanel'))return;
+  if($v('v6NotificationPanel')){
+    const existingButton=$v('notificationButton'),existingPanel=$v('v6NotificationPanel');
+    if(existingButton)existingButton.onclick=()=>{
+      existingPanel.classList.toggle('hidden');
+      state.notifications=0;
+      const badge=$v('notificationCount');if(badge){badge.textContent='0';badge.classList.add('hidden')}
+    };
+    return;
+  }
   const panel=n('aside','v6-notification-panel hidden');panel.id='v6NotificationPanel';panel.setAttribute('aria-label','Recent FlyXJ notifications');
   const header=n('div','v6-notification-head');header.append(n('h3','','Recent activity'));
   const read=n('button','v6-close','×');read.type='button';read.setAttribute('aria-label','Close notifications');read.onclick=()=>panel.classList.add('hidden');
