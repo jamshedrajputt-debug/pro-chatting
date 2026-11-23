@@ -21,7 +21,16 @@
    const me=await request('/api/me');
    const id=encodeURIComponent(order.id);
    const box=modal('Share actual files to WhatsApp','Choose a file below. Your phone share menu opens: select WhatsApp and recipient. No order links are sent.');
-   const status=el('p','flyxj-action-status','Share the PDF and image separately to send both actual attachments.');
+   const status=el('p','flyxj-action-status','Share both real files together, or select one file individually.');
+   if(me.role==='staff'){
+    const combined=el('button','flyxj-action-primary','↗ Share Combined PNG + PDF (Choose App)');
+    combined.type='button';combined.style.display='block';combined.style.margin='10px 0';combined.style.width='100%';
+    combined.onclick=()=>{
+      if(!window.FlyxjShareFiles)return status.textContent='Update app to V7 for native sharing.';
+      window.FlyxjShareFiles.share(order.id,combined,status);
+    };
+    box.append(combined);
+   }
    box.append(status);
    const choices=[['Share original PDF','pdf'],['Share combined maker image (PNG)','maker']];
    (order.photos||[]).forEach((_,i)=>choices.push(['Share reference photo '+(i+1),'photo',i]));
