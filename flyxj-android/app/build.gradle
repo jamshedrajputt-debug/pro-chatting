@@ -20,7 +20,11 @@ android {
     buildTypes {
         release {
             minifyEnabled false
-            signingConfig signingConfigs.flyxjRelease
+            // Only sign inside CI when private key secrets are configured.
+            // Otherwise produce an unsigned release APK for secure offline signing.
+            if (System.getenv('FLYXJ_KEYSTORE_PATH')) {
+                signingConfig signingConfigs.flyxjRelease
+            }
         }
     }
     compileOptions {
