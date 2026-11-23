@@ -6,6 +6,8 @@ on:
     paths:
       - 'flyxj-android/**'
       - '.github/workflows/flyxj-android-apk.yml'
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 jobs:
   build:
