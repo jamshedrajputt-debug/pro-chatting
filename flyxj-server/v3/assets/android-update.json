@@ -1,6 +1,6 @@
 {
-  "version": 6,
-  "apk": "https://github.com/jamshedrajputt-debug/pro-chatting/releases/download/flyxj-android-v6/signed-app.apk",
-  "release": "https://github.com/jamshedrajputt-debug/pro-chatting/releases/tag/flyxj-android-v6",
-  "sha256": "c95718c67096cdedc2ff63a7583c50603f1416b513709b3982212e7753472604"
+  "version": 7,
+  "apk": "https://github.com/jamshedrajputt-debug/pro-chatting/releases/download/flyxj-android-v7/signed-app.apk",
+  "release": "https://github.com/jamshedrajputt-debug/pro-chatting/releases/tag/flyxj-android-v7",
+  "sha256": "90c52ab7af69bf3c3c655fed7f8b21c68546e3d18d97b7efedd5097fc70d1f50"
 }
