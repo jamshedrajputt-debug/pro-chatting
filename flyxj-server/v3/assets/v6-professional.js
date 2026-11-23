@@ -180,6 +180,27 @@
   host.append(n('h3','','Production assignment'),n('p','v6-muted','Assigned to: '+(o.assigned_to||'Unassigned')));
   if(getUser()?.role==='staff'){
    const btn=n('button','v6-small-primary','Change assignment');btn.type='button';btn.onclick=()=>window.flyxjV6Assign(o);host.append(btn);
+   let wa=$v('v6WhatsAppStatus');
+   if(!wa){wa=n('div','v6-whatsapp-card');wa.id='v6WhatsAppStatus';host.append(wa)}
+   const caption=n('strong','','WhatsApp file delivery');const status=n('p','v6-muted','Checking Meta media status…');
+   const send=n('button','v6-small-outline','Send / retry order files');
+   send.type='button';send.onclick=async()=>{
+     if(!confirm('Send PDF and reference photos using the connected WhatsApp Business account?'))return;
+     send.disabled=true;
+     try{
+       const result=await api('/api/orders/'+o.id+'/whatsapp/send-files',{method:'POST',body:JSON.stringify({})});
+       status.textContent='WhatsApp: '+(result.status||'queued').replaceAll('_',' ')+' · '+(result.accepted_files||0)+' / '+(result.total_files||0)+' files accepted by Meta. Delivery to recipient is not confirmed.';
+       showToast('WhatsApp media transfer queued. Check status again shortly.');
+     }catch(e){status.textContent=e.message;showToast(e.message,true)}
+     finally{send.disabled=false}
+   };
+   wa.replaceChildren(caption,status,send);
+   api('/api/orders/'+o.id+'/whatsapp').then(result=>{
+     if(!wa.isConnected||state.selected?.id!==o.id)return;
+     const delivery=(result.status||'unknown').replaceAll('_',' ');
+     status.textContent='WhatsApp: '+delivery+' · '+(result.accepted_files||0)+' / '+(result.total_files||0)+' files accepted by Meta. Delivery to recipient is not confirmed.';
+     send.disabled=result.status==='accepted_by_provider';
+   }).catch(()=>{status.textContent='WhatsApp status unavailable. Check the connected Meta Business account.'});
   }
  };
  function secureWhatsApp(){
