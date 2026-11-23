@@ -37,6 +37,11 @@ public final class ShareBridge {
     }
 
     @JavascriptInterface public void shareFiles(String json) {
+        // JavaScriptInterface invokes off the UI thread: do WebView and chooser work on main.
+        main.post(() -> handleShare(json));
+    }
+
+    private void handleShare(String json) {
         if (busy) { notifyUser("Share already preparing"); return; }
         if (json == null || json.length() > 3000) { notifyUser("Invalid share request"); return; }
         String current = webView.getUrl();
