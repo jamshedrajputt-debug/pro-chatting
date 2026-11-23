@@ -1,0 +1,33 @@
+name: FlyXJ V6 compatibility checks
+on:
+  push:
+    branches:
+      - flyxj-v6-professional-20261123
+  workflow_dispatch:
+jobs:
+  node-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install test dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Validate V6 and existing app syntax plus safety contracts
+        run: node tests/flyxj-v6-check.js
+      - name: Run isolated authenticated API integration tests
+        run: node tests/flyxj-v6-integration.js
+      - name: Generate branded V6 PDF layout sample
+        run: |
+          node - <<'NODE'
+          const fs=require('fs');const create=require('./flyxj-server/v3/pdf.js');
+          const pdf=create(['FLYXJ | ORDER STUDIO','PRODUCTION & COST REPORT','NOT A TAX INVOICE','','Order: FXJ-2026-000001','Dress: Custom leather jacket','Assigned staff: maker','Priority: urgent  Deadline: 2026-12-01','Customer: usera','Selling price: 12000 PKR','Making cost: 4500 PKR','Shipping cost: 1000 PKR','Gross profit: 6500 PKR','Created: 2026-11-23']);
+          if(pdf.length<500||!pdf.toString('ascii',0,8).startsWith('%PDF-1.4'))throw Error('Invalid generated PDF');
+          fs.writeFileSync('FLYXJ-V6-branded-report-test.pdf',pdf);
+          NODE
+      - name: Upload V6 PDF visual QA sample
+        uses: actions/upload-artifact@v4
+        with:
+          name: FLYXJ-V6-Branded-PDF-Preview
+          path: FLYXJ-V6-branded-report-test.pdf
