@@ -36,6 +36,13 @@ public final class UpdateManager {
     private final Handler ui = new Handler(Looper.getMainLooper());
     private long downloadId = -1L;
     private BroadcastReceiver receiver;
+    private Uri pendingInstallUri;
+    public void onResume(){
+        if(pendingInstallUri!=null && (Build.VERSION.SDK_INT<26 || activity.getPackageManager().canRequestPackageInstalls())){
+            Uri ready=pendingInstallUri;pendingInstallUri=null;
+            install(ready);
+        }
+    }
 
     public UpdateManager(Activity activity) { this.activity = activity; }
 
@@ -122,7 +129,7 @@ public final class UpdateManager {
             };
             IntentFilter filter=new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE);
             if(Build.VERSION.SDK_INT>=33)
-                activity.registerReceiver(receiver,filter,Context.RECEIVER_NOT_EXPORTED);
+                activity.registerReceiver(receiver,filter,Context.RECEIVER_EXPORTED);
             else activity.registerReceiver(receiver,filter);
         }catch(Exception ex){
             Toast.makeText(activity,"Update error: "+ex.getMessage(),Toast.LENGTH_LONG).show();
@@ -131,9 +138,10 @@ public final class UpdateManager {
     private void install(Uri apkUri){
         if(apkUri==null){Toast.makeText(activity,"Update file not found",Toast.LENGTH_LONG).show();return;}
         if(Build.VERSION.SDK_INT>=26 && !activity.getPackageManager().canRequestPackageInstalls()){
+            pendingInstallUri=apkUri;
             new AlertDialog.Builder(activity)
               .setTitle("Allow FLYXJ app updates")
-              .setMessage("Android requires you to allow installing updates from this app once. After enabling it, return to Downloads and open the downloaded FlyXJ APK.")
+              .setMessage("Android requires you to allow installing updates from this app once. Enable it and return to FlyXJ to continue installing the downloaded update.")
               .setPositiveButton("Open Settings",(d,w)->{
                   Intent settings=new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
                       Uri.parse("package:"+activity.getPackageName()));
