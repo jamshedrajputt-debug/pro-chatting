@@ -1,0 +1,16 @@
+name: FlyXJ V6 compatibility checks
+on:
+  push:
+    branches:
+      - flyxj-v6-professional-20261123
+  workflow_dispatch:
+jobs:
+  node-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate V6 and existing app syntax plus safety contracts
+        run: node tests/flyxj-v6-check.js
