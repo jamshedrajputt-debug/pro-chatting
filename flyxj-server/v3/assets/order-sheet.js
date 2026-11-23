@@ -6,14 +6,11 @@
   let order=null,viewIndex=0,allPhotos=false;
   const mobileDownloads={maker:null,pdf:null};
   const isAndroid=/Android/i.test(navigator.userAgent);
-  // Android intent URLs ask the operating system to open the short-lived,
-  // HTTPS attachment in Chrome. Fallback is the same download URL.
+  // A valid HTTPS file URL works in regular browsers and never produces
+  // Android's unsupported intent:// navigation error. Browsers decide
+  // whether an embedded WebView is allowed to hand off a file to Downloads.
   function downloadHref(url){
-    const full=new URL(url,location.origin);
-    if(!isAndroid)return full.href;
-    const fallback=encodeURIComponent(full.href);
-    return 'intent://'+full.host+full.pathname+full.search+
-      '#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url='+fallback+';end';
+    return new URL(url,location.origin).href;
   }
   function el(tag,className,text){
     const n=document.createElement(tag);
@@ -81,7 +78,7 @@
         if(viewIndex!==index)return;
         download.href=downloadHref(file.url);
         if(isAndroid)download.removeAttribute('download');else download.download=file.filename;
-        download.textContent=isAndroid?'↓ Open Chrome & Download':'↓ Download photo';
+        download.textContent='↓ Download photo';
       }).catch(error=>{if(viewIndex===index)download.textContent='Photo unavailable';});
     }
   }
@@ -190,14 +187,13 @@
     const copy=$(kind==='maker'?'makerCopy':'pdfCopy');
     mobileDownloads[kind]=file;
     anchor.href=downloadHref(file.url);
-    if(isAndroid)anchor.removeAttribute('download');
-    else anchor.download=file.filename;
-    anchor.target='_self';
+    anchor.download=file.filename;
+    anchor.target='_blank';
     anchor.rel='noopener noreferrer';
     anchor.setAttribute('aria-disabled','false');
     anchor.textContent=kind==='maker'?'↓ Download Maker Image (PNG)':'↓ Download Original PDF';
     const name=kind==='maker'?'combined image':'PDF';
-    status.textContent=isAndroid?'Ready — tap Download to open Chrome and start saving your '+name+'.':'Ready — tap Download to save your '+name+'.';
+    status.textContent='Ready — tap Download. If your app blocks file downloads, use Open in Browser below (no copy/paste).';
     copy.classList.add('hidden');
     if(kind==='maker'){
       $('makerBackup').classList.remove('hidden');
@@ -229,7 +225,7 @@
         readyDownload('maker',file,csrf);
         if(new URLSearchParams(location.search).has('download')){
           $('makerDownload').focus();
-          $('makerStatus').textContent='Maker image ready — tap the blue button. Chrome will open and download your PNG directly.';
+          $('makerStatus').textContent='Maker image ready — tap Download. No unsupported Chrome redirect.';
         }
       }).catch(e=>{$('makerStatus').textContent=e.message}));
     }else $('makerDownload').closest('.simple-maker')?.classList.add('hidden');
