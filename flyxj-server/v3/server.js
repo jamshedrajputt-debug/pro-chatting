@@ -90,6 +90,7 @@ const text=(s,max=200)=>typeof s==='string'?s.trim().slice(0,max):'';
 const ref=o=>o.reference || ('FXJ-'+String(o.id).padStart(6,'0'));
 const canView=(u,o)=>u.role==='staff'||(o.customer||o.ordered_by)===u.username;
 const canActive=(u,o)=>canView(u,o)&&!o.deleted_at;
+const isOwner=u=>u.role==='staff'&&u.username===users[1].name;
 const shipDefault=()=>({courier:'',tracking_id:'',tracking_url:'',updated_at:null});
 const financeDefault=()=>({sale_pkr:null,making_pkr:null,shipping_pkr:null,fx_pkr_per_usd:null,updated_at:null,recognized_at:null});
 const validEarning=n=>n!==null&&n!==undefined&&n!==''&&Number.isFinite(Number(n))&&Number(n)>=0&&Number(n)<=1e9;
@@ -179,6 +180,7 @@ function publicOrder(o) {
     shipping:o.shipping||shipDefault(),
     finance:o.finance||financeDefault(),customer_earning_pkr:validEarning(o.customer_earning_pkr)?Number(o.customer_earning_pkr):null,
     measurements:o.measurements||{},expected_date:o.expected_date||'',priority:o.priority||'normal',
+    assigned_to:o.assigned_to||'',
     approval:o.approval||{status:'not_requested',note:'',updated_at:null},
     pdf_url:o.pdf_file?'/api/orders/'+o.id+'/pdf':null,
     finished_photos:(o.finished_files||[]).map((_,i)=>'/api/orders/'+o.id+'/finished/'+i),
@@ -265,6 +267,19 @@ app.get('/api/events',auth,(req,res)=>{
 app.get('/api/dashboard',auth,(req,res)=>{
   const allowed=orders.filter(o=>canActive(req.user,o));
   res.json({stats:slimStats(allowed),recent:allowed.slice(-5).reverse().map(publicOrder),statuses:STATUSES});
+});
+app.get('/api/operations',auth,(req,res)=>{
+ const available=orders.filter(o=>canActive(req.user,o));
+ const today=now().slice(0,10);
+ const open=available.filter(o=>!['completed','delivered','cancelled'].includes(o.status));
+ const overdue=open.filter(o=>o.expected_date&&o.expected_date<today);
+ const dueSoon=open.filter(o=>o.expected_date&&o.expected_date>=today&&o.expected_date<=new Date(Date.now()+3*86400000).toISOString().slice(0,10));
+ const urgent=open.filter(o=>o.priority==='urgent'||o.priority==='high');
+ res.set('Cache-Control','no-store');
+ res.json({active:open.length,overdue:overdue.length,due_soon:dueSoon.length,priority:urgent.length,
+  unassigned:req.user.role==='staff'?open.filter(o=>!o.assigned_to).length:null,
+  storage:persistent.enabled?'persistent':'ephemeral',
+  recent:open.slice(-6).reverse().map(o=>({id:o.id,reference:ref(o),title:o.title,expected_date:o.expected_date||'',priority:o.priority||'normal',assigned_to:o.assigned_to||'',status:o.status}))});
 });
 app.get('/api/orders',auth,(req,res)=>{
   const allowed=orders.filter(o=>canActive(req.user,o));
@@ -494,6 +509,21 @@ app.post('/api/orders/:id/whatsapp/send-files',auth,csrf,(req,res)=>{
  if(result.status==='not_connected')return err(res,503,'WhatsApp Business media templates not connected. Configure Meta sender/token and approved image/document templates.');
  return res.status(result.status==='queued'?202:200).json({...result,...mediaStatus(o)});
 });
+// Staff assignments are durable order fields, with conflict control and audit trail.
+app.patch('/api/orders/:id/assign',auth,csrf,async(req,res)=>{
+ if(req.user.role!=='staff')return err(res,403,'Staff only');
+ const existing=loadOrder(req,res);if(!existing)return;
+ if(req.body?.updated_at!==existing.updated_at)return err(res,409,'Order changed. Refresh and try again.');
+ const assigned=text(req.body?.assigned_to,30);
+ const allowed=[users[1].name,...additionalStaff.filter(u=>u.active!==false).map(u=>u.name)];
+ if(assigned&&!allowed.includes(assigned))return err(res,400,'Select an active staff account');
+ const previous=existing;
+ const next={...existing,assigned_to:assigned};
+ history(next,req.user.username,assigned?'Assigned to '+assigned:'Staff assignment cleared','assignment');
+ const index=orders.indexOf(existing);orders[index]=next;
+ try{await save();pushOrder(next,'assignment','Production assignment updated');res.json({order:publicOrder(next)})}
+ catch(e){orders[index]=previous;err(res,503,'Could not save staff assignment')}
+});
 app.get('/api/orders/:id',auth,(req,res)=>{
   const o=loadOrder(req,res);if(o)res.json({order:publicOrder(o)});
 });
@@ -555,7 +585,7 @@ app.post('/api/orders',auth,csrf,async(req,res)=>{
       fs.writeFileSync(path.join(PHOTO_DIR,filename),p.bytes,{flag:'wx'});
       image_files.push(filename);
     }
-    const o={id,reference,title,colour,size,shoe_size,customer_earning_pkr:Math.round(Number(v.customer_earning_pkr)*100)/100,quantity:qty,comments,status:'pending',
+    const o={id,reference,title,colour,size,shoe_size,assigned_to:'',customer_earning_pkr:Math.round(Number(v.customer_earning_pkr)*100)/100,quantity:qty,comments,status:'pending',
       pdf_file:pdfName,measurements,finished_files:[],finance:financeDefault(),
       approval:{status:'not_requested',note:'',updated_at:null},
       expected_date:/^\d{4}-\d{2}-\d{2}$/.test(v.expected_date||'')?v.expected_date:'',
@@ -964,10 +994,10 @@ app.post('/api/chat/read',auth,csrf,async(req,res)=>{
 });
 app.get('/api/staff',auth,(req,res)=>{
  if(req.user.role!=='staff')return err(res,403,'Staff only');
- res.json({staff:[{name:users[1].name,active:true},...additionalStaff.map(u=>({name:u.name,active:u.active!==false}))]});
+ res.json({can_manage:isOwner(req.user),staff:[{name:users[1].name,active:true},...additionalStaff.map(u=>({name:u.name,active:u.active!==false}))]});
 });
 app.post('/api/staff',auth,csrf,async(req,res)=>{
- if(req.user.role!=='staff')return err(res,403,'Staff only');
+ if(!isOwner(req.user))return err(res,403,'Owner account required');
  const username=text(req.body?.username,30),password=req.body?.password;
  if(!/^[a-zA-Z0-9_-]{3,30}$/.test(username)||typeof password!=='string'||password.length<12||password.length>200)return err(res,400,'Use a 3-30 character username and 12+ character password');
  if([...users,...additionalStaff].some(u=>u.name.toLowerCase()===username.toLowerCase()))return err(res,409,'Username already exists');
@@ -979,12 +1009,15 @@ app.post('/api/staff',auth,csrf,async(req,res)=>{
 
 
 app.get('/api/orders/:id/summary.pdf',auth,(req,res)=>{
+ if(req.user.role!=='staff')return err(res,403,'Staff only: cost and profit report');
  const o=loadOrder(req,res);if(!o)return;
  const f=financeRow(o),shipping=o.shipping||{};
  const fmt=(field,currency)=>f?f[field].toFixed(2)+' '+currency:'Not set';
  const lines=[
- 'FLYXJ ORDER COST SUMMARY','NOT A TAX INVOICE','',
+ 'FLYXJ  |  ORDER STUDIO','PRODUCTION & COST REPORT','NOT A TAX INVOICE','',
  'Order: '+ref(o),'Dress: '+o.title,'Customer: '+(o.customer||o.ordered_by),
+ 'Assigned staff: '+(o.assigned_to||'Unassigned'),
+ 'Priority: '+(o.priority||'normal')+'  Deadline: '+(o.expected_date||'Not set'),
  'Ordered: '+o.created_at,'Size: '+o.size+'  Colour: '+o.colour+'  Quantity: '+o.quantity,
  'Status: '+o.status,'Courier: '+(shipping.courier||'Not assigned'),
  'Tracking ID: '+(shipping.tracking_id||'Not assigned'),'',
@@ -1005,7 +1038,7 @@ app.get('/api/orders/:id/summary.pdf',auth,(req,res)=>{
 
 // Free-hosting backup and recovery. Export sensitive private data only to authenticated staff.
 app.get('/api/backup.json',auth,async(req,res)=>{
- if(req.user.role!=='staff')return err(res,403,'Staff only');
+ if(!isOwner(req.user))return err(res,403,'Owner account required');
  const collect=async(dir,names,category)=>Promise.all([...new Set(names.filter(Boolean))].map(async name=>{
   try{
    const bytes=await persistent.retrieveOrLocal(dir,name,category);
@@ -1021,7 +1054,7 @@ app.get('/api/backup.json',auth,async(req,res)=>{
  res.json(archive);
 });
 app.post('/api/restore',auth,csrf,async(req,res)=>{
- if(req.user.role!=='staff')return err(res,403,'Staff only');
+ if(!isOwner(req.user))return err(res,403,'Owner account required');
  if(req.get('x-confirm-restore')!=='REPLACE_ALL_DATA')return err(res,400,'Restore requires explicit confirmation');
  const b=req.body;
  if(b?.format!=='flyxj-backup-v3'||!Array.isArray(b.orders)||!Array.isArray(b.directChat)||!Array.isArray(b.additionalStaff)||
