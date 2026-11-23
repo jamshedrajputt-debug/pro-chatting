@@ -5,10 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#122143">
 <meta name="description" content="FlyXJ order operations dashboard: dress orders, photos and shipment tracking.">
-<title>FLYXJ · Complete Order & Profit Dashboard</title>
+<title>FLYXJ V6 · Professional Order Studio</title>
 <link rel="stylesheet" href="/assets/style.css">
 <link rel="stylesheet" href="/assets/style-v3.css?v=edit-delete-wa-20261122">
 <link rel="stylesheet" href="/assets/order-actions.css?v=edit-delete-wa-2">
+<link rel="stylesheet" href="/assets/v6-professional.css?v=flyxj-v6-20261123">
 <script defer src="/assets/app.js?v=shoe-earning-20261122"></script>
 <script defer src="/assets/android-update.js?v=flyxj-v5-webview-fallback"></script>
 <script defer src="/assets/order-actions.js?v=manual-file-share-20261122"></script>
@@ -16,6 +17,7 @@
 <script defer src="/assets/chat-extra.js?v=androidchat-20261116"></script>
 <script defer src="/assets/finance-extra.js"></script>
 <script defer src="/assets/init-extra.js?v=androidchat-20261116"></script>
+<script defer src="/assets/v6-professional.js?v=flyxj-v6-20261123"></script>
 </head>
 <body>
 <div class="login-shell" id="loginShell">
@@ -55,9 +57,9 @@
       <div class="topbar-breadcrumb">WORKSPACE <span>/</span> <strong id="breadcrumb">Overview</strong></div>
       <div class="topbar-actions"><button class="btn btn-ghost btn-refresh" type="button" id="refreshButton"><span aria-hidden="true">↻</span> Refresh</button><button class="icon-button notification-button" id="notificationButton" type="button" title="Latest updates">♧ <span id="notificationCount" class="notification-count hidden">0</span></button><span class="top-divider"></span><span class="user-avatar" id="userAvatar">FX</span><span class="user-details"><b id="userName">User</b><small id="userRole">Customer</small></span></div></header>
     <main class="page-content">
-      <div class="page-intro"><div><div class="eyebrow dark">FLYXJ CONTROL CENTRE</div><h1 id="viewHeading">Overview</h1><p class="muted" id="viewSubtitle">Your orders, progress and updates in one place.</p></div>
+      <div class="page-intro"><div><div class="eyebrow dark">FLYXJ V6 · PRODUCTION CONTROL CENTRE</div><h1 id="viewHeading">Overview</h1><p class="muted" id="viewSubtitle">Your orders, progress and updates in one place.</p></div>
         <button type="button" class="btn btn-primary" id="addOrderButton"><span class="plus">+</span> New order</button></div>
-      <div class="notice"><span class="notice-icon">!</span> <span><strong>Free hosting / test environment.</strong> Order records and uploaded photos can be lost on restart. Keep your own backup of important orders and photos.</span></div>
+      <div class="notice"><span class="notice-icon">!</span> <span><strong>Data protection.</strong> Order records are stored in your configured private storage when connected. Keep regular encrypted backups; check the live storage status below.</span></div>
       <section class="stats-grid" id="statsGrid" aria-label="Order statistics">
         <div class="stat-card"><div class="stat-label">Total orders <span class="stat-icon indigo">▣</span></div><strong id="statTotal">—</strong><small>All submitted orders</small></div>
         <div class="stat-card"><div class="stat-label">Active orders <span class="stat-icon gold">◉</span></div><strong id="statActive">—</strong><small>Currently being processed</small></div>
