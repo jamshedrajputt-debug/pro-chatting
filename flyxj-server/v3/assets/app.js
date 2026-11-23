@@ -80,13 +80,14 @@ function connectTrackingEvents(){
   if(!state.me||typeof EventSource==='undefined')return;
   const events=new EventSource('/api/events');
   state.events=events;
-  for(const eventName of ['order','status','approval','finance','photo','shipping','message','return']){
+  for(const eventName of ['order','status','approval','finance','photo','shipping','message','return','assignment']){
     events.addEventListener(eventName,ev=>{
       if(state.events!==events)return;
       try{const payload=JSON.parse(ev.data);
         if(eventName==='order'||eventName==='status'||eventName==='approval'||eventName==='shipping'){
           alertNotification((payload.description||'Order updated')+' · '+(payload.reference||''));
         }
+        if(typeof window.flyxjV6Notify==='function')window.flyxjV6Notify(payload.description||'Order updated',payload.reference||'',eventName);
         refresh({silent:true});if(state.view==='finance')loadFinance();
       }catch(e){}
     });
@@ -98,6 +99,7 @@ function connectTrackingEvents(){
       if(!state.chat.some(x=>x.id===message.id))state.chat.push(message);
       if(message.from!==state.me?.username&&!state.chatOpen){
         state.unread++;updateChatBadge();alertNotification('New direct chat message');
+        if(typeof window.flyxjV6Notify==='function')window.flyxjV6Notify('New direct chat message','', 'message');
       }
       renderDirectChat();
     }catch(e){}
@@ -128,6 +130,7 @@ async function refresh({silent=false}={}){
     state.orders=next;state.stats=dash.stats;
     $('navOrderCount').textContent=state.orders.length;
     renderStats();renderOrders();renderWorkflow();
+    if(typeof window.flyxjV6Refresh==='function')window.flyxjV6Refresh();
     if(state.selected){
       const current=state.orders.find(o=>o.id===state.selected.id);
       if(current)renderDetail(current);
@@ -167,8 +170,21 @@ function filterOrders(){
   if(state.view==='tracking')list=list.filter(o=>o.shipping?.tracking_id||o.return_shipping?.tracking_id||['shipped','delivered'].includes(o.status));
   if(q)list=list.filter(o=>[
     o.reference,o.title,o.customer,o.colour,o.size,o.comments,
-    o.shipping?.tracking_id,o.shipping?.courier,o.return_shipping?.tracking_id
+    o.shipping?.tracking_id,o.shipping?.courier,o.return_shipping?.tracking_id,o.assigned_to
   ].some(v=>String(v||'').toLowerCase().includes(q)));
+  const v6=window.flyxjV6Filters||{};
+  if(v6.priority&&v6.priority!=='all')list=list.filter(o=>o.priority===v6.priority);
+  if(v6.assignee&&v6.assignee!=='all')list=list.filter(o=>v6.assignee==='unassigned'?!o.assigned_to:o.assigned_to===v6.assignee);
+  if(v6.due&&v6.due!=='all'){
+    const today=new Date().toLocaleDateString('en-CA',{timeZone:'Europe/London'});
+    const soon=new Date(Date.now()+3*86400000).toLocaleDateString('en-CA',{timeZone:'Europe/London'});
+    list=list.filter(o=>{
+      const open=!['delivered','completed','cancelled'].includes(o.status);
+      return open&&o.expected_date&&(v6.due==='overdue'?o.expected_date<today:v6.due==='soon'&&o.expected_date>=today&&o.expected_date<=soon);
+    });
+  }
+  if(v6.sort==='deadline')list.sort((a,b)=>(a.expected_date||'9999-99-99').localeCompare(b.expected_date||'9999-99-99'));
+  if(v6.sort==='priority'){const w={urgent:0,high:1,normal:2};list.sort((a,b)=>(w[a.priority]??2)-(w[b.priority]??2));}
   if(state.view==='overview')list=list.slice(0,7);
   return list;
 }
@@ -197,6 +213,10 @@ function renderOrders(){
       maker.title='Download one image with four photos, size and color';
       maker.addEventListener('click',e=>e.stopPropagation());
       actions.append(maker);
+      const assign=node('button','flyxj-v6-inline-assign','Assign');
+      assign.type='button';assign.title='Assign production staff';
+      assign.onclick=e=>{e.stopPropagation();if(window.flyxjV6Assign)window.flyxjV6Assign(o)};
+      actions.append(assign);
     }
     const trigger=node('button','flyxj-actions-trigger','⋯');
     trigger.type='button';trigger.title='Order actions';trigger.setAttribute('aria-label','Order actions');
@@ -359,6 +379,7 @@ function renderHistory(o){
 }
 function renderDetail(o){
   state.selected=o;
+  if(typeof window.flyxjV6Detail==='function')window.flyxjV6Detail(o);
   $('detailRef').textContent=o.reference;
   $('detailTitle').textContent=o.title;
   $('detailMeta').textContent=(o.customer||'Customer')+' · Ordered '+day(o.created_at);
