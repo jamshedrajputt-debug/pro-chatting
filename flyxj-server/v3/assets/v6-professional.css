@@ -75,3 +75,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible{ou
  .flyxj-v6-inline-assign{padding:7px 8px}
 }
 @media(prefers-reduced-motion:reduce){.stat-card,.v6-ops-card,.sidebar-nav .nav-link{transition:none}}
+
+.v6-whatsapp-card{display:flex;flex-direction:column;align-items:flex-start;gap:8px;margin-top:14px;border-top:1px solid #dae5f4;padding-top:14px}
+.v6-whatsapp-card strong{color:#1a3557;font-size:13px}
+.v6-whatsapp-card p{margin:0;line-height:1.5}
