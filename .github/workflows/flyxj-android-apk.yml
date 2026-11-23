@@ -39,13 +39,16 @@ jobs:
           name: FlyXJ-Unsigned-Release-APK
           path: flyxj-android/app/build/outputs/apk/release/app-release-unsigned.apk
           if-no-files-found: error
+      - name: Package official Android APK signing tool
+        run: |
+          mkdir -p signer-tool/lib
+          cp "$ANDROID_HOME/build-tools/35.0.0/apksigner" signer-tool/apksigner
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" signer-tool/lib/apksigner.jar
       - name: Upload official Android apksigner for secure offline signing
         uses: actions/upload-artifact@v4
         with:
           name: Android-APK-Signer-Tool
-          path: |
-            ${{ env.ANDROID_HOME }}/build-tools/35.0.0/apksigner
-            ${{ env.ANDROID_HOME }}/build-tools/35.0.0/lib/apksigner.jar
+          path: signer-tool/
           if-no-files-found: error
       - name: Upload APK
         uses: actions/upload-artifact@v4
