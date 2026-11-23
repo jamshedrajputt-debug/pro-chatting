@@ -9,8 +9,19 @@ android {
         versionCode 4
         versionName '4.0-auto-update'
     }
+    signingConfigs {
+        flyxjRelease {
+            storeFile file(System.getenv('FLYXJ_KEYSTORE_PATH') ?: 'signing-keystore-not-configured.jks')
+            storePassword System.getenv('FLYXJ_STORE_PASSWORD') ?: ''
+            keyAlias System.getenv('FLYXJ_KEY_ALIAS') ?: 'flyxj'
+            keyPassword System.getenv('FLYXJ_KEY_PASSWORD') ?: ''
+        }
+    }
     buildTypes {
-        release { minifyEnabled false }
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.flyxjRelease
+        }
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
