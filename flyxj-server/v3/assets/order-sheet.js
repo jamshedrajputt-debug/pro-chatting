@@ -236,6 +236,11 @@
   async function start(){
     if(!id)return fail('Invalid order link. Return to orders and open a valid order.');
     $('morePhotos').onclick=()=>{allPhotos=!allPhotos;showThumbs()};
+    const combined=$('shareCombinedFiles');
+    if(combined)combined.onclick=()=>{
+      if(!window.FlyxjShareFiles)return $('shareCombinedStatus').textContent='Share feature is loading. Reopen this order.';
+      window.FlyxjShareFiles.share(id,combined,$('shareCombinedStatus'));
+    };
     $('viewerClose').onclick=closePhoto;
     $('viewerDownload').onclick=e=>{
       if($('viewerDownload').getAttribute('href')==='#'){
@@ -275,9 +280,11 @@
         // Staff role must be verified, never inferred from the page URL.
         api('/api/me').then(me=>{
           if(me.role==='staff'){
+            combined?.closest('.simple-maker')?.classList.remove('hidden');
             waButton.classList.remove('hidden');
             waButton.onclick=()=>actions.share(data.order);
           }else{
+            combined?.closest('.simple-maker')?.classList.add('hidden');
             waButton.classList.add('hidden');
             waButton.onclick=null;
           }
