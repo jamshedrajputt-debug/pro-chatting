@@ -96,22 +96,23 @@ const financeDefault=()=>({sale_pkr:null,making_pkr:null,shipping_pkr:null,fx_pk
 const validEarning=n=>n!==null&&n!==undefined&&n!==''&&Number.isFinite(Number(n))&&Number(n)>=0&&Number(n)<=1e9;
 const isShipped=o=>['shipped','delivered','completed'].includes(o.status);
 function validFinance(f) {
- return !!f&&['sale_pkr','making_pkr','shipping_pkr','fx_pkr_per_usd'].every(k=>f[k]!=null&&String(f[k]).trim()!==''&&Number.isFinite(Number(f[k]))&&Number(f[k])>=0&&Number(f[k])<=1e9)&&Number(f.sale_pkr)>0&&Number(f.fx_pkr_per_usd)>0;
+ return !!f&&['making_pkr','shipping_pkr','fx_pkr_per_usd'].every(k=>f[k]!=null&&String(f[k]).trim()!==''&&Number.isFinite(Number(f[k]))&&Number(f[k])>=0&&Number(f[k])<=1e9)&&Number(f.fx_pkr_per_usd)>0;
 }
 function normalizeFinance(body,old){
  if(!validFinance(body))return null;
  const f={updated_at:now(),recognized_at:old?.recognized_at||null};
- for(const k of ['sale_pkr','making_pkr','shipping_pkr','fx_pkr_per_usd'])f[k]=Math.round(Number(body[k])*100)/100;
+ for(const k of ['making_pkr','shipping_pkr','fx_pkr_per_usd'])f[k]=Math.round(Number(body[k])*100)/100;
+ // Retain legacy selling prices for history, but they have no role in profit.
+ f.sale_pkr=old?.sale_pkr??null;
  return f;
 }
 function financeRow(o){
- const f=o.finance;if(!validFinance(f))return null;
+ const f=o.finance;if(!validFinance(f)||!validEarning(o.customer_earning_pkr))return null;
  const round=n=>Math.round(n*100)/100, fx=Number(f.fx_pkr_per_usd);
- const sale=Number(f.sale_pkr),making=Number(f.making_pkr),shipping=Number(f.shipping_pkr);
+ const sale=f.sale_pkr==null?0:Number(f.sale_pkr),making=Number(f.making_pkr),shipping=Number(f.shipping_pkr);
  const earning=validEarning(o.customer_earning_pkr)?Number(o.customer_earning_pkr):0;
- // User A earning is the revenue basis, not an expense. Fallback to selling
- // price only for older orders without a separately entered User A earning.
- const revenue=validEarning(o.customer_earning_pkr)?earning:sale;
+ // Only User A net earning (after Etsy fees) is revenue, never list selling price.
+ const revenue=earning;
  const cost=round(making+shipping),profit=round(revenue-cost);
  const usd=n=>round(n/fx);
  return {id:o.id,reference:ref(o),title:o.title,quantity:o.quantity||1,status:o.status,
@@ -642,7 +643,7 @@ app.patch('/api/orders/:id/status',auth,csrf,async(req,res)=>{
   }
   if(req.body?.finance){
     const f=normalizeFinance(req.body.finance,o.finance);
-    if(!f)return err(res,400,'Enter selling price, making cost, shipping cost in PKR, and PKR/USD rate');
+    if(!f)return err(res,400,'Enter making cost, shipping cost in PKR, and PKR/USD rate');
     nextFinance=f;
   }
   const nextShippedQuantity=req.body?.shipped_quantity===undefined
@@ -651,7 +652,7 @@ app.patch('/api/orders/:id/status',auth,csrf,async(req,res)=>{
   if(!Number.isInteger(nextShippedQuantity)||nextShippedQuantity<0||nextShippedQuantity>o.quantity)
     return err(res,400,'Shipped quantity must be between 0 and ordered quantity');
   if(['shipped','delivered','completed'].includes(status)&&(!validFinance(nextFinance)||!nextShipping?.courier||!nextShipping?.tracking_id))
-    return err(res,400,'Shipping requires courier, tracking ID, selling price, making cost, shipping cost and PKR per USD rate');
+    return err(res,400,'Shipping requires courier, tracking ID, making cost, shipping cost and PKR per USD rate');
   if(['cutting','stitching'].includes(status)&&o.pdf_file&&o.approval?.status!=='approved')
     return err(res,400,'Customer approval required before cutting or stitching');
   o.shipping=nextShipping;o.finance=nextFinance;
@@ -905,7 +906,7 @@ app.patch('/api/orders/:id/finance',auth,csrf,async(req,res)=>{
  if(req.user.role!=='staff')return err(res,403,'Staff only');
  const o=loadOrder(req,res);if(!o)return;
  const f=normalizeFinance(req.body,o.finance);
- if(!f)return err(res,400,'Enter sale, making, shipping PKR prices and exchange rate PKR/USD');
+ if(!f)return err(res,400,'Enter making and shipping PKR costs and PKR/USD rate');
  if(isShipped(o)&&!f.recognized_at)f.recognized_at=now();
  o.finance=f;
  history(o,req.user.username,'Sale/making/shipping costs updated','finance');
@@ -961,7 +962,7 @@ function financialReport(req){
    all_rows:allRows,all_count:allRows.length,all_totals:estimatedTotals,
    all_weekly:periods('weekly',10,allPriced),all_monthly:periods('monthly',12,allPriced),
    pending_count:pendingCount,
-   disclaimer:'Gross profit = User A earning (when entered, otherwise selling price) minus making and shipping costs. User A earning is NOT deducted a second time. All Priced includes ESTIMATES for orders not shipped; Shipped Only shows recognised shipments. Excludes platform fees, taxes, refunds and other expenses.'};
+   disclaimer:'Real profit = User A net earning after Etsy fees minus making and shipping costs. Selling price is excluded entirely. All Priced includes ESTIMATES for unshipped orders; Shipped Only shows recognised shipments. Excludes other unentered expenses, taxes and refunds.'};
 }
 app.get('/api/finance',auth,(req,res)=>res.json(financialReport(req)));
 app.get('/api/finance.csv',auth,(req,res)=>{
@@ -1048,10 +1049,10 @@ app.get('/api/orders/:id/summary.pdf',auth,(req,res)=>{
  'Ordered: '+o.created_at,'Size: '+o.size+'  Colour: '+o.colour+'  Quantity: '+o.quantity,
  'Status: '+o.status,'Courier: '+(shipping.courier||'Not assigned'),
  'Tracking ID: '+(shipping.tracking_id||'Not assigned'),'',
- 'Selling price: '+fmt('sale_pkr','PKR'),'Making cost: '+fmt('making_pkr','PKR'),
+ 'User A net earning: '+fmt('customer_earning_pkr','PKR'),'Making cost: '+fmt('making_pkr','PKR'),
  'Shipping cost: '+fmt('shipping_pkr','PKR'),'Total cost: '+fmt('cost_pkr','PKR'),
  'Gross profit: '+fmt('profit_pkr','PKR'),'',
- 'Selling price: '+fmt('sale_usd','USD'),'Making cost: '+fmt('making_usd','USD'),
+ 'User A net earning: '+fmt('customer_earning_usd','USD'),'Making cost: '+fmt('making_usd','USD'),
  'Shipping cost: '+fmt('shipping_usd','USD'),'Total cost: '+fmt('cost_usd','USD'),
  'Gross profit: '+fmt('profit_usd','USD'),
  'PKR per USD: '+(f?f.fx_pkr_per_usd:'Not set'),'',
