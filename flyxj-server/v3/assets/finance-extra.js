@@ -15,11 +15,11 @@ function renderFinance(){
  show('fSalesPkr',totals.income_pkr);show('fSalesUsd',totals.income_usd,'USD');
  show('fCostPkr',totals.cost_pkr);show('fCostUsd',totals.cost_usd,'USD');
  show('fProfitPkr',totals.profit_pkr);show('fProfitUsd',totals.profit_usd,'USD');
- $('financeCount').textContent=all?(f.all_count||0)+' priced orders · '+(f.pending_count||0)+' estimated / not shipped':(f.count||0)+' shipped order(s) · recognised';
+ $('financeCount').textContent=all?(f.all_count||0)+' costed orders · '+(f.pending_count||0)+' estimated / not shipped':(f.count||0)+' shipped order(s) · recognised';
  $('financeDisclaimer').textContent=(all?'ESTIMATED TOTALS include orders not yet shipped. Do not treat them as realised profit. ':'Recognised orders only. ')+(f.disclaimer||'Gross profit excludes other expenses.');
  const tbody=$('financeRows');tbody.replaceChildren();
  if(!selectedRows.length){
-  const tr=node('tr'),td=node('td','muted','No orders with complete sale, making, shipping and FX figures yet.');td.colSpan=9;tr.append(td);tbody.append(tr);
+  const tr=node('tr'),td=node('td','muted','No orders with User A net earning, making, shipping and FX figures yet.');td.colSpan=9;tr.append(td);tbody.append(tr);
  }
  for(const r of selectedRows){
   const tr=node('tr');tr.dataset.id=r.id;tr.className='finance-order-row';
@@ -27,7 +27,7 @@ function renderFinance(){
   const date=node('td','',day(r.date));
   const track=node('td');track.append(node('b','',r.courier||'—'),node('div','tiny muted',r.tracking_id||'—'));
   tr.append(first,date,track);
-  for(const [p,u] of [['sale_pkr','sale_usd'],['making_pkr','making_usd'],['shipping_pkr','shipping_usd'],['cost_pkr','cost_usd'],['profit_pkr','profit_usd'],['cumulative_profit_pkr','cumulative_profit_usd']]){
+  for(const [p,u] of [['income_pkr','income_usd'],['making_pkr','making_usd'],['shipping_pkr','shipping_usd'],['cost_pkr','cost_usd'],['profit_pkr','profit_usd'],['cumulative_profit_pkr','cumulative_profit_usd']]){
    const td=node('td');td.append(node('b','',formatAmount(r[p])),node('div','tiny muted',formatAmount(r[u],'USD')));
    if(p==='profit_pkr'||p==='cumulative_profit_pkr')td.classList.add(r[p]<0?'negative-profit':'positive-profit');
    tr.append(td);
@@ -45,7 +45,7 @@ function drawFinanceChart(periods){
  const ns='http://www.w3.org/2000/svg',width=850,height=320,left=69,right=22,top=24,bottom=58;
  const widthPlot=width-left-right,heightPlot=height-top-bottom;
  const svg=document.createElementNS(ns,'svg');svg.setAttribute('viewBox','0 0 '+width+' '+height);
- svg.setAttribute('role','img');svg.setAttribute('aria-label','Weekly or monthly sales cost and gross profit chart');
+ svg.setAttribute('role','img');svg.setAttribute('aria-label','Weekly or monthly net earning, costs and real profit chart');
  svg.style.width='100%';svg.style.height='auto';
  const types=[{key:'income_pkr',color:'#4a6ec4',name:'Income'},{key:'making_pkr',color:'#dc9e42',name:'Making + shipping',other:'shipping_pkr'},
  {key:'profit_pkr',color:'#219972',name:'Gross profit'},{key:'cumulative_profit_pkr',color:'#845ec8',name:'Cumulative profit'}];
