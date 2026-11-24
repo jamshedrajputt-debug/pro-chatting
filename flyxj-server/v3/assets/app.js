@@ -424,6 +424,7 @@ function renderDetail(o){
     gallery.append(img);
   }
   renderShipping(o);renderMessages(o);renderHistory(o);renderExtraDetails(o);
+  window.FlyxjDashboardMoney?.init(o);
   const earning=$('customerEarningEdit');if(earning)earning.value=o.customer_earning_pkr??0;
   if(state.me.role==='staff'){
     $('detailStatusSelect').value=o.status;
@@ -524,7 +525,9 @@ async function init(){
   $('earningForm').onsubmit=async e=>{
     e.preventDefault();
     if(state.me?.role!=='customer')return toast('Only User A can edit earning',true);
-    await saveAndRefresh('/customer-earning','PATCH',{customer_earning_pkr:$('customerEarningEdit').value},'User A earning saved for User B');
+    const earning=window.FlyxjDashboardMoney?.earning();
+    if(!earning)return toast('Enter valid net earning and order FX rate',true);
+    await saveAndRefresh('/customer-earning','PATCH',earning,'User A net Etsy earning saved');
   };
   $('statusForm').onsubmit=async e=>{
     e.preventDefault();
