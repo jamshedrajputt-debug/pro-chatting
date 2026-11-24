@@ -65,7 +65,7 @@ jobs:
           retention-days: 14
 
   web_patch:
-    name: Automatically repair compatible web dependency vulnerabilities
+    name: Automatically repair in-range web dependency vulnerabilities
     needs: web
     runs-on: ubuntu-latest
     permissions:
@@ -80,7 +80,7 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-      - name: Apply only non-breaking in-range security dependency patches
+      - name: Apply compatible dependency security patches, then retest
         shell: bash
         run: |
           set -euo pipefail
@@ -91,13 +91,28 @@ jobs:
           node tests/flyxj-v8-check.js
           node tests/flyxj-v6-check.js
           node tests/flyxj-v6-integration.js
-      - name: Limit unattended release strictly to dependency manifests
+      - name: Restrict unattended deployment to npm manifests
         shell: bash
         run: |
           set -euo pipefail
           if ! git diff --quiet; then
             git diff --name-only
-            if git diff --name-only | grep -Ev '^(package-lock.json|package.json)
+            if git diff --name-only | grep -Ev '^(package-lock.json|package.json)$'; then
+              echo "::error::Unexpected app code changes; no auto deployment"
+              exit 1
+            fi
+            git config user.name "flyxj-maintenance[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add package.json package-lock.json
+            git commit -m "chore(flyxj): automated verified weekly npm security patches"
+            git push origin HEAD:flyxj-orders-render-free
+            echo "Validated dependency patches pushed; Render auto-deploy enabled"
+          else
+            echo "No dependency changes; production left untouched"
+          fi
+
+  android:
+    name: Android APK build and signing/update guard
     runs-on: ubuntu-latest
     steps:
       - name: Checkout FLYXJ Android release branch
@@ -154,87 +169,7 @@ jobs:
         run: |
           set -euo pipefail
           TITLE="FLYXJ weekly maintenance requires attention"
-          BODY=$(printf 'Weekly automated checks found a problem.\n\nWeb: %s\nAndroid: %s\n\nWorkflow log: %s\n\nNo production changes or Android APK were auto-released. Review and repair before deploying.\n' "$WEB" "$PATCH" "$ANDROID" "$RUN_URL")
-          EXISTING=$(gh issue list --repo "$GH_REPO" --state open --search "$TITLE in:title" --json number,title --jq '.[] | select(.title=="FLYXJ weekly maintenance requires attention") | .number' | head -1)
-          if [ -n "$EXISTING" ]; then
-            gh issue comment "$EXISTING" --repo "$GH_REPO" --body "$BODY"
-          else
-            gh issue create --repo "$GH_REPO" --title "$TITLE" --body "$BODY"
-          fi
-; then
-              echo "::error::Unexpected application changes: no automatic release"
-              exit 1
-            fi
-            git diff -- package.json package-lock.json > /tmp/flyxj-weekly-deps.patch
-            test -s /tmp/flyxj-weekly-deps.patch
-            git config user.name "flyxj-maintenance[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add package.json package-lock.json
-            git commit -m "chore(flyxj): automated verified weekly in-range dependency security patches"
-            git push origin HEAD:flyxj-orders-render-free
-            echo "Safe dependency patches deployed through Render auto-deploy."
-          else
-            echo "No dependency patch needed. Live branch unchanged."
-          fi
-
-  android:
-    name: Android APK build and signing/update guard
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout FLYXJ Android release branch
-        uses: actions/checkout@v4
-        with:
-          ref: flyxj-android-apk-build-20261123
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-      - uses: android-actions/setup-android@v4
-        with:
-          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
-      - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.10.2'
-      - name: Build unsigned production APK for compatibility
-        working-directory: flyxj-android
-        run: gradle --no-daemon --stacktrace assembleRelease
-      - name: Verify Android package, safe update version, and released signed build
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          test -s flyxj-android/app/build/outputs/apk/release/app-release-unsigned.apk
-          CURRENT=$(grep -Eo 'versionCode[[:space:]]+[0-9]+' flyxj-android/app/build.gradle | head -1 | grep -Eo '[0-9]+')
-          test -n "$CURRENT"
-          RELEASE=$(gh api repos/${{ github.repository }}/releases/latest --jq '.tag_name')
-          RELEASE_VERSION=$(printf '%s' "$RELEASE" | sed -n -E 's/^flyxj-android-v([0-9]+)$/\1/p')
-          test -n "$RELEASE_VERSION"
-          if (( CURRENT < RELEASE_VERSION )); then echo "::error::Android source version behind published release"; exit 1; fi
-          echo "PASS Android source v$CURRENT; signed release $RELEASE; unsigned build compiles"
-          echo "Signed Android APK is never auto-published without the permanent signing key."
-
-  report:
-    name: Alert on maintenance failures
-    needs: [web, android]
-    if: ${{ always() && (needs.web.result == 'failure' || needs.android.result == 'failure') }}
-    runs-on: ubuntu-latest
-    permissions:
-      issues: write
-      contents: read
-    steps:
-      - name: Create or update maintenance alert issue
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          WEB: ${{ needs.web.result }}
-          ANDROID: ${{ needs.android.result }}
-          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          TITLE="FLYXJ weekly maintenance requires attention"
-          BODY=$(printf 'Weekly automated checks found a problem.\n\nWeb: %s\nAndroid: %s\n\nWorkflow log: %s\n\nNo production changes or Android APK were auto-released. Review and repair before deploying.\n' "$WEB" "$ANDROID" "$RUN_URL")
+          BODY=$(printf 'Weekly automated checks found a problem.\n\nWeb: %s\nWeb patch: %s\nAndroid: %s\n\nWorkflow log: %s\n\nReview before changing any production data or Android APK.\n' "$WEB" "$PATCH" "$ANDROID" "$RUN_URL")
           EXISTING=$(gh issue list --repo "$GH_REPO" --state open --search "$TITLE in:title" --json number,title --jq '.[] | select(.title=="FLYXJ weekly maintenance requires attention") | .number' | head -1)
           if [ -n "$EXISTING" ]; then
             gh issue comment "$EXISTING" --repo "$GH_REPO" --body "$BODY"
