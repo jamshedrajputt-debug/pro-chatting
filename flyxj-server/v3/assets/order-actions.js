@@ -23,6 +23,13 @@
    const box=modal('Share actual files to WhatsApp','Choose a file below. Your phone share menu opens: select WhatsApp and recipient. No order links are sent.');
    const status=el('p','flyxj-action-status','Share both real files together, or select one file individually.');
    if(me.role==='staff'){
+    const all=el('button','flyxj-action-primary','↗ Share ALL '+(order.photos||[]).length+' Original Photos (Choose App)');
+    all.type='button';all.style.display='block';all.style.margin='10px 0';all.style.width='100%';
+    all.onclick=()=>{
+      if(!window.FlyxjShareFiles?.shareAllPhotos)return status.textContent='Sharing is unavailable. Reload your FLYXJ app.';
+      window.FlyxjShareFiles.shareAllPhotos(order.id,all,status);
+    };
+    box.append(all);
     const combined=el('button','flyxj-action-primary','↗ Share Combined PNG + PDF (Choose App)');
     combined.type='button';combined.style.display='block';combined.style.margin='10px 0';combined.style.width='100%';
     combined.onclick=()=>{

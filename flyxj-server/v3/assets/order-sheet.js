@@ -236,6 +236,11 @@
   async function start(){
     if(!id)return fail('Invalid order link. Return to orders and open a valid order.');
     $('morePhotos').onclick=()=>{allPhotos=!allPhotos;showThumbs()};
+    const allOriginal=$('shareAllOriginalPhotos');
+    if(allOriginal)allOriginal.onclick=()=>{
+      if(!window.FlyxjShareFiles?.shareAllPhotos)return $('shareAllOriginalStatus').textContent='Share feature unavailable. Refresh this order.';
+      window.FlyxjShareFiles.shareAllPhotos(id,allOriginal,$('shareAllOriginalStatus'));
+    };
     const combined=$('shareCombinedFiles');
     if(combined)combined.onclick=()=>{
       if(!window.FlyxjShareFiles)return $('shareCombinedStatus').textContent='Share feature is loading. Reopen this order.';
@@ -268,12 +273,15 @@
     try{
       const data=await api('/api/orders/'+id);
       renderOrder(data.order);showAddress();
+      const count=data.order.photos?.length||0;
+      if($('shareAllOriginalCount'))$('shareAllOriginalCount').textContent=count+' original photo'+(count===1?'':'s');
       setupMobileDownloads().catch(e=>{
         $('makerStatus').textContent=e.message;
         $('pdfStatus').textContent=e.message;
       });
       const actions=window.FlyxjOrderActions;
       if(actions){
+        $('shareAllOriginalPhotosCard')?.classList.add('hidden');
         $('sheetEdit').onclick=()=>actions.edit(data.order.id);
         $('sheetDelete').onclick=()=>actions.delete(data.order.id);
         const waButton=$('sheetWhatsApp');
@@ -281,10 +289,12 @@
         api('/api/me').then(me=>{
           if(me.role==='staff'){
             combined?.closest('.simple-maker')?.classList.remove('hidden');
+            $('shareAllOriginalPhotosCard')?.classList.remove('hidden');
             waButton.classList.remove('hidden');
             waButton.onclick=()=>actions.share(data.order);
           }else{
             combined?.closest('.simple-maker')?.classList.add('hidden');
+            $('shareAllOriginalPhotosCard')?.classList.add('hidden');
             waButton.classList.add('hidden');
             waButton.onclick=null;
           }

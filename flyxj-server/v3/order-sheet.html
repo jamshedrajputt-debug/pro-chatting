@@ -17,7 +17,7 @@ a[aria-disabled="true"]{opacity:.55;pointer-events:none}
 </style>
 <link rel="stylesheet" href="/assets/v8-page-nav.css?v=v8-20261124">
 <link rel="stylesheet" href="/assets/order-actions.css?v=edit-delete-wa-2">
-<script defer src="/assets/share-files.js?v=flyxj-v7-native-share"></script>
+<script defer src="/assets/share-files.js?v=flyxj-android-v8-all-photos"></script>
 <script defer src="/assets/order-actions.js?v=manual-file-share-20261122"></script>
 <script defer src="/assets/order-sheet.js?v=https-download-fix-20261123"></script>
 <script defer src="/assets/v8-page-nav.js?v=v8-20261124"></script>
@@ -48,6 +48,12 @@ a[aria-disabled="true"]{opacity:.55;pointer-events:none}
   <a class="btn" id="makerPreview" target="_blank" rel="noopener noreferrer">View image / Save photo</a>
 </div>
 <p id="makerStatus" class="muted" aria-live="polite">Making your combined image on the server…</p>
+</section>
+<section class="card hidden" id="shareAllOriginalPhotosCard">
+<div class="section-title"><h2>Share ALL Original Customer Photos</h2><span class="count" id="shareAllOriginalCount">1–8 photos</span></div>
+<p class="muted">Every original reference image from User A, separately attached in one Android share menu. Select WhatsApp, Gmail or another app.</p>
+<button class="pdf-button" id="shareAllOriginalPhotos" type="button">↗ Share All Original Photos</button>
+<p class="muted" id="shareAllOriginalStatus" aria-live="polite">Select an app and recipient after the files are prepared.</p>
 </section>
 <section class="card"><div class="section-title"><h2>Dress reference photos</h2><span class="count" id="photoCount"></span></div><div class="four-grid" id="photoGrid"></div><button class="more-button hidden" id="morePhotos" type="button">View remaining photos</button><div class="hint">Tap a photo to zoom, then use Download photo to save it on your phone. Back closes the photo.</div></section>
 <section class="card"><div class="section-title"><h2>PDF specification & delivery address</h2></div>
