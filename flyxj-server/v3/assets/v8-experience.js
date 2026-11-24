@@ -239,7 +239,7 @@ function installDraft(){
 window.FlyxjV8={
  sync,filesCentre,preview,sharePreset,health,moreMenu,
  onLogin:()=>{sync();const key=scope();try{const raw=JSON.parse(localStorage.getItem(key)||'null');const notice=byId('fx8DraftStatus');if(raw&&notice)notice.textContent='Saved draft found. Tap Restore draft to recover your text.'}catch{}},
- onLogout:()=>{if(activeModal)activeModal.remove();activeModal=null;draftHistory=[];lastDraftSnapshot=snapshot();sync()},
+ onLogout:()=>{clearTimeout(draftTimer);saveDraft();const form=byId('newOrderForm');if(form)form.reset();if(typeof state!=='undefined'){state.files=[];if(typeof renderImagePreview==='function')renderImagePreview()}if(activeModal)activeModal.remove();activeModal=null;draftHistory=[];lastDraftSnapshot=null;sync()},
  afterOrderCreated:()=>{const key=scope();try{if(key)localStorage.removeItem(key)}catch{};draftHistory=[];lastDraftSnapshot=null;const status=byId('fx8DraftStatus');if(status)status.textContent='Order created · draft cleared'},
  onFormChange:updateDraft
 };
