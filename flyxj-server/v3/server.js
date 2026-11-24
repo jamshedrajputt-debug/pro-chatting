@@ -895,9 +895,25 @@ app.post('/api/orders/:id/approve',auth,csrf,async(req,res)=>{
 app.patch('/api/orders/:id/customer-earning',auth,csrf,async(req,res)=>{
  if(req.user.role!=='customer')return err(res,403,'Only User A may edit their earning');
  const o=loadOrder(req,res);if(!o)return;
- if(!validEarning(req.body?.customer_earning_pkr))return err(res,400,'Enter a valid PKR earning');
+ let earningPkr;
+ const raw=req.body?.amount,currency=req.body?.currency;
+ if(raw!==undefined){
+   const amount=Number(raw),rate=Number(req.body?.fx_pkr_per_usd??o.finance?.fx_pkr_per_usd);
+   if(!['USD','PKR'].includes(currency)||raw===''||!Number.isFinite(amount)||amount<0||amount>1e9||
+       !Number.isFinite(rate)||rate<=0||rate>1e6)
+     return err(res,400,'Enter an earning amount, USD/PKR currency and order FX rate');
+   const existing=Number(o.finance?.fx_pkr_per_usd);
+   if(existing>0&&Math.abs(rate-existing)>0.005)
+     return err(res,400,'Order FX rate is already set. Use the same rate or ask User B to correct it first');
+   earningPkr=Math.round((currency==='USD'?amount*rate:amount)*100)/100;
+   if(!validEarning(earningPkr))return err(res,400,'Converted earning exceeds allowed amount');
+   if(!(existing>0))o.finance={...(o.finance||financeDefault()),fx_pkr_per_usd:Math.round(rate*100)/100};
+ }else{
+   if(!validEarning(req.body?.customer_earning_pkr))return err(res,400,'Enter a valid PKR earning');
+   earningPkr=Math.round(Number(req.body.customer_earning_pkr)*100)/100;
+ }
  const original=o.customer_earning_pkr;
- o.customer_earning_pkr=Math.round(Number(req.body.customer_earning_pkr)*100)/100;
+ o.customer_earning_pkr=earningPkr;
  history(o,req.user.username,'User A earning updated','finance');
  try{await save();pushOrder(o,'finance','User A earning updated');return res.json({order:publicOrder(o)})}
  catch(e){o.customer_earning_pkr=original;return err(res,503,'Could not save earning')}
