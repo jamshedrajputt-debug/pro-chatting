@@ -14,12 +14,14 @@ a[aria-disabled="true"]{opacity:.55;pointer-events:none}
 #makerBackup,#pdfCopy{gap:10px}
 #makerStatus,#pdfStatus{line-height:1.5}
 
+.flyxj-control-form{border-top:1px solid #e2e9f4;padding:14px 0;display:grid;gap:11px}.flyxj-control-form h3{margin:0;color:#17345b;font-size:15px}.flyxj-control-form label{display:grid;gap:6px;font-size:12px;font-weight:750;color:#334763}.fx9-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.flyxj-control-form input,.flyxj-control-form select,.flyxj-control-form textarea{width:100%;font:inherit;font-size:15px;padding:12px;background:#fff;color:#172843;border:1px solid #d7e1ef;border-radius:10px}.flyxj-control-form button{justify-content:center;border:0;min-height:45px;width:100%}.fx9-summary{border:1px solid #dfe9f8;background:#f3f7fd;border-radius:11px;padding:13px;white-space:pre-line;font-size:13px;line-height:1.7;color:#17345b;font-weight:660}.flyxj-mobile-control [data-feedback]{margin:0;min-height:15px}@media(max-width:420px){.fx9-grid{grid-template-columns:1fr}}
 </style>
 <link rel="stylesheet" href="/assets/v8-page-nav.css?v=v8-20261124">
 <link rel="stylesheet" href="/assets/order-actions.css?v=edit-delete-wa-2">
 <script defer src="/assets/share-files.js?v=flyxj-android-v8-all-photos"></script>
 <script defer src="/assets/order-actions.js?v=manual-file-share-20261122"></script>
-<script defer src="/assets/order-sheet.js?v=https-download-fix-20261123"></script>
+<script defer src="/assets/order-sheet.js?v=flyxj-v8-mobile-20261124"></script>
+<script defer src="/assets/mobile-staff-controls.js?v=flyxj-v8-mobile-20261124"></script>
 <script defer src="/assets/v8-page-nav.js?v=v8-20261124"></script>
 </head><body>
 <header class="bar"><a href="/#orders" id="backOrders">‹ Orders</a><div><strong>FLYXJ · Order Sheet</strong><small id="barRef">Staff quick view · all details together</small></div></header>
@@ -60,6 +62,32 @@ a[aria-disabled="true"]{opacity:.55;pointer-events:none}
 <div id="addressText" class="address">Checking PDF for address…</div><div id="addressHint" class="hint">Always verify the complete delivery address in the attached PDF before shipping.</div>
 <div class="actions"><a class="pdf-button hidden" href="#" id="pdfLink" aria-disabled="true">↓ Download Original PDF</a><a id="pdfOpenBrowser" class="btn hidden" href="#" target="_blank" rel="noopener noreferrer">Open PDF in browser</a><button id="pdfCopy" class="btn hidden" type="button">Backup: Copy PDF link</button><button id="copyAddress" class="btn hidden" type="button">Copy extracted address</button></div>
 <p id="pdfStatus" class="muted" aria-live="polite">Preparing private PDF download…</p></section>
+<section class="card flyxj-mobile-control hidden" id="flyxjMobileStaffControls">
+<div class="section-title"><h2>Shipping ID, Quantity & Profit</h2><span class="count">User B only</span></div>
+<p class="muted">Save shipment ID, pieces shipped and manufacturing expenses from Android.</p>
+<form id="fx9ShipForm" class="flyxj-control-form">
+<h3>Shipping tracking</h3>
+<div class="fx9-grid"><label>Courier<input name="courier" maxlength="100" placeholder="DHL / Royal Mail" required></label><label>Shipping Tracking ID<input name="tracking_id" maxlength="120" required></label><label>Pieces shipped<input name="shipped_quantity" type="number" min="0" step="1" required></label><label>Total ordered<input name="total_quantity" type="number" readonly></label></div>
+<label>Tracking URL (optional)<input name="tracking_url" type="url" placeholder="https://..."></label>
+<button class="pdf-button" type="submit">Save Shipping ID + Quantity</button><p data-feedback class="muted" aria-live="polite"></p>
+</form>
+<form id="fx9FinanceForm" class="flyxj-control-form">
+<h3>Making Cost & Profit</h3>
+<div class="fx9-grid"><label>Selling price (PKR)<input name="sale_pkr" type="number" min="0.01" step="0.01" required></label><label>Making cost (PKR)<input name="making_pkr" type="number" min="0" step="0.01" required></label><label>Shipping cost (PKR)<input name="shipping_pkr" type="number" min="0" step="0.01" required></label><label>PKR per USD<input name="fx_pkr_per_usd" type="number" min="0.01" step="0.01" required></label></div>
+<div id="fx9ProfitView" class="fx9-summary">Enter figures to calculate gross profit.</div>
+<button class="pdf-button" type="submit">Save Making Cost + Profit</button><p data-feedback class="muted" aria-live="polite"></p>
+</form>
+<form id="fx9StatusForm" class="flyxj-control-form">
+<h3>Order Status</h3><label>Production stage<select name="status"><option value="pending">Pending</option><option value="awaiting_approval">Awaiting approval</option><option value="confirmed">Confirmed</option><option value="cutting">Cutting</option><option value="stitching">Stitching</option><option value="in_progress">In progress</option><option value="quality_check">Quality check</option><option value="shipped">Shipped</option><option value="delivered">Delivered</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></label>
+<label>Staff note<textarea name="staff_note" rows="2" maxlength="1000"></textarea></label>
+<button class="pdf-button" type="submit">Update Order Status</button><p data-feedback class="muted" aria-live="polite"></p>
+</form>
+</section>
+<section class="card hidden" id="fx9EarningCard"><div class="section-title"><h2>User A · My Earning</h2></div>
+<form id="fx9EarningForm" class="flyxj-control-form"><label>My earning (PKR)<input name="customer_earning_pkr" type="number" min="0" max="1000000000" step="0.01" required></label><button class="pdf-button" type="submit">Save My Earning</button><p data-feedback class="muted" aria-live="polite"></p></form>
+<div id="fx9CustomerProfit" class="fx9-summary"></div>
+</section>
+<section class="card"><div class="section-title"><h2>Shipment Summary</h2></div><div id="fx9ShipmentSummary" class="fx9-summary">Checking shipment details…</div></section>
 <section class="card"><div class="section-title"><h2>Order information</h2></div><div class="info-grid" id="information"></div><p id="notes" class="order-note"></p><div class="actions"><a href="/#orders" class="btn">← Back to Orders</a></div></section>
 </div>
 </main>
