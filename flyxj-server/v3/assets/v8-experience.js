@@ -94,7 +94,8 @@ function moreMenu(){
   ['Shipment Tracking',()=>navigate('tracking')],
   ['Finance & Profit',()=>navigate('finance')],
   ['Staff & Backup',()=>navigate('team')],
-  ['Refresh orders',()=>refresh()]
+  ['Refresh orders',()=>refresh()],
+  ['Log out securely',()=>document.getElementById('logoutButton')?.click()]
  ]){
   if(title==='Staff & Backup'&&!isStaff())continue;
   buttons.append(actionBtn(title,()=>{ui.hide();fn()}))

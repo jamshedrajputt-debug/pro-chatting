@@ -146,6 +146,7 @@ function renderStats(){
   $('statTotal').textContent=s.total;
   $('statActive').textContent=s.active;
   $('statShipped').textContent=s.shipped;
+  const pieces=$('statShippedPieces');if(pieces)pieces.textContent=(s.shipped_units||0)+' pieces shipped · shipped / delivered / completed orders';
   $('statDone').textContent=s.completed;
 }
 function renderWorkflow(){
@@ -401,7 +402,7 @@ function renderDetail(o){
   $('detailUpdated').textContent='Updated '+day(o.updated_at);
   const grid=$('detailGrid');grid.replaceChildren(
     appendDetail('Size',o.size),appendDetail('Shoes size',o.shoe_size||'—'),appendDetail('User A earning (PKR)',o.customer_earning_pkr??'Not entered'),appendDetail('Colour',o.colour),
-    appendDetail('Quantity',o.quantity),appendDetail('Submitted by',o.customer),
+    appendDetail('Quantity',o.quantity),appendDetail('Shipped pieces',(Number.isInteger(o.shipped_quantity)?o.shipped_quantity:((['shipped','delivered','completed'].includes(o.status))?o.quantity:0))+' / '+o.quantity),appendDetail('Submitted by',o.customer),
     appendDetail('Order reference',o.reference),appendDetail('Created',time(o.created_at))
   );
   $('detailComments').textContent=o.comments||'No custom instructions added.';
@@ -429,6 +430,7 @@ function renderDetail(o){
     $('staffNote').value=o.staff_note||'';
     $('shippingCourier').value=o.shipping?.courier||'';
     $('shippingId').value=o.shipping?.tracking_id||'';
+    if($('shippingPieces')){$('shippingPieces').max=String(o.quantity||1);$('shippingPieces').value=Number.isInteger(o.shipped_quantity)?o.shipped_quantity:(['shipped','delivered','completed'].includes(o.status)?o.quantity:0)}
     $('shippingUrl').value=o.shipping?.tracking_url||'';
   }else{
     $('returnCourier').value=o.return_shipping?.courier||'';
@@ -528,13 +530,14 @@ async function init(){
     const payload={status,staff_note:$('staffNote').value};
     if(['shipped','delivered','completed'].includes(status)){
       payload.shipping={courier:$('shippingCourier').value,tracking_id:$('shippingId').value,tracking_url:$('shippingUrl').value};
+      payload.shipped_quantity=Number($('shippingPieces').value);
       payload.finance=financeInputs();
     }
     await saveAndRefresh('/status','PATCH',payload,'Production status updated');
   };
   $('shippingForm').onsubmit=async e=>{
     e.preventDefault();
-    await saveAndRefresh('/shipping','PATCH',{courier:$('shippingCourier').value,tracking_id:$('shippingId').value,tracking_url:$('shippingUrl').value},'Tracking sent to customer');
+    await saveAndRefresh('/shipping','PATCH',{courier:$('shippingCourier').value,tracking_id:$('shippingId').value,tracking_url:$('shippingUrl').value,shipped_quantity:Number($('shippingPieces').value)},'Tracking and shipped quantity saved');
   };
   $('returnForm').onsubmit=async e=>{
     e.preventDefault();
