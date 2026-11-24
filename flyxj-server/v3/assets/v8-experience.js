@@ -47,6 +47,7 @@ async function health(){
  const account=healthValue(grid,'Signed-in role',state.me.role+' · '+state.me.username);
  const sync=healthValue(grid,'Last check','Checking…');
  const app=healthValue(grid,'Android app version',(/FlyXJAndroid\/(\d+)/.exec(navigator.userAgent)||[])[1]||'Web / earlier app');
+ healthValue(grid,'Dashboard version','V8');
  const release=healthValue(grid,'Latest release','Checking…');
  const connection=healthValue(grid,'Internet',navigator.onLine?'Connected':'Offline');
  const status=el('div','fx8-status');ui.body.append(status);
@@ -240,7 +241,7 @@ window.FlyxjV8={
  sync,filesCentre,preview,sharePreset,health,moreMenu,
  onLogin:()=>{sync();const key=scope();try{const raw=JSON.parse(localStorage.getItem(key)||'null');const notice=byId('fx8DraftStatus');if(raw&&notice)notice.textContent='Saved draft found. Tap Restore draft to recover your text.'}catch{}},
  onLogout:()=>{clearTimeout(draftTimer);saveDraft();const form=byId('newOrderForm');if(form)form.reset();if(typeof state!=='undefined'){state.files=[];if(typeof renderImagePreview==='function')renderImagePreview()}if(activeModal)activeModal.remove();activeModal=null;draftHistory=[];lastDraftSnapshot=null;sync()},
- afterOrderCreated:()=>{const key=scope();try{if(key)localStorage.removeItem(key)}catch{};draftHistory=[];lastDraftSnapshot=null;const status=byId('fx8DraftStatus');if(status)status.textContent='Order created · draft cleared'},
+ afterOrderCreated:()=>{const key=scope();try{if(key)localStorage.removeItem(key)}catch{};draftHistory=[];lastDraftSnapshot=null;setTimeout(()=>{lastDraftSnapshot=snapshot()},0);const status=byId('fx8DraftStatus');if(status)status.textContent='Order created · draft cleared'},
  onFormChange:updateDraft
 };
 function boot(){buildNav();installDraft()}
