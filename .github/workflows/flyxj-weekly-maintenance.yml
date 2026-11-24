@@ -1,0 +1,127 @@
+name: FLYXJ Weekly Automatic Maintenance
+on:
+  schedule:
+    # Every Monday 04:15 UTC (05:15 in British Summer Time).
+    - cron: '15 4 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: read
+  issues: write
+concurrency:
+  group: flyxj-weekly-maintenance
+  cancel-in-progress: false
+jobs:
+  web:
+    name: Secure web regression and storage check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout FLYXJ live production branch
+        uses: actions/checkout@v4
+        with:
+          ref: flyxj-orders-render-free
+          persist-credentials: false
+      - name: Set up supported Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Reproducible dependency install
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Run web syntax, permissions and cross-page UI checks
+        run: |
+          node tests/flyxj-v8-check.js
+          node tests/flyxj-v6-check.js
+      - name: Test safe authenticated API endpoints against disposable local fixtures
+        run: node tests/flyxj-v6-integration.js
+      - name: Monitor live website and verify persistent storage connection
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const url='https://flyxj-order-manager-free.onrender.com/api/health';
+          (async()=>{
+            const response=await fetch(url,{signal:AbortSignal.timeout(100000),headers:{accept:'application/json'}});
+            if(!response.ok)throw Error('Live health returned HTTP '+response.status);
+            const h=await response.json();
+            if(h.ok!==true)throw Error('FLYXJ live health is not OK');
+            if(h.storage!=='supabase-private')throw Error('FLYXJ persistence is not private Supabase storage');
+            if(!Number.isInteger(h.orders)||h.orders<0)throw Error('Live order count invalid');
+            console.log('PASS live FLYXJ',h.version,'persistent storage connected; existing orders',h.orders);
+          })().catch(e=>{console.error('FLYXJ monitoring failed:',e.message);process.exitCode=1});
+          NODE
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high --json > npm-audit.json || { echo 'Security advisory found (report in artifact)'; exit 1; }
+      - name: Upload audit report (only workflow maintainers)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flyxj-weekly-npm-audit
+          path: npm-audit.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+  android:
+    name: Android APK build and signing/update guard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout FLYXJ Android release branch
+        uses: actions/checkout@v4
+        with:
+          ref: flyxj-android-apk-build-20261123
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+      - name: Build unsigned production APK for compatibility
+        working-directory: flyxj-android
+        run: gradle --no-daemon --stacktrace assembleRelease
+      - name: Verify Android package, safe update version, and released signed build
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test -s flyxj-android/app/build/outputs/apk/release/app-release-unsigned.apk
+          CURRENT=$(grep -Eo 'versionCode[[:space:]]+[0-9]+' flyxj-android/app/build.gradle | head -1 | grep -Eo '[0-9]+')
+          test -n "$CURRENT"
+          RELEASE=$(gh api repos/${{ github.repository }}/releases/latest --jq '.tag_name')
+          RELEASE_VERSION=$(printf '%s' "$RELEASE" | sed -n -E 's/^flyxj-android-v([0-9]+)$/\1/p')
+          test -n "$RELEASE_VERSION"
+          if (( CURRENT < RELEASE_VERSION )); then echo "::error::Android source version behind published release"; exit 1; fi
+          echo "PASS Android source v$CURRENT; signed release $RELEASE; unsigned build compiles"
+          echo "Signed Android APK is never auto-published without the permanent signing key."
+
+  report:
+    name: Alert on maintenance failures
+    needs: [web, android]
+    if: ${{ always() && (needs.web.result == 'failure' || needs.android.result == 'failure') }}
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+    steps:
+      - name: Create or update maintenance alert issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          WEB: ${{ needs.web.result }}
+          ANDROID: ${{ needs.android.result }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TITLE="FLYXJ weekly maintenance requires attention"
+          BODY=$(printf 'Weekly automated checks found a problem.\n\nWeb: %s\nAndroid: %s\n\nWorkflow log: %s\n\nNo production changes or Android APK were auto-released. Review and repair before deploying.\n' "$WEB" "$ANDROID" "$RUN_URL")
+          EXISTING=$(gh issue list --repo "$GH_REPO" --state open --search "$TITLE in:title" --json number,title --jq '.[] | select(.title=="FLYXJ weekly maintenance requires attention") | .number' | head -1)
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --repo "$GH_REPO" --body "$BODY"
+          else
+            gh issue create --repo "$GH_REPO" --title "$TITLE" --body "$BODY"
+          fi
