@@ -101,7 +101,12 @@ function validFinance(f) {
 function normalizeFinance(body,old){
  if(!validFinance(body))return null;
  const f={updated_at:now(),recognized_at:old?.recognized_at||null};
- for(const k of ['sale_pkr','making_pkr','shipping_pkr','fx_pkr_per_usd'])f[k]=Math.round(Number(body[k])*100)/100;
+ for(const k of ['sale_pkr','making_pkr','shipping_pkr'])f[k]=Math.round(Number(body[k])*100)/100;
+ f.fx_pkr_per_usd=Math.round(Number(body.fx_pkr_per_usd)*10000)/10000;
+ if(old?.sale_usd_input!=null&&Number.isFinite(Number(old.sale_usd_input))&&
+    Math.abs(Number(old.sale_pkr)-f.sale_pkr)<0.005 &&
+    Math.abs(Number(old.fx_pkr_per_usd)-f.fx_pkr_per_usd)<0.00005)
+   f.sale_usd_input=Number(old.sale_usd_input);
  return f;
 }
 function financeRow(o){
@@ -897,6 +902,29 @@ app.patch('/api/orders/:id/customer-earning',auth,csrf,async(req,res)=>{
  history(o,req.user.username,'User A earning updated','finance');
  try{await save();pushOrder(o,'finance','User A earning updated');return res.json({order:publicOrder(o)})}
  catch(e){o.customer_earning_pkr=original;return err(res,503,'Could not save earning')}
+});
+// User A owns their USD selling-price entry on any old or new order.
+// Preserve User B's making/shipping costs. Never fabricate an FX rate.
+app.patch('/api/orders/:id/selling-price',auth,csrf,async(req,res)=>{
+ if(req.user.role!=='customer')return err(res,403,'Only User A can edit their USD selling price');
+ const o=loadOrder(req,res);if(!o)return;
+ const usdRaw=req.body?.sale_usd,fxRaw=req.body?.fx_pkr_per_usd;
+ const usd=Number(usdRaw),fx=Number(fxRaw);
+ if(usdRaw==null||usdRaw===''||fxRaw==null||fxRaw===''||
+   !Number.isFinite(usd)||!Number.isFinite(fx)||usd<=0||usd>1e7||fx<=0||fx>1e6||
+   !/^\\d{1,8}(?:\\.\\d{1,2})?$/.test(String(usdRaw))||
+   !/^\\d{1,7}(?:\\.\\d{1,4})?$/.test(String(fxRaw)))
+   return err(res,400,'Enter USD selling price and a valid PKR per USD exchange rate');
+ const pkr=Math.round(usd*fx*100)/100;
+ if(!Number.isFinite(pkr)||pkr<=0||pkr>1e9)return err(res,400,'Converted PKR selling price exceeds allowed range');
+ const previous=structuredClone(o.finance||financeDefault());
+ const priorUpdated=o.updated_at,priorHistory=Array.isArray(o.history)?o.history.slice():[];
+ o.finance={...previous,sale_pkr:pkr,sale_usd_input:usd,fx_pkr_per_usd:Math.round(fx*10000)/10000,updated_at:now()};
+ history(o,req.user.username,'User A selling price updated: USD '+usd+' at '+fx+' PKR/USD','finance');
+ try{
+   await save();pushOrder(o,'finance','Selling price updated by User A');
+   return res.json({order:publicOrder(o),sale_usd:usd,sale_pkr:pkr});
+ }catch(e){o.finance=previous;o.updated_at=priorUpdated;o.history=priorHistory;return err(res,503,'Could not save USD selling price')}
 });
 app.patch('/api/orders/:id/finance',auth,csrf,async(req,res)=>{
  if(req.user.role!=='staff')return err(res,403,'Staff only');
