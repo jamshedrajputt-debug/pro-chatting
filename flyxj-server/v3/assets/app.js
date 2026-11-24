@@ -53,6 +53,7 @@ function resetApp(){
   $('floatingChatButton').classList.add('hidden');$('floatingChatPanel').classList.add('hidden');
   $('loginShell').classList.remove('hidden');$('dashboardShell').classList.add('hidden');
   closeDrawer();$('loginPassword').value='';
+  if(window.FlyxjV8)window.FlyxjV8.onLogout();
 }
 function setLoggedIn(me){
   state.me=me;$('loginShell').classList.add('hidden');$('dashboardShell').classList.remove('hidden');
@@ -64,6 +65,7 @@ function setLoggedIn(me){
   for(const e of document.querySelectorAll('.customer-only'))e.classList.toggle('hidden',me.role!=='customer');
   $('floatingChatButton').classList.remove('hidden');
   connectTrackingEvents();
+  if(window.FlyxjV8)window.FlyxjV8.onLogin();
 }
 // Live updates through a session-authenticated private stream.
 // Polling continues as a fallback for devices where streaming is interrupted.
@@ -270,6 +272,7 @@ function navigate(view,{fromHistory=false}={}){
   if(view==='team')loadTeam();
   for(const nav of document.querySelectorAll('[data-nav]'))nav.classList.toggle('active',nav.dataset.nav===view);
   if(view!=='finance'&&view!=='team')renderOrders();
+  if(window.FlyxjV8)window.FlyxjV8.sync();
 }
 function openDrawer(id){
   $('overlay').classList.remove('hidden');
@@ -329,6 +332,7 @@ async function submitOrder(event){
       measurements:readMeasurements()
     };
     const data=await api('/api/orders',{method:'POST',body:JSON.stringify(body)});
+    if(window.FlyxjV8)window.FlyxjV8.afterOrderCreated();
     $('newOrderForm').reset();state.files=[];renderImagePreview();closeDrawer();
     await refresh({silent:true});
     navigate('orders');toast('Order '+data.order.reference+' created successfully');
