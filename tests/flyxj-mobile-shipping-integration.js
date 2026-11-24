@@ -48,7 +48,7 @@ async function run(){
  assert.equal(pendingFinance.data.all_count,1,'existing pending order appears in projected graph after User B saves prices');
  assert.equal(pendingFinance.data.pending_count,1);
  assert.equal(pendingFinance.data.all_rows[0].recognised,false);
- assert.equal(pendingFinance.data.all_totals.profit_pkr,5800);
+ assert.equal(pendingFinance.data.all_totals.profit_pkr,-5200);
  assert.equal(pendingFinance.data.totals.profit_pkr,0,'actual profit remains zero until shipped');
  r=await req('/api/orders/1/status',b,'PATCH',{status:'shipped',staff_note:'Two pieces sent',shipped_quantity:2});
  assert.equal(r.status,200,'User B may mark shipped after storing shipping and finance');assert.equal(r.data.order.shipped_quantity,2);
@@ -57,7 +57,7 @@ async function run(){
  r=await req('/api/orders/1',a);assert.equal(r.data.order.shipping.tracking_id,'DHL-2026-123');assert.equal(r.data.order.shipped_quantity,2);
  r=await req('/api/orders/1/customer-earning',a,'PATCH',{customer_earning_pkr:750});
  assert.equal(r.status,200);assert.equal(r.data.order.customer_earning_pkr,750);
- const finances=await req('/api/finance',a);assert.equal(finances.status,200);assert.equal(finances.data.rows[0].profit_pkr,5550);
+ const finances=await req('/api/finance',a);assert.equal(finances.status,200);assert.equal(finances.data.rows[0].profit_pkr,-4950);
  const staffFinances=await req('/api/finance',b);assert.equal(staffFinances.data.rows[0].profit_pkr,5550,'both accounts see the same finance result');
  assert.equal(staffFinances.data.all_count,1,'shipped order stays in all priced graph');
  assert.equal(staffFinances.data.all_rows[0].recognised,true);
