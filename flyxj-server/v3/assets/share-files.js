@@ -82,8 +82,8 @@
    const set=value=>{if(status)status.textContent=value};
    if(button?.disabled)return;
    const key=String(id);
-   if(!/^[1-9]\\d{0,8}$/.test(key)){set('Invalid order number');return}
-   const versionMatch=/FlyXJAndroid\\/(\\d+)/.exec(navigator.userAgent);
+   if(!/^[1-9][0-9]{0,8}$/.test(key)){set('Invalid order number');return}
+   const versionMatch=new RegExp('FlyXJAndroid/([0-9]+)').exec(navigator.userAgent);
    const nativeReady=Number(versionMatch?.[1]||0)>=8 &&
      window.FlyxjShare&&typeof window.FlyxjShare.shareFiles==='function';
    const previous=photoPending.get(key);
@@ -112,7 +112,7 @@
          headers:{'content-type':'application/json','x-csrf-token':me.csrf},
          body:JSON.stringify({kind:'photo',index})
        });
-       const ext=/\\.(jpg|png|webp)$/i.exec(item.filename||'');
+       const ext=/[.](jpg|png|webp)$/i.exec(item.filename||'');
        if(!ext)throw Error('Unexpected photo file type');
        const mime=ext[1].toLowerCase()==='jpg'?'image/jpeg':'image/'+ext[1].toLowerCase();
        tickets.push({url:validTicket(item),filename:item.filename,type:mime});
