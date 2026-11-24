@@ -58,11 +58,11 @@ async function run(){
  r=await req('/api/orders/1/customer-earning',a,'PATCH',{customer_earning_pkr:750});
  assert.equal(r.status,200);assert.equal(r.data.order.customer_earning_pkr,750);
  const finances=await req('/api/finance',a);assert.equal(finances.status,200);assert.equal(finances.data.rows[0].profit_pkr,-4950);
- const staffFinances=await req('/api/finance',b);assert.equal(staffFinances.data.rows[0].profit_pkr,5550,'both accounts see the same finance result');
+ const staffFinances=await req('/api/finance',b);assert.equal(staffFinances.data.rows[0].profit_pkr,-4950,'both accounts see the same finance result');
  assert.equal(staffFinances.data.all_count,1,'shipped order stays in all priced graph');
  assert.equal(staffFinances.data.all_rows[0].recognised,true);
- assert.equal(staffFinances.data.all_totals.profit_pkr,5550,'both graph scopes reflect User A earning edit');
- assert.equal(finances.data.all_totals.profit_pkr,5550,'User A and B see consistent report');
+ assert.equal(staffFinances.data.all_totals.profit_pkr,-4950,'both graph scopes reflect User A earning edit');
+ assert.equal(finances.data.all_totals.profit_pkr,-4950,'User A and B see consistent report');
 
  const sheet=await fetch(base+'/order/1');assert.equal(sheet.status,200);const html=await sheet.text();assert.match(html,/fx9ShipForm/);assert.match(html,/fx9FinanceForm/);assert.match(html,/fx9EarningForm/);
  const script=await fetch(base+'/assets/mobile-staff-controls.js');assert.equal(script.status,200);
