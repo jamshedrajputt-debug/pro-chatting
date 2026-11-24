@@ -48,12 +48,12 @@ function toggleChatSurface(open){
   }
 }
 function resetApp(){
+  if(window.FlyxjV8)window.FlyxjV8.onLogout();
   if(state.events){state.events.close();state.events=null}
   state.me=null;state.orders=[];state.selected=null;state.announcedTracking.clear();state.chatOpen=false;
   $('floatingChatButton').classList.add('hidden');$('floatingChatPanel').classList.add('hidden');
   $('loginShell').classList.remove('hidden');$('dashboardShell').classList.add('hidden');
   closeDrawer();$('loginPassword').value='';
-  if(window.FlyxjV8)window.FlyxjV8.onLogout();
 }
 function setLoggedIn(me){
   state.me=me;$('loginShell').classList.add('hidden');$('dashboardShell').classList.remove('hidden');
