@@ -54,7 +54,8 @@ jobs:
           NODE
       - name: Audit production dependencies (patch job runs next)
         continue-on-error: true
-        run: npm audit --omit=dev --audit-level=high --json > npm-audit.json || { echo 'Security advisory detected: secure auto-patch job will run'; exit 1; }
+        run: |
+          npm audit --omit=dev --audit-level=high --json > npm-audit.json || { echo 'Security advisory detected: secure auto-patch job will run'; exit 1; }
       - name: Upload audit report (only workflow maintainers)
         if: always()
         uses: actions/upload-artifact@v4
