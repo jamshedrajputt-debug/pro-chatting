@@ -64,10 +64,84 @@ function render(){
    '\nUSD profit: $'+(profit/Number(finance.fx_pkr_per_usd)).toFixed(2):
    'Enter selling price, making, shipping cost and exchange rate to calculate profit.';
  }else if(user?.role==='customer'){
+  const saleForm=$('fx9SaleForm');
+  if(saleForm){
+   field(saleForm,'sale_usd').value=finance.sale_usd_input??(valid?(price/Number(finance.fx_pkr_per_usd)).toFixed(2):'');
+   field(saleForm,'fx_pkr_per_usd').value=finance.fx_pkr_per_usd??'';
+   updateSalePreview(saleForm);
+  }
   field($('fx9EarningForm'),'customer_earning_pkr').value=earning;
   $('fx9CustomerProfit').textContent='My earning: '+amount(earning)+
    '\nStatus: '+order.status.replaceAll('_',' ')+'\nShipped: '+shipped+' / '+order.quantity;
  }
+}
+function updateSalePreview(form){
+ const usd=Number(field(form,'sale_usd').value),rate=Number(field(form,'fx_pkr_per_usd').value);
+ const box=$('fx9SalePkrPreview');
+ if(!box)return;
+ box.textContent=(field(form,'sale_usd').value!==''&&field(form,'fx_pkr_per_usd').value!==''&&
+   Number.isFinite(usd)&&Number.isFinite(rate)&&usd>0&&rate>0)
+   ?'USD 
+ try{
+  user=await request('/api/me');
+  order=(await request('/api/orders/'+orderId)).order;
+  const ship=$('fx9ShipForm'),finance=$('fx9FinanceForm'),stage=$('fx9StatusForm'),earning=$('fx9EarningForm');
+  if(!ship||!finance||!stage||!earning)return;
+  if(user.role==='staff'){
+   ship.onsubmit=e=>{
+    e.preventDefault();
+    save(ship,'/shipping',{courier:field(ship,'courier').value.trim(),
+      tracking_id:field(ship,'tracking_id').value.trim(),
+      tracking_url:field(ship,'tracking_url').value.trim(),
+      shipped_quantity:Number(field(ship,'shipped_quantity').value)});
+   };
+   finance.onsubmit=e=>{
+    e.preventDefault();
+    const body={};
+    for(const key of ['sale_pkr','making_pkr','shipping_pkr','fx_pkr_per_usd'])body[key]=field(finance,key).value;
+    save(finance,'/finance',body);
+   };
+   stage.onsubmit=e=>{
+    e.preventDefault();
+    save(stage,'/status',{status:field(stage,'status').value,staff_note:field(stage,'staff_note').value,
+      shipped_quantity:Number(field(ship,'shipped_quantity').value)});
+   };
+   finance.addEventListener('input',()=>{
+    const sale=Number(field(finance,'sale_pkr').value)||0;
+    const making=Number(field(finance,'making_pkr').value)||0;
+    const shipping=Number(field(finance,'shipping_pkr').value)||0;
+    const earning=Number(order.customer_earning_pkr)||0;
+    const fx=Number(field(finance,'fx_pkr_per_usd').value);
+    const p=sale-making-shipping-earning;
+    $('fx9ProfitView').textContent='Gross profit: '+amount(p)+(fx>0?'  ·  USD $'+(p/fx).toFixed(2):'')+
+      '\nCalculation: Selling − Making − Shipping − User A earning';
+   });
+  }
+  if(user.role==='customer'){
+   const saleForm=$('fx9SaleForm');
+   if(saleForm){
+    saleForm.addEventListener('input',()=>updateSalePreview(saleForm));
+    saleForm.onsubmit=e=>{
+     e.preventDefault();
+     save(saleForm,'/selling-price',{
+       sale_usd:field(saleForm,'sale_usd').value,
+       fx_pkr_per_usd:field(saleForm,'fx_pkr_per_usd').value
+     });
+    };
+   }
+  }
+  if(user.role==='customer')earning.onsubmit=e=>{
+   e.preventDefault();
+   save(earning,'/customer-earning',{customer_earning_pkr:field(earning,'customer_earning_pkr').value});
+  };
+  render();
+ }catch(e){
+  const info=$('fx9ShipmentSummary');if(info)info.textContent='Unable to load mobile finance: '+e.message;
+ }
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
+})();+usd.toFixed(2)+' × PKR '+rate.toLocaleString('en-GB')+' = '+amount(Math.round(usd*rate*100)/100)
+   :'Enter the USD selling price and your agreed PKR/USD exchange rate.';
 }
 async function start(){
  try{
