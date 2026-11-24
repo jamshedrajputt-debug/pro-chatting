@@ -1,5 +1,9 @@
 name: FLYXJ Weekly Automatic Maintenance
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/flyxj-weekly-maintenance.yml'
   schedule:
     # Every Monday 04:15 UTC (05:15 in British Summer Time).
     - cron: '15 4 * * 1'
