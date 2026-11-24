@@ -41,7 +41,8 @@ function render(){
  const earning=Number(order.customer_earning_pkr)||0;
  const valid=finance.sale_pkr!==null&&finance.sale_pkr!==undefined&&Number(finance.fx_pkr_per_usd)>0;
  const price=Number(finance.sale_pkr)||0,making=Number(finance.making_pkr)||0,cost=Number(finance.shipping_pkr)||0;
- const profit=price-making-cost-earning;
+ const revenue=order.customer_earning_pkr!=null?earning:price;
+ const profit=revenue-making-cost;
  const staff=$('flyxjMobileStaffControls');
  if(staff)staff.classList.toggle('hidden',user?.role!=='staff');
  const earningCard=$('fx9EarningCard');
@@ -59,8 +60,8 @@ function render(){
   field(stage,'status').value=order.status;
   field(stage,'staff_note').value=order.staff_note||'';
   $('fx9ProfitView').textContent=valid?
-   'User A earning: '+amount(earning)+'\nMaking: '+amount(making)+
-   '\nShipping: '+amount(cost)+'\nGross profit: '+amount(profit)+
+   'User A earning (income): '+amount(earning)+'\nMaking: '+amount(making)+
+   '\nShipping: '+amount(cost)+'\nReal earning / gross profit: '+amount(profit)+
    '\nUSD profit: $'+(profit/Number(finance.fx_pkr_per_usd)).toFixed(2):
    'Enter selling price, making, shipping cost and exchange rate to calculate profit.';
  }else if(user?.role==='customer'){
@@ -100,9 +101,10 @@ async function start(){
     const shipping=Number(field(finance,'shipping_pkr').value)||0;
     const earning=Number(order.customer_earning_pkr)||0;
     const fx=Number(field(finance,'fx_pkr_per_usd').value);
-    const p=sale-making-shipping-earning;
+    const income=order.customer_earning_pkr!=null?earning:sale;
+    const p=income-making-shipping;
     $('fx9ProfitView').textContent='Gross profit: '+amount(p)+(fx>0?'  ·  USD $'+(p/fx).toFixed(2):'')+
-      '\nCalculation: Selling − Making − Shipping − User A earning';
+      '\nCalculation: User A earning (or selling price if blank) − Making − Shipping';
    });
   }
   if(user.role==='customer')earning.onsubmit=e=>{
