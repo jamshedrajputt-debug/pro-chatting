@@ -20,7 +20,7 @@ public final class ShareFileProvider extends ContentProvider {
         if (uri.getPathSegments().size() != 2 || !"shared".equals(uri.getPathSegments().get(0)))
             throw new FileNotFoundException("Invalid share link");
         String filename = uri.getLastPathSegment();
-        if (filename == null || !filename.matches("[a-zA-Z0-9_-]{8,64}\\.(png|pdf)"))
+        if (filename == null || !filename.matches("[a-zA-Z0-9_-]{8,64}\\.(png|pdf|jpg|webp)"))
             throw new FileNotFoundException("Invalid filename");
         File file = new File(new File(getContext().getCacheDir(), "shared"), filename);
         if (!file.isFile()) throw new FileNotFoundException("Attachment expired");
@@ -30,7 +30,11 @@ public final class ShareFileProvider extends ContentProvider {
     @Override public boolean onCreate() { return true; }
 
     @Override public String getType(Uri uri) {
-        try { return locate(uri).getName().endsWith(".pdf") ? "application/pdf" : "image/png"; }
+        try { String file=locate(uri).getName();
+        if(file.endsWith(".pdf"))return "application/pdf";
+        if(file.endsWith(".jpg"))return "image/jpeg";
+        if(file.endsWith(".webp"))return "image/webp";
+        return "image/png"; }
         catch (FileNotFoundException e) { return null; }
     }
 
