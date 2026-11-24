@@ -1,0 +1,17 @@
+name: FLYXJ All Original Photos share safety checks
+on:
+  push:
+    branches: [flyxj-v9-share-all-photos-20261124]
+  workflow_dispatch:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: node tests/flyxj-all-original-photos-check.js
+      - run: node tests/flyxj-v8-check.js
+      - run: node tests/flyxj-v6-integration.js
