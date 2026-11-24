@@ -14,7 +14,7 @@ const now=()=>Date.now();
 const onlyLogged=()=>typeof state!=='undefined'&&!!state.me;
 const isStaff=()=>onlyLogged()&&state.me.role==='staff';
 const scope=()=>onlyLogged()?'flyxj-v8-draft-'+encodeURIComponent(state.me.username):null;
-let activeModal=null, draftHistory=[],draftTimer=null,watchInstalled=false,listenerAttached=false;
+let activeModal=null, draftHistory=[],draftTimer=null,lastDraftSnapshot=null;
 function actionBtn(label,handler,primary=false){
  const b=el('button','fx8-button'+(primary?' fx8-button-primary':''),label);
  b.type='button';b.addEventListener('click',handler);return b;
@@ -189,11 +189,12 @@ function saveDraft(){
  const notice=byId('fx8DraftStatus');if(notice&&hasContent)notice.textContent='Draft saved on this device · photos and PDFs must be reselected';
 }
 function updateDraft(){
- const previous=snapshot();if(!previous)return;
- const last=draftHistory[draftHistory.length-1];
- if(!last||JSON.stringify(last)!==JSON.stringify(previous)){
-  draftHistory.push(previous);if(draftHistory.length>12)draftHistory.shift();
+ const current=snapshot();if(!current)return;
+ if(lastDraftSnapshot&&JSON.stringify(lastDraftSnapshot)!==JSON.stringify(current)){
+   draftHistory.push(lastDraftSnapshot);
+   if(draftHistory.length>12)draftHistory.shift();
  }
+ lastDraftSnapshot=current;
  clearTimeout(draftTimer);draftTimer=setTimeout(saveDraft,350);
 }
 function restoreDraft(){
@@ -205,6 +206,7 @@ function restoreDraft(){
   const field=byId(id);
   if(field&&form.contains(field)&&!['file','password'].includes(field.type)&&typeof value==='string')field.value=value;
  }
+ lastDraftSnapshot=snapshot();
  const notice=byId('fx8DraftStatus');if(notice)notice.textContent='Draft restored · reselect PDF and photos before submitting';
  return true;
 }
@@ -214,7 +216,7 @@ function undoDraft(){
  for(const [id,value] of Object.entries(previous)){
   const field=byId(id);if(field&&form.contains(field))field.value=value;
  }
- saveDraft();
+ lastDraftSnapshot=snapshot();saveDraft();
  const status=byId('fx8DraftStatus');if(status)status.textContent='Previous draft values restored';
 }
 function installDraft(){
@@ -225,21 +227,20 @@ function installDraft(){
  const undo=actionBtn('↶ Undo',undoDraft);
  const clear=actionBtn('Clear draft',()=>{
   if(!confirm('Clear the saved draft text on this device?'))return;
-  try{localStorage.removeItem(scope())}catch{};draftHistory=[];status.textContent='Saved draft cleared';
+  try{localStorage.removeItem(scope())}catch{};draftHistory=[];lastDraftSnapshot=snapshot();status.textContent='Saved draft cleared';
  });
  section.append(status,restore,undo,clear);
  const footer=form.querySelector('.drawer-footer');if(footer)footer.before(section);else form.prepend(section);
  const fields=()=>{clearTimeout(draftTimer);draftTimer=setTimeout(updateDraft,150)};
  form.addEventListener('input',fields);
  form.addEventListener('change',fields);
- const fieldsNames=['dressTitle','dressSize','dressColour','dressComments'];
- const initial=snapshot();if(initial)draftHistory=[initial];
+ const initial=snapshot();if(initial)lastDraftSnapshot=initial;
 }
 window.FlyxjV8={
  sync,filesCentre,preview,sharePreset,health,moreMenu,
  onLogin:()=>{sync();const key=scope();try{const raw=JSON.parse(localStorage.getItem(key)||'null');const notice=byId('fx8DraftStatus');if(raw&&notice)notice.textContent='Saved draft found. Tap Restore draft to recover your text.'}catch{}},
- onLogout:()=>{if(activeModal)activeModal.remove();activeModal=null;sync()},
- afterOrderCreated:()=>{const key=scope();try{if(key)localStorage.removeItem(key)}catch{};draftHistory=[];const status=byId('fx8DraftStatus');if(status)status.textContent='Order created · draft cleared'},
+ onLogout:()=>{if(activeModal)activeModal.remove();activeModal=null;draftHistory=[];lastDraftSnapshot=snapshot();sync()},
+ afterOrderCreated:()=>{const key=scope();try{if(key)localStorage.removeItem(key)}catch{};draftHistory=[];lastDraftSnapshot=null;const status=byId('fx8DraftStatus');if(status)status.textContent='Order created · draft cleared'},
  onFormChange:updateDraft
 };
 function boot(){buildNav();installDraft()}
