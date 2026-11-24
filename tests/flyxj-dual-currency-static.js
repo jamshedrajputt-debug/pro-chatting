@@ -1,0 +1,13 @@
+'use strict';
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
+const root=path.join(__dirname,'../flyxj-server/v3'),read=p=>fs.readFileSync(path.join(root,p),'utf8');
+for(const p of ['server.js','assets/app.js','assets/mobile-staff-controls.js','assets/fx9-money.js','assets/fx9-dashboard-money.js','assets/init-extra.js','assets/finance-extra.js'])assert.doesNotThrow(()=>new vm.Script(read(p),{filename:p}));
+assert.match(read('order-sheet.html'),/fx9-money\.js/);
+assert.match(read('index.html'),/fx9-dashboard-money\.js/);
+assert.match(read('assets/fx9-money.js'),/USD/);
+assert.match(read('assets/fx9-money.js'),/PKR/);
+assert.match(read('assets/fx9-dashboard-money.js'),/control:kind/);
+assert.match(read('assets/init-extra.js'),/\/production-costs/);
+assert.match(read('assets/app.js'),/\/selling-price/);
+assert.match(read('assets/app.js'),/\/customer-earning/);
+console.log('PASS JS syntax and USD/PKR controls all order screens');
