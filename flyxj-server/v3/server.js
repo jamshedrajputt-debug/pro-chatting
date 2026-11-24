@@ -109,12 +109,15 @@ function financeRow(o){
  const round=n=>Math.round(n*100)/100, fx=Number(f.fx_pkr_per_usd);
  const sale=Number(f.sale_pkr),making=Number(f.making_pkr),shipping=Number(f.shipping_pkr);
  const earning=validEarning(o.customer_earning_pkr)?Number(o.customer_earning_pkr):0;
- const cost=round(making+shipping+earning),profit=round(sale-cost);
+ // User A earning is the revenue basis, not an expense. Fallback to selling
+ // price only for older orders without a separately entered User A earning.
+ const revenue=validEarning(o.customer_earning_pkr)?earning:sale;
+ const cost=round(making+shipping),profit=round(revenue-cost);
  const usd=n=>round(n/fx);
  return {id:o.id,reference:ref(o),title:o.title,quantity:o.quantity||1,status:o.status,
  date:f.recognized_at||o.shipped_at||o.updated_at||o.created_at,courier:o.shipping?.courier||'',
- tracking_id:o.shipping?.tracking_id||'',sale_pkr:sale,making_pkr:making,shipping_pkr:shipping,customer_earning_pkr:earning,
- cost_pkr:cost,profit_pkr:profit,sale_usd:usd(sale),making_usd:usd(making),shipping_usd:usd(shipping),
+ tracking_id:o.shipping?.tracking_id||'',sale_pkr:sale,income_pkr:revenue,making_pkr:making,shipping_pkr:shipping,customer_earning_pkr:earning,
+ cost_pkr:cost,profit_pkr:profit,sale_usd:usd(sale),income_usd:usd(revenue),making_usd:usd(making),shipping_usd:usd(shipping),
  cost_usd:usd(cost),profit_usd:usd(profit),customer_earning_usd:usd(earning),fx_pkr_per_usd:fx};
 }
 const MAX_PDF_BYTES=30*1024*1024;
@@ -914,7 +917,7 @@ function financialReport(req){
  const allPriced=orders.filter(o=>canActive(req.user,o)).map(financeRow).filter(Boolean)
    .sort((a,b)=>new Date(a.date).getTime()-new Date(b.date).getTime());
  const list=allPriced.filter(o=>['shipped','delivered','completed'].includes(o.status));
- const keys=['sale_pkr','making_pkr','shipping_pkr','customer_earning_pkr','cost_pkr','profit_pkr','sale_usd','making_usd','shipping_usd','customer_earning_usd','cost_usd','profit_usd'];
+ const keys=['sale_pkr','income_pkr','making_pkr','shipping_pkr','customer_earning_pkr','cost_pkr','profit_pkr','sale_usd','income_usd','making_usd','shipping_usd','customer_earning_usd','cost_usd','profit_usd'];
  const sum=(rows,k)=>Math.round(rows.reduce((n,o)=>n+(Number(o[k])||0),0)*100)/100;
  const totals=Object.fromEntries(keys.map(k=>[k,sum(list,k)]));
  const periods=(type,count,entries=list)=>{
@@ -958,11 +961,11 @@ function financialReport(req){
    all_rows:allRows,all_count:allRows.length,all_totals:estimatedTotals,
    all_weekly:periods('weekly',10,allPriced),all_monthly:periods('monthly',12,allPriced),
    pending_count:pendingCount,
-   disclaimer:'Gross profit = sale minus making, shipping and User A earning. All Priced includes ESTIMATES for orders not shipped. Shipped Only shows recognised shipments. Does not include marketplace fees, taxes, refunds or other expenses.'};
+   disclaimer:'Gross profit = User A earning (when entered, otherwise selling price) minus making and shipping costs. User A earning is NOT deducted a second time. All Priced includes ESTIMATES for orders not shipped; Shipped Only shows recognised shipments. Excludes platform fees, taxes, refunds and other expenses.'};
 }
 app.get('/api/finance',auth,(req,res)=>res.json(financialReport(req)));
 app.get('/api/finance.csv',auth,(req,res)=>{
- const data=financialReport(req),keys=['reference','title','date','status','courier','tracking_id','sale_pkr','making_pkr','shipping_pkr','customer_earning_pkr','cost_pkr','profit_pkr','sale_usd','making_usd','shipping_usd','customer_earning_usd','cost_usd','profit_usd','cumulative_profit_pkr','cumulative_profit_usd','fx_pkr_per_usd'];
+ const data=financialReport(req),keys=['reference','title','date','status','courier','tracking_id','sale_pkr','income_pkr','making_pkr','shipping_pkr','customer_earning_pkr','cost_pkr','profit_pkr','sale_usd','income_usd','making_usd','shipping_usd','customer_earning_usd','cost_usd','profit_usd','cumulative_profit_pkr','cumulative_profit_usd','fx_pkr_per_usd'];
  const cell=v=>'"'+String(v??'').replaceAll('"','""')+'"';
  res.set('Content-Type','text/csv; charset=utf-8');
  res.set('Content-Disposition','attachment; filename="FLYXJ-financial-report.csv"');
