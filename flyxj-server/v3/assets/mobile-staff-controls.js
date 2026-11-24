@@ -84,7 +84,7 @@
     earn.onsubmit=e=>{e.preventDefault();save(earn,'/customer-earning',controls.earning.payload())};
    }else{
     const rate=field(production,'fx_pkr_per_usd');
-    const saleInput=field(production,'sale_pkr');saleInput.readOnly=true;
+    const saleInput=field(production,'sale_pkr');saleInput.readOnly=true;saleInput.required=false;
     saleInput.title='User A controls the selling price';
     const label=saleInput.closest('label');if(label)label.firstChild.textContent='User A selling price (PKR, read-only)';
     controls.making=money.create(field(production,'making_pkr'),order.finance?.making_pkr,rate,{allowZero:true,defaultCurrency:'USD'});
