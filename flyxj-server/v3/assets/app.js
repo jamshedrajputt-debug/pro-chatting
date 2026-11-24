@@ -469,9 +469,10 @@ async function init(){
     e.preventDefault();const btn=$('signInButton');btn.disabled=true;
     try{
       const data=await api('/api/login',{method:'POST',body:JSON.stringify({username:$('loginName').value,password:$('loginPassword').value})});
-      $('loginPassword').value='';setLoggedIn(data);navigate(location.hash==='#orders'?'orders':'overview');await refresh({silent:true});
-      if(window.FlyxjV8&&location.hash==='#files')window.FlyxjV8.filesCentre();
-      if(window.FlyxjV8&&location.hash==='#more')window.FlyxjV8.moreMenu();
+      $('loginPassword').value='';const requestedView=location.hash;
+      setLoggedIn(data);navigate(requestedView==='#orders'?'orders':'overview');await refresh({silent:true});
+      if(window.FlyxjV8&&requestedView==='#files')window.FlyxjV8.filesCentre();
+      if(window.FlyxjV8&&requestedView==='#more')window.FlyxjV8.moreMenu();
       toast('Welcome to FlyXJ');
     }catch(ex){toast(ex.message,true)}
     finally{btn.disabled=false}
@@ -542,9 +543,9 @@ async function init(){
       try{initExtraFeatures()}catch(err){console.error('FlyXJ extra UI initialization error:',err)}
     }else console.warn('FlyXJ extra script missing. Essential chat click remains available.');
   },0);
-  try{const me=await api('/api/me');setLoggedIn(me);navigate(location.hash==='#orders'?'orders':'overview');await refresh({silent:true});
-    if(window.FlyxjV8&&location.hash==='#files')window.FlyxjV8.filesCentre();
-    if(window.FlyxjV8&&location.hash==='#more')window.FlyxjV8.moreMenu();
+  try{const me=await api('/api/me');const requestedView=location.hash;setLoggedIn(me);navigate(requestedView==='#orders'?'orders':'overview');await refresh({silent:true});
+    if(window.FlyxjV8&&requestedView==='#files')window.FlyxjV8.filesCentre();
+    if(window.FlyxjV8&&requestedView==='#more')window.FlyxjV8.moreMenu();
   }catch{resetApp()}
   document.addEventListener('visibilitychange',()=>{
     if(state.me&&document.visibilityState==='visible')refresh({silent:true});
