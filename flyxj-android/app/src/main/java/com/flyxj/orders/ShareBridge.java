@@ -21,120 +21,134 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.UUID;
 
-/** JavaScript bridge accepts ONLY temporary FLYXJ server-issued file ticket URLs. */
+/** Secure short-lived original photo and PDF share chooser for FLYXJ orders. */
 public final class ShareBridge {
     private final Activity activity;
     private final WebView webView;
     private final Handler main = new Handler(Looper.getMainLooper());
     private volatile boolean busy;
     private static final String DOMAIN = "flyxj-order-manager-free.onrender.com";
-    private static final int MAX_PDF = 32 * 1024 * 1024;
-    private static final int MAX_IMAGE = 14 * 1024 * 1024;
+    private static final int MAX_SINGLE_BYTES = 32 * 1024 * 1024;
+    private static final long MAX_TOTAL_BYTES = 64L * 1024 * 1024;
 
     ShareBridge(Activity activity, WebView webView) {
-        this.activity = activity;
-        this.webView = webView;
+        this.activity=activity;
+        this.webView=webView;
     }
 
     @JavascriptInterface public void shareFiles(String json) {
-        // JavaScriptInterface invokes off the UI thread: do WebView and chooser work on main.
         main.post(() -> handleShare(json));
     }
 
     private void handleShare(String json) {
-        if (busy) { notifyUser("Share already preparing"); return; }
-        if (json == null || json.length() > 3000) { notifyUser("Invalid share request"); return; }
-        String current = webView.getUrl();
-        if (current == null || !current.startsWith("https://" + DOMAIN + "/")) {
-            notifyUser("Open FLYXJ website to share order files");
-            return;
+        if(busy) { notifyUser("Already preparing shared files"); return; }
+        if(json==null||json.length()>4500) { notifyUser("Invalid sharing request"); return; }
+        final Uri[] links;
+        final String[] types;
+        final String title;
+        try {
+            Uri current=Uri.parse(webView.getUrl());
+            if(!"https".equals(current.getScheme())||!DOMAIN.equals(current.getHost())||
+               current.getPort()!=-1)throw new Exception("Open FLYXJ first");
+            JSONObject payload=new JSONObject(json);
+            JSONArray files=payload.getJSONArray("files");
+            if(files.length()<1||files.length()>8)throw new Exception("Choose 1 to 8 original files");
+            JSONArray formats=payload.optJSONArray("types");
+            if(formats!=null&&formats.length()!=files.length())throw new Exception("Invalid file types");
+            links=new Uri[files.length()];
+            types=new String[files.length()];
+            for(int i=0;i<files.length();i++){
+                Uri url=Uri.parse(files.getString(i));
+                if(!"https".equals(url.getScheme())||!DOMAIN.equals(url.getHost())||
+                   url.getPort()!=-1||url.getQuery()!=null||url.getFragment()!=null||
+                   !url.getPath().matches("/api/mobile-file/[0-9a-f]{64}"))
+                    throw new Exception("Untrusted file link");
+                links[i]=url;
+                String mime=formats==null?(i==0?"image/png":"application/pdf"):formats.getString(i);
+                if(!mime.equals("image/jpeg")&&!mime.equals("image/png")&&!mime.equals("image/webp")&&!mime.equals("application/pdf"))
+                    throw new Exception("Unsupported attachment type");
+                types[i]=mime;
+            }
+            title=payload.optString("title","Share FLYXJ order files");
+        } catch(Exception e) {
+            notifyUser("Share cancelled: "+e.getMessage());return;
         }
-        final String[] tickets = new String[2];
-        try {
-            JSONObject request = new JSONObject(json);
-            JSONArray files = request.getJSONArray("files");
-            if (files.length() != 2) throw new Exception("Combined PNG and PDF are required");
-            for (int i = 0; i < 2; i++) {
-                String value = files.getString(i);
-                Uri url = Uri.parse(value);
-                if (!"https".equals(url.getScheme()) || !DOMAIN.equals(url.getHost()) ||
-                    url.getPort() != -1 || url.getQuery() != null || url.getFragment() != null ||
-                    !url.getPath().matches("/api/mobile-file/[0-9a-f]{64}")) {
-                    throw new Exception("Only secure FLYXJ file links can be shared");
-                }
-                tickets[i] = url.toString();
-            }
-        } catch (Exception e) { notifyUser("Cannot share: " + e.getMessage()); return; }
-        busy = true;
-        notifyUser("Preparing PNG + PDF to share...");
+        busy=true;
+        notifyUser("Preparing "+links.length+" original file(s)...");
         new Thread(() -> {
-            ArrayList<Uri> uris = new ArrayList<>();
+            ArrayList<Uri> shareUris=new ArrayList<>();
+            long total=0;
             try {
-                File folder = new File(activity.getCacheDir(), "shared");
-                if (!folder.exists() && !folder.mkdirs()) throw new Exception("Cannot prepare private cache");
-                for (int i = 0; i < tickets.length; i++) {
-                    boolean pdf = i == 1;
-                    String name = UUID.randomUUID().toString().replace("-", "") + (pdf ? ".pdf" : ".png");
-                    File target = new File(folder, name);
-                    download(tickets[i], target, pdf ? MAX_PDF : MAX_IMAGE, pdf);
-                    Uri uri = new Uri.Builder().scheme("content").authority(ShareFileProvider.AUTHORITY)
-                        .appendPath("shared").appendPath(name).build();
-                    uris.add(uri);
+                File directory=new File(activity.getCacheDir(),"shared");
+                if(!directory.exists()&&!directory.mkdirs())throw new Exception("Private cache unavailable");
+                // Remove old transient share data only; no customer images are modified remotely.
+                File[] older=directory.listFiles();
+                if(older!=null)for(File old:older)if(old.isFile()&&System.currentTimeMillis()-old.lastModified()>6L*60L*60L*1000L)old.delete();
+                for(int i=0;i<links.length;i++){
+                    String extension=types[i].equals("application/pdf")?".pdf":
+                       types[i].equals("image/jpeg")?".jpg":
+                       types[i].equals("image/webp")?".webp":".png";
+                    String randomName=UUID.randomUUID().toString().replace("-","")+extension;
+                    File target=new File(directory,randomName);
+                    long bytes=download(links[i].toString(),target,types[i]);
+                    total+=bytes;
+                    if(total>MAX_TOTAL_BYTES){target.delete();throw new Exception("Total share size too large");}
+                    Uri uri=new Uri.Builder().scheme("content").authority(ShareFileProvider.AUTHORITY)
+                        .appendPath("shared").appendPath(randomName).build();
+                    shareUris.add(uri);
                 }
                 main.post(() -> {
-                    try {
-                        Intent send = new Intent(Intent.ACTION_SEND_MULTIPLE);
-                        send.setType("*/*");
-                        send.putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris);
-                        ClipData clip = ClipData.newUri(activity.getContentResolver(), "FlyXJ order files", uris.get(0));
-                        for (int i = 1; i < uris.size(); i++)
-                            clip.addItem(new ClipData.Item(uris.get(i)));
-                        send.setClipData(clip);
-                        send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                        activity.startActivity(Intent.createChooser(send, "Share FLYXJ PNG + PDF"));
-                    } catch (Exception error) {
-                        Toast.makeText(activity, "Share menu unavailable: " + error.getMessage(), Toast.LENGTH_LONG).show();
-                    } finally { busy = false; }
+                    try{
+                        boolean images=true,allPdf=true;
+                        for(String type:types){if(!type.startsWith("image/"))images=false;if(!type.equals("application/pdf"))allPdf=false;}
+                        String mime=images?"image/*":allPdf?"application/pdf":"*/*";
+                        Intent share=new Intent(shareUris.size()==1?Intent.ACTION_SEND:Intent.ACTION_SEND_MULTIPLE);
+                        share.setType(mime);
+                        if(shareUris.size()==1)share.putExtra(Intent.EXTRA_STREAM,shareUris.get(0));
+                        else share.putParcelableArrayListExtra(Intent.EXTRA_STREAM,shareUris);
+                        ClipData clip=ClipData.newUri(activity.getContentResolver(),"FLYXJ order",shareUris.get(0));
+                        for(int i=1;i<shareUris.size();i++)clip.addItem(new ClipData.Item(shareUris.get(i)));
+                        share.setClipData(clip);
+                        share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                        activity.startActivity(Intent.createChooser(share,title.length()>75?title.substring(0,75):title));
+                    } catch(Exception e){notifyUser("Share menu error: "+e.getMessage());}
+                    finally{busy=false;}
                 });
-            } catch (Exception error) {
-                main.post(() -> {
-                    busy = false;
-                    Toast.makeText(activity, "Share failed: " + error.getMessage(), Toast.LENGTH_LONG).show();
-                });
+            }catch(Exception e){
+                main.post(() -> {busy=false;notifyUser("Sharing failed: "+e.getMessage());});
             }
-        }).start();
+        },"FLYXJ-private-file-share").start();
     }
 
-    private void download(String address, File file, int limit, boolean pdf) throws Exception {
-        HttpURLConnection conn = (HttpURLConnection)new URL(address).openConnection();
-        conn.setInstanceFollowRedirects(false);
-        conn.setConnectTimeout(12000);
-        conn.setReadTimeout(25000);
-        conn.setRequestProperty("Accept", pdf ? "application/pdf" : "image/png");
-        try {
-            if (conn.getResponseCode() != 200) throw new Exception("File link expired. Reopen order and retry.");
-            String mime = conn.getContentType();
-            if (mime == null || !(pdf ? mime.startsWith("application/pdf") : mime.startsWith("image/png")))
-                throw new Exception("Unexpected file format");
-            if (conn.getContentLengthLong() > limit) throw new Exception("Attachment too large");
-            int count = 0;
-            try (InputStream input = conn.getInputStream(); FileOutputStream output = new FileOutputStream(file)) {
-                byte[] buffer = new byte[16384];
-                int length;
-                while ((length = input.read(buffer)) != -1) {
-                    count += length;
-                    if (count > limit) throw new Exception("File exceeds share size limit");
-                    output.write(buffer, 0, length);
+    private long download(String link,File file,String expectedType) throws Exception {
+        HttpURLConnection connection=(HttpURLConnection)new URL(link).openConnection();
+        connection.setInstanceFollowRedirects(false);
+        connection.setConnectTimeout(12000);
+        connection.setReadTimeout(25000);
+        connection.setRequestProperty("Accept",expectedType);
+        try{
+            if(connection.getResponseCode()!=200)throw new Exception("Order file expired. Retry sharing.");
+            String responseType=connection.getContentType();
+            if(responseType==null||!responseType.toLowerCase().startsWith(expectedType))
+                throw new Exception("Unexpected image/PDF format");
+            if(connection.getContentLengthLong()>MAX_SINGLE_BYTES)
+                throw new Exception("File too large");
+            int count=0;
+            try(InputStream in=connection.getInputStream();FileOutputStream out=new FileOutputStream(file)){
+                byte[] buffer=new byte[16384];int length;
+                while((length=in.read(buffer))!=-1){
+                    count+=length;
+                    if(count>MAX_SINGLE_BYTES)throw new Exception("Photo exceeds limit");
+                    out.write(buffer,0,length);
                 }
             }
-            if (count < 20) throw new Exception("Attachment missing");
-        } catch (Exception error) {
-            file.delete();
-            throw error;
-        } finally { conn.disconnect(); }
+            if(count<20)throw new Exception("Empty original file");
+            return count;
+        }catch(Exception error){file.delete();throw error;}
+        finally{connection.disconnect();}
     }
 
-    private void notifyUser(String message) {
-        main.post(() -> Toast.makeText(activity, message, Toast.LENGTH_SHORT).show());
+    private void notifyUser(String text){
+        main.post(() -> Toast.makeText(activity,text,Toast.LENGTH_SHORT).show());
     }
 }
