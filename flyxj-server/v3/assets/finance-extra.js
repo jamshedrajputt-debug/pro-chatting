@@ -8,20 +8,22 @@ async function loadFinance(){
 }
 function renderFinance(){
  const f=state.finance;if(!f)return;
- const totals=f.totals||{};
+ const all=document.getElementById('financeScope')?.value!=='shipped';
+ const totals=(all?f.all_totals:f.totals)||{};
+ const selectedRows=(all?f.all_rows:f.rows)||[];
  const show=(id,value,currency)=>$(id).textContent=formatAmount(value||0,currency);
  show('fSalesPkr',totals.sale_pkr);show('fSalesUsd',totals.sale_usd,'USD');
  show('fCostPkr',totals.cost_pkr);show('fCostUsd',totals.cost_usd,'USD');
  show('fProfitPkr',totals.profit_pkr);show('fProfitUsd',totals.profit_usd,'USD');
- $('financeCount').textContent=(f.count||0)+' shipped order(s)';
- $('financeDisclaimer').textContent=f.disclaimer||'Gross profit excludes other expenses.';
+ $('financeCount').textContent=all?(f.all_count||0)+' priced orders · '+(f.pending_count||0)+' estimated / not shipped':(f.count||0)+' shipped order(s) · recognised';
+ $('financeDisclaimer').textContent=(all?'ESTIMATED TOTALS include orders not yet shipped. Do not treat them as realised profit. ':'Recognised orders only. ')+(f.disclaimer||'Gross profit excludes other expenses.');
  const tbody=$('financeRows');tbody.replaceChildren();
- if(!f.rows?.length){
-  const tr=node('tr'),td=node('td','muted','No shipped orders with prices yet.');td.colSpan=9;tr.append(td);tbody.append(tr);
+ if(!selectedRows.length){
+  const tr=node('tr'),td=node('td','muted','No orders with complete sale, making, shipping and FX figures yet.');td.colSpan=9;tr.append(td);tbody.append(tr);
  }
- for(const r of (f.rows||[])){
+ for(const r of selectedRows){
   const tr=node('tr');tr.dataset.id=r.id;tr.className='finance-order-row';
-  const first=node('td');first.append(node('b','',r.reference),node('div','tiny muted',r.title));
+  const first=node('td');first.append(node('b','',r.reference),node('div','tiny muted',r.title),node('div','tiny muted',r.recognised?'● Shipped · recognised':'◌ Not shipped · estimate'));
   const date=node('td','',day(r.date));
   const track=node('td');track.append(node('b','',r.courier||'—'),node('div','tiny muted',r.tracking_id||'—'));
   tr.append(first,date,track);
@@ -35,7 +37,7 @@ function renderFinance(){
  }
  $('periodWeek').classList.toggle('active',state.financePeriod==='weekly');
  $('periodMonth').classList.toggle('active',state.financePeriod==='monthly');
- drawFinanceChart(f[state.financePeriod]||[]);
+ drawFinanceChart(f[(all?'all_':'')+state.financePeriod]||[]);
 }
 function drawFinanceChart(periods){
  const host=$('profitChart');host.replaceChildren();
