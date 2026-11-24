@@ -76,5 +76,64 @@
    }catch(e){set(e.message)}
    finally{if(button)button.disabled=false}
  }
- window.FlyxjShareFiles={share};
+ const photoPending=new Map();
+ // Share all ORIGINAL order images, never a collage: one tap on Android V8+.
+ async function shareAllPhotos(id,button,status){
+   const set=value=>{if(status)status.textContent=value};
+   if(button?.disabled)return;
+   const key=String(id);
+   if(!/^[1-9]\\d{0,8}$/.test(key)){set('Invalid order number');return}
+   const versionMatch=/FlyXJAndroid\\/(\\d+)/.exec(navigator.userAgent);
+   const nativeReady=Number(versionMatch?.[1]||0)>=8 &&
+     window.FlyxjShare&&typeof window.FlyxjShare.shareFiles==='function';
+   const previous=photoPending.get(key);
+   // For browsers, second user tap is necessary to keep Web Share user activation.
+   if(!nativeReady&&previous&&Date.now()-previous.at<7*60000){
+     try {
+       if(!navigator.share||navigator.canShare&&!navigator.canShare({files:previous.files}))
+         throw Error('This browser cannot share multiple images. Update the FLYXJ Android app.');
+       await navigator.share({files:previous.files,title:'FLYXJ order '+key+' reference photos'});
+       set('Share menu completed. Recipient delivery depends on your selected app.');
+     }catch(e){set(e.name==='AbortError'?'Sharing cancelled':e.message)}
+     return;
+   }
+   if(button)button.disabled=true;
+   set('Preparing all original customer photos…');
+   try{
+     const me=await json('/api/me');
+     if(me.role!=='staff')throw Error('Only User B / staff can share all photos');
+     const payload=await json('/api/orders/'+key);
+     const count=payload.order?.photos?.length||0;
+     if(count<1||count>8)throw Error('This order has no available reference photos (maximum 8)');
+     const tickets=[];
+     for(let index=0;index<count;index++){
+       const item=await json(base+key+'/mobile-file',{
+         method:'POST',
+         headers:{'content-type':'application/json','x-csrf-token':me.csrf},
+         body:JSON.stringify({kind:'photo',index})
+       });
+       const ext=/\\.(jpg|png|webp)$/i.exec(item.filename||'');
+       if(!ext)throw Error('Unexpected photo file type');
+       const mime=ext[1].toLowerCase()==='jpg'?'image/jpeg':'image/'+ext[1].toLowerCase();
+       tickets.push({url:validTicket(item),filename:item.filename,type:mime});
+     }
+     if(nativeReady){
+       window.FlyxjShare.shareFiles(JSON.stringify({
+         files:tickets.map(t=>t.url),types:tickets.map(t=>t.type),
+         title:'FLYXJ · Share '+count+' original photos'
+       }));
+       set(count+' original photos prepared. Choose WhatsApp, Gmail or another app from Android Share.');
+     }else{
+       if(!navigator.share||typeof File!=='function')
+         throw Error('Direct sharing requires FLYXJ Android V8 or a browser with file sharing.');
+       const files=await browserFiles(tickets);
+       if(navigator.canShare&&!navigator.canShare({files}))
+         throw Error('This browser cannot share all '+count+' photos together.');
+       photoPending.set(key,{files,at:Date.now()});
+       set(count+' original photos ready. Tap Share All Photos once more to open the app picker.');
+     }
+   }catch(e){set('Share failed: '+e.message)}
+   finally{if(button)button.disabled=false}
+ }
+ window.FlyxjShareFiles={share,shareAllPhotos};
 })();
