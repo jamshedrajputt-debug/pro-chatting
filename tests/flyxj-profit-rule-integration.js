@@ -57,11 +57,17 @@ async function run(){
  r=await req('/api/finance',b);
  assert.equal(r.data.rows[0].profit_pkr,5000,'Earning minus only production and shipping');
  assert.equal(r.data.rows[0].income_pkr,50000);
+ r=await req('/api/orders/1/customer-earning',a,'PATCH',{amount:'200',currency:'USD',fx_pkr_per_usd:'270'});
+ assert.equal(r.status,200,'User A can enter net Etsy earnings in USD');
+ assert.equal(r.data.order.customer_earning_pkr,54000,'USD converted to PKR using saved order rate');
+ assert.equal((await req('/api/finance',b)).data.all_totals.profit_pkr,9000,'graph updates from USD earning');
+ r=await req('/api/orders/1/customer-earning',a,'PATCH',{amount:'200',currency:'USD',fx_pkr_per_usd:'290'});
+ assert.equal(r.status,400,'prevent conflicting order FX rate');
  const stored=JSON.parse(fs.readFileSync(path.join(dataDir,'orders.json'),'utf8'));
  assert.equal(stored[0].finance.sale_pkr,60000,'selling price preserved');
  assert.equal(stored[0].finance.making_pkr,30000,'making preserved');
  assert.equal(stored[0].finance.shipping_pkr,15000,'shipping preserved');
- assert.equal(stored[0].customer_earning_pkr,50000,'earning preserved on edit');
- console.log('PASS: PKR 60,000 earning - PKR 30,000 making - PKR 15,000 shipping = PKR 15,000 real earning, USD $55.56, both graphs consistent, no data rewrite');
+ assert.equal(stored[0].customer_earning_pkr,54000,'USD earning converted safely');
+ console.log('PASS: Etsy net 60000 - making 30000 - shipping 15000 = real profit 15000; both graphs, USD conversion and rate validation work');
 }
 run().catch(e=>{console.error(e,logs.slice(-1100));process.exitCode=1}).finally(()=>{proc.kill();fs.rmSync(dataDir,{recursive:true,force:true})});
