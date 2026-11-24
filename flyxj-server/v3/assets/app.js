@@ -215,6 +215,15 @@ function renderOrders(){
       maker.title='Download one image with four photos, size and color';
       maker.addEventListener('click',e=>e.stopPropagation());
       actions.append(maker);
+      const shareAll=node('button','flyxj-v6-inline-assign','↗ All photos');
+      shareAll.type='button';
+      shareAll.title='Share all original customer photos to WhatsApp, Gmail or any compatible app';
+      shareAll.onclick=e=>{
+        e.stopPropagation();
+        if(!window.FlyxjShareFiles?.shareAllPhotos)return toast('Share update unavailable. Refresh the app.',true);
+        window.FlyxjShareFiles.shareAllPhotos(o.id,shareAll,null);
+      };
+      actions.append(shareAll);
       const assign=node('button','flyxj-v6-inline-assign','Assign');
       assign.type='button';assign.title='Assign production staff';
       assign.onclick=e=>{e.stopPropagation();if(window.flyxjV6Assign)window.flyxjV6Assign(o)};
