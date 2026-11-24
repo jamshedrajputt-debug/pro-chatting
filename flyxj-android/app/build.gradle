@@ -6,8 +6,8 @@ android {
         applicationId 'com.flyxj.orders.downloadfix'
         minSdk 23
         targetSdk 35
-        versionCode 7
-        versionName '7.0-native-share'
+        versionCode 8
+        versionName '8.0-all-original-photos-share'
     }
     signingConfigs {
         flyxjRelease {
