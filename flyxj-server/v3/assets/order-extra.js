@@ -42,8 +42,9 @@ function formatAmount(value,currency='PKR'){
  return (currency==='USD'?'$':'PKR ')+n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
 }
 function financeInputs(){
- return {making_pkr:$('makingPkr').value,
- shipping_pkr:$('shippingPkr').value,fx_pkr_per_usd:$('usdRate').value};
+ const values=window.FlyxjDashboardMoney?.costs();
+ if(!values)throw Error('Enter making, shipping and the order exchange rate');
+ return values;
 }
 function renderExtraDetails(o){
  const pdf=$('orderPdfLink');pdf.replaceChildren();
@@ -84,7 +85,7 @@ function renderExtraDetails(o){
   view.append(node('b','', 'Real earning / gross profit: '+formatAmount(profit)+' | '+formatAmount(profit/fx,'USD')));
   view.append(node('small','muted','Historical rate: '+fx+' PKR per USD'));
   }
- }else view.append(node('span','muted','User A earning: '+formatAmount(o.customer_earning_pkr||0)+'. User B will enter making cost, shipping cost and exchange rate.'));
+ }else view.append(node('span','muted','User A net Etsy earning: '+formatAmount(o.customer_earning_pkr||0)+'. User B will enter making cost, shipping cost and exchange rate.'));
  if(state.me?.role==='staff'){
   $('makingPkr').value=f.making_pkr??'';
   $('shippingPkr').value=f.shipping_pkr??'';$('usdRate').value=f.fx_pkr_per_usd??'';
