@@ -154,7 +154,7 @@ function sharePreset(order){
  const ui=modal('Share Files · '+(order.reference||''),'Select a saved preset or choose an attachment combination.');
  const storageKey='flyxj-v8-share-preset-'+encodeURIComponent(state.me.username);
  let selected='both';try{selected=localStorage.getItem(storageKey)||'both'}catch{}
- const options=[['both','Combined PNG + original PDF','Both files in one native Android share chooser'],['maker','Combined maker image only','One PNG with four photos, size and colour'],['pdf','Original PDF only','Preserve original document quality'],['photos','Reference photos','Pick individual photos from existing Share Files menu']];
+ const options=[['both','Combined PNG + original PDF','Both files in one native Android share chooser'],['maker','Combined maker image only','One PNG with four photos, size and colour'],['pdf','Original PDF only','Preserve original document quality'],['photos','Share ALL original photos','Send each original customer image in one share request']];
  const wrap=el('div');ui.body.append(wrap);
  for(const [key,title,description] of options){
   const row=el('div','fx8-preset');const input=el('input');input.type='radio';input.name='fx8Preset';input.value=key;input.checked=key===selected;
@@ -167,6 +167,10 @@ function sharePreset(order){
   if(selected==='both'){
    if(!window.FlyxjShareFiles)return status.textContent='Share service unavailable. Reopen the order.';
    await window.FlyxjShareFiles.share(order.id,button,status);return;
+  }
+  if(selected==='photos'){
+   if(!window.FlyxjShareFiles?.shareAllPhotos)return status.textContent='Share All Photos is unavailable. Refresh app.';
+   await window.FlyxjShareFiles.shareAllPhotos(order.id,button,status);return;
   }
   if(!window.FlyxjOrderActions)return status.textContent='Share menu unavailable';
   ui.hide();window.FlyxjOrderActions.share(order);
