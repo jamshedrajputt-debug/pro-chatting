@@ -42,6 +42,14 @@ async function run(){
  assert.equal((await req('/api/orders/1/shipping',b,'PATCH',{courier:'DHL',tracking_id:'123',shipped_quantity:6})).status,400,'cannot ship more than ordered');
  r=await req('/api/orders/1/finance',b,'PATCH',{sale_pkr:12000,making_pkr:5000,shipping_pkr:700,fx_pkr_per_usd:270});
  assert.equal(r.status,200,'User B can save making+shipping cost');assert.equal(r.data.order.finance.making_pkr,5000);
+ const pendingFinance=await req('/api/finance',a);
+ assert.equal(pendingFinance.status,200);
+ assert.equal(pendingFinance.data.count,0,'pending order not counted as realised');
+ assert.equal(pendingFinance.data.all_count,1,'existing pending order appears in projected graph after User B saves prices');
+ assert.equal(pendingFinance.data.pending_count,1);
+ assert.equal(pendingFinance.data.all_rows[0].recognised,false);
+ assert.equal(pendingFinance.data.all_totals.profit_pkr,5800);
+ assert.equal(pendingFinance.data.totals.profit_pkr,0,'actual profit remains zero until shipped');
  r=await req('/api/orders/1/status',b,'PATCH',{status:'shipped',staff_note:'Two pieces sent',shipped_quantity:2});
  assert.equal(r.status,200,'User B may mark shipped after storing shipping and finance');assert.equal(r.data.order.shipped_quantity,2);
  r=await req('/api/dashboard',a);
@@ -51,6 +59,11 @@ async function run(){
  assert.equal(r.status,200);assert.equal(r.data.order.customer_earning_pkr,750);
  const finances=await req('/api/finance',a);assert.equal(finances.status,200);assert.equal(finances.data.rows[0].profit_pkr,5550);
  const staffFinances=await req('/api/finance',b);assert.equal(staffFinances.data.rows[0].profit_pkr,5550,'both accounts see the same finance result');
+ assert.equal(staffFinances.data.all_count,1,'shipped order stays in all priced graph');
+ assert.equal(staffFinances.data.all_rows[0].recognised,true);
+ assert.equal(staffFinances.data.all_totals.profit_pkr,5550,'both graph scopes reflect User A earning edit');
+ assert.equal(finances.data.all_totals.profit_pkr,5550,'User A and B see consistent report');
+
  const sheet=await fetch(base+'/order/1');assert.equal(sheet.status,200);const html=await sheet.text();assert.match(html,/fx9ShipForm/);assert.match(html,/fx9FinanceForm/);assert.match(html,/fx9EarningForm/);
  const script=await fetch(base+'/assets/mobile-staff-controls.js');assert.equal(script.status,200);
  const saved=JSON.parse(fs.readFileSync(path.join(dir,'orders.json'),'utf8'));assert.equal(saved[0].shipped_quantity,2);assert.equal(saved[0].finance.making_pkr,5000);
