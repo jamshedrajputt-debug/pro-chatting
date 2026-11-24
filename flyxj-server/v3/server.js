@@ -916,10 +916,11 @@ app.patch('/api/orders/:id/customer-earning',auth,csrf,async(req,res)=>{
    earningPkr=Math.round(Number(req.body.customer_earning_pkr)*100)/100;
  }
  const original=o.customer_earning_pkr;
+ const oldFinance=structuredClone(o.finance||financeDefault());
  o.customer_earning_pkr=earningPkr;
  history(o,req.user.username,'User A earning updated','finance');
  try{await save();pushOrder(o,'finance','User A earning updated');return res.json({order:publicOrder(o)})}
- catch(e){o.customer_earning_pkr=original;return err(res,503,'Could not save earning')}
+ catch(e){o.customer_earning_pkr=original;o.finance=oldFinance;return err(res,503,'Could not save earning')}
 });
 app.patch('/api/orders/:id/finance',auth,csrf,async(req,res)=>{
  if(req.user.role!=='staff')return err(res,403,'Staff only');
@@ -928,8 +929,8 @@ app.patch('/api/orders/:id/finance',auth,csrf,async(req,res)=>{
  if(!f)return err(res,400,'Enter making and shipping PKR costs and PKR/USD rate');
  if(isShipped(o)&&!f.recognized_at)f.recognized_at=now();
  o.finance=f;
- history(o,req.user.username,'Sale/making/shipping costs updated','finance');
- try{await save();pushOrder(o,'finance','Order pricing updated');res.json({order:publicOrder(o)})}catch{err(res,500,'Pricing save failed')}
+ history(o,req.user.username,'Making and shipping costs updated','finance');
+ try{await save();pushOrder(o,'finance','Making and shipping costs updated');res.json({order:publicOrder(o)})}catch{err(res,500,'Pricing save failed')}
 });
 
 
