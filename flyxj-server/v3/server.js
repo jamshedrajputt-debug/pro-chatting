@@ -178,6 +178,7 @@ function publicOrder(o) {
     ...rest,reference:ref(o),
     customer:o.customer||o.ordered_by||'',
     shipping:o.shipping||shipDefault(),
+    shipped_quantity:Number.isInteger(o.shipped_quantity)?o.shipped_quantity:(isShipped(o)?(o.quantity||1):0),
     finance:o.finance||financeDefault(),customer_earning_pkr:validEarning(o.customer_earning_pkr)?Number(o.customer_earning_pkr):null,
     measurements:o.measurements||{},expected_date:o.expected_date||'',priority:o.priority||'normal',
     assigned_to:o.assigned_to||'',
@@ -212,9 +213,10 @@ function slimStats(list) {
   const by_status=Object.fromEntries(STATUSES.map(s=>[s,0]));
   for(const o of list)if(by_status[o.status]!==undefined)by_status[o.status]++;
   const active=list.filter(o=>!['completed','cancelled','delivered'].includes(o.status)).length;
-  const shipped=list.filter(o=>['shipped','delivered'].includes(o.status)).length;
+  const shipped=list.filter(o=>['shipped','delivered','completed'].includes(o.status)).length;
+  const shipped_units=list.reduce((sum,o)=>sum+(Number.isInteger(o.shipped_quantity)?o.shipped_quantity:(isShipped(o)?(o.quantity||1):0)),0);
   const this_week=list.filter(o=>Date.now()-new Date(o.created_at).getTime()<7*86400000).length;
-  return {total:list.length,active,shipped,completed:by_status.completed+by_status.delivered,this_week,by_status};
+  return {total:list.length,active,shipped,shipped_units,completed:by_status.completed+by_status.delivered,this_week,by_status};
 }
 
 app.get('/api/health',(req,res)=>res.json({ok:true,version:'8.0-web',storage:persistent.enabled?'supabase-private':'ephemeral',orders:orders.filter(o=>!o.deleted_at).length}));
@@ -640,12 +642,18 @@ app.patch('/api/orders/:id/status',auth,csrf,async(req,res)=>{
     if(!f)return err(res,400,'Enter selling price, making cost, shipping cost in PKR, and PKR/USD rate');
     nextFinance=f;
   }
+  const nextShippedQuantity=req.body?.shipped_quantity===undefined
+    ?(Number.isInteger(o.shipped_quantity)?o.shipped_quantity:(isShipped(o)?o.quantity:0))
+    :Number(req.body.shipped_quantity);
+  if(!Number.isInteger(nextShippedQuantity)||nextShippedQuantity<0||nextShippedQuantity>o.quantity)
+    return err(res,400,'Shipped quantity must be between 0 and ordered quantity');
   if(['shipped','delivered','completed'].includes(status)&&(!validFinance(nextFinance)||!nextShipping?.courier||!nextShipping?.tracking_id))
     return err(res,400,'Shipping requires courier, tracking ID, selling price, making cost, shipping cost and PKR per USD rate');
   if(['cutting','stitching'].includes(status)&&o.pdf_file&&o.approval?.status!=='approved')
     return err(res,400,'Customer approval required before cutting or stitching');
   o.shipping=nextShipping;o.finance=nextFinance;
   o.status=status;o.staff_note=note;
+  o.shipped_quantity=isShipped(o)?(req.body?.shipped_quantity===undefined&&nextShippedQuantity===0?o.quantity:nextShippedQuantity):nextShippedQuantity;
   if(isShipped(o)&&!o.finance.recognized_at)o.finance.recognized_at=now();
   if(status==='shipped'&&!o.shipped_at)o.shipped_at=now();
   o.completed_at=['delivered','completed'].includes(status)?now():null;
@@ -659,9 +667,13 @@ app.patch('/api/orders/:id/shipping',auth,csrf,async(req,res)=>{
   const tracking_id=text(req.body&&req.body.tracking_id,120);
   const tracking_url=safeUrl(req.body&&req.body.tracking_url);
   if(tracking_url===null)return err(res,400,'Tracking URL must start with https://');
+  const suppliedQuantity=req.body?.shipped_quantity;
+  const shippedQuantity=suppliedQuantity===undefined?(Number.isInteger(o.shipped_quantity)?o.shipped_quantity:(isShipped(o)?o.quantity:0)):Number(suppliedQuantity);
+  if(!Number.isInteger(shippedQuantity)||shippedQuantity<0||shippedQuantity>o.quantity)return err(res,400,'Shipped pieces must be between 0 and order quantity');
   if(!courier&&!tracking_id)return err(res,400,'Enter courier or tracking ID');
   o.shipping={courier,tracking_id,tracking_url,updated_at:now()};
-  history(o,req.user.username,'Shipping tracking updated','shipping');
+  o.shipped_quantity=shippedQuantity;
+  history(o,req.user.username,'Shipping tracking updated · '+shippedQuantity+' of '+o.quantity+' shipped','shipping');
   try{await save();notifyCustomerTracking(o);pushOrder(o,'shipping','Courier tracking updated');res.json({order:publicOrder(o)})}catch{err(res,500,'Shipping details could not be saved')}
 });
 app.post('/api/orders/:id/return',auth,csrf,async(req,res)=>{
