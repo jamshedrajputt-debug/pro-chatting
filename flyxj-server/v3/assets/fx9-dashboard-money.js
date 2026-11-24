@@ -29,5 +29,5 @@
   if(!controls.making||!controls.shipping)return null;
   return {making:payload('making'),shipping:payload('shipping'),fx_pkr_per_usd:el('usdRate').value};
  }
- window.FlyxjDashboardMoney={init,payload,costs};
+ window.FlyxjDashboardMoney={init,payload,costs,control:kind=>controls[kind]};
 })();
