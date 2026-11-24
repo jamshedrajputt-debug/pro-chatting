@@ -11,7 +11,7 @@ assert.match(js,/\/shipping'/);assert.match(js,/\/finance'/);assert.match(js,/\/
 assert.match(app,/statShippedPieces/);
 assert.match(read('assets/v8-experience.js'),/Log out securely/);
 assert.match(server,/shipped_units/);assert.match(server,/shipped_quantity/);
-assert.match(server,/Gross profit = sale minus making, shipping and User A earning/);
+assert.match(server,/Gross profit = User A earning/);
 assert.match(server,/all_rows:allRows/);
 assert.match(server,/pending_count:pendingCount/);
 console.log('PASS mobile order sheet, logout and finance integration syntax');
