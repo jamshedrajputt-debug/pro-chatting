@@ -48,6 +48,7 @@ function toggleChatSurface(open){
   }
 }
 function resetApp(){
+  if(window.FlyxjV8)window.FlyxjV8.onLogout();
   if(state.events){state.events.close();state.events=null}
   state.me=null;state.orders=[];state.selected=null;state.announcedTracking.clear();state.chatOpen=false;
   $('floatingChatButton').classList.add('hidden');$('floatingChatPanel').classList.add('hidden');
@@ -64,6 +65,7 @@ function setLoggedIn(me){
   for(const e of document.querySelectorAll('.customer-only'))e.classList.toggle('hidden',me.role!=='customer');
   $('floatingChatButton').classList.remove('hidden');
   connectTrackingEvents();
+  if(window.FlyxjV8)window.FlyxjV8.onLogin();
 }
 // Live updates through a session-authenticated private stream.
 // Polling continues as a fallback for devices where streaming is interrupted.
@@ -270,6 +272,7 @@ function navigate(view,{fromHistory=false}={}){
   if(view==='team')loadTeam();
   for(const nav of document.querySelectorAll('[data-nav]'))nav.classList.toggle('active',nav.dataset.nav===view);
   if(view!=='finance'&&view!=='team')renderOrders();
+  if(window.FlyxjV8)window.FlyxjV8.sync();
 }
 function openDrawer(id){
   $('overlay').classList.remove('hidden');
@@ -329,6 +332,7 @@ async function submitOrder(event){
       measurements:readMeasurements()
     };
     const data=await api('/api/orders',{method:'POST',body:JSON.stringify(body)});
+    if(window.FlyxjV8)window.FlyxjV8.afterOrderCreated();
     $('newOrderForm').reset();state.files=[];renderImagePreview();closeDrawer();
     await refresh({silent:true});
     navigate('orders');toast('Order '+data.order.reference+' created successfully');
@@ -465,7 +469,10 @@ async function init(){
     e.preventDefault();const btn=$('signInButton');btn.disabled=true;
     try{
       const data=await api('/api/login',{method:'POST',body:JSON.stringify({username:$('loginName').value,password:$('loginPassword').value})});
-      $('loginPassword').value='';setLoggedIn(data);navigate(location.hash==='#orders'?'orders':'overview');await refresh({silent:true});toast('Welcome to FlyXJ');
+      $('loginPassword').value='';setLoggedIn(data);navigate(location.hash==='#orders'?'orders':'overview');await refresh({silent:true});
+      if(window.FlyxjV8&&location.hash==='#files')window.FlyxjV8.filesCentre();
+      if(window.FlyxjV8&&location.hash==='#more')window.FlyxjV8.moreMenu();
+      toast('Welcome to FlyXJ');
     }catch(ex){toast(ex.message,true)}
     finally{btn.disabled=false}
   };
@@ -535,7 +542,10 @@ async function init(){
       try{initExtraFeatures()}catch(err){console.error('FlyXJ extra UI initialization error:',err)}
     }else console.warn('FlyXJ extra script missing. Essential chat click remains available.');
   },0);
-  try{const me=await api('/api/me');setLoggedIn(me);navigate(location.hash==='#orders'?'orders':'overview');await refresh({silent:true})}catch{resetApp()}
+  try{const me=await api('/api/me');setLoggedIn(me);navigate(location.hash==='#orders'?'orders':'overview');await refresh({silent:true});
+    if(window.FlyxjV8&&location.hash==='#files')window.FlyxjV8.filesCentre();
+    if(window.FlyxjV8&&location.hash==='#more')window.FlyxjV8.moreMenu();
+  }catch{resetApp()}
   document.addEventListener('visibilitychange',()=>{
     if(state.me&&document.visibilityState==='visible')refresh({silent:true});
   });
