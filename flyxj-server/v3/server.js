@@ -911,12 +911,13 @@ app.patch('/api/orders/:id/finance',auth,csrf,async(req,res)=>{
 
 
 function financialReport(req){
- const list=orders.filter(o=>canActive(req.user,o)&&isShipped(o)).map(financeRow).filter(Boolean)
+ const allPriced=orders.filter(o=>canActive(req.user,o)).map(financeRow).filter(Boolean)
    .sort((a,b)=>new Date(a.date).getTime()-new Date(b.date).getTime());
+ const list=allPriced.filter(o=>['shipped','delivered','completed'].includes(o.status));
  const keys=['sale_pkr','making_pkr','shipping_pkr','customer_earning_pkr','cost_pkr','profit_pkr','sale_usd','making_usd','shipping_usd','customer_earning_usd','cost_usd','profit_usd'];
  const sum=(rows,k)=>Math.round(rows.reduce((n,o)=>n+(Number(o[k])||0),0)*100)/100;
  const totals=Object.fromEntries(keys.map(k=>[k,sum(list,k)]));
- const periods=(type,count)=>{
+ const periods=(type,count,entries=list)=>{
   const today=new Date(),anchor=new Date(Date.UTC(today.getUTCFullYear(),today.getUTCMonth(),today.getUTCDate()));
   if(type==='weekly')anchor.setUTCDate(anchor.getUTCDate()-(anchor.getUTCDay()+6)%7);
   else anchor.setUTCDate(1);
@@ -928,7 +929,7 @@ function financialReport(req){
    const end=new Date(start);
    if(type==='weekly')end.setUTCDate(end.getUTCDate()+7);
    else end.setUTCMonth(end.getUTCMonth()+1);
-   const group=list.filter(o=>{const d=new Date(o.date);return d>=start&&d<end});
+   const group=entries.filter(o=>{const d=new Date(o.date);return d>=start&&d<end});
    const row={date:start.toISOString().slice(0,10),
     label:type==='weekly'?start.getUTCDate()+' '+start.toLocaleString('en',{month:'short',timeZone:'UTC'}):start.toLocaleString('en',{month:'short',year:'2-digit',timeZone:'UTC'}),
     orders:group.length};
@@ -940,13 +941,24 @@ function financialReport(req){
   return series;
  };
  let runningPkr=0,runningUsd=0;
- const rows=list.map(o=>{
-  runningPkr=Math.round((runningPkr+o.profit_pkr)*100)/100;
-  runningUsd=Math.round((runningUsd+o.profit_usd)*100)/100;
-  return {...o,cumulative_profit_pkr:runningPkr,cumulative_profit_usd:runningUsd};
- });
+ const addCumulative=entries=>{
+   let pkr=0,usd=0;
+   return entries.map(o=>{
+     pkr=Math.round((pkr+o.profit_pkr)*100)/100;
+     usd=Math.round((usd+o.profit_usd)*100)/100;
+     return {...o,recognised:['shipped','delivered','completed'].includes(o.status),
+       cumulative_profit_pkr:pkr,cumulative_profit_usd:usd};
+   });
+ };
+ const rows=addCumulative(list);
+ const allRows=addCumulative(allPriced);
+ const estimatedTotals=Object.fromEntries(keys.map(k=>[k,sum(allPriced,k)]));
+ const pendingCount=allPriced.length-list.length;
  return {rows,totals,count:rows.length,weekly:periods('weekly',10),monthly:periods('monthly',12),
- disclaimer:'Gross profit = selling price minus making cost, shipping cost and User A earning. Excludes marketplace fees, taxes, refunds and other expenses. USD uses each order’s entered PKR/USD rate.'};
+   all_rows:allRows,all_count:allRows.length,all_totals:estimatedTotals,
+   all_weekly:periods('weekly',10,allPriced),all_monthly:periods('monthly',12,allPriced),
+   pending_count:pendingCount,
+   disclaimer:'Gross profit = sale minus making, shipping and User A earning. All Priced includes ESTIMATES for orders not shipped. Shipped Only shows recognised shipments. Does not include marketplace fees, taxes, refunds or other expenses.'};
 }
 app.get('/api/finance',auth,(req,res)=>res.json(financialReport(req)));
 app.get('/api/finance.csv',auth,(req,res)=>{

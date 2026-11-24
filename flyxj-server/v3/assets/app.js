@@ -495,6 +495,8 @@ async function init(){
   $('showAllButton').onclick=()=>navigate('orders');
   $('helpAction').onclick=()=>navigate('orders');
   for(const el of document.querySelectorAll('[data-nav]'))el.onclick=()=>navigate(el.dataset.nav);
+  const financeScope=$('financeScope');
+  if(financeScope)financeScope.onchange=()=>{if(state.finance)renderFinance()};
   $('statusFilter').onchange=renderOrders;
   $('orderSearch').oninput=renderOrders;
   $('overlay').onclick=closeDrawer;
