@@ -424,14 +424,8 @@ function renderDetail(o){
     gallery.append(img);
   }
   renderShipping(o);renderMessages(o);renderHistory(o);renderExtraDetails(o);
-  if(window.FlyxjDashboardMoney)window.FlyxjDashboardMoney.init(o);
+  window.FlyxjDashboardMoney?.init(o);
   const earning=$('customerEarningEdit');if(earning)earning.value=o.customer_earning_pkr??0;
-  if(state.me?.role==='customer'){
-    const f=o.finance||{};
-    $('customerSellingUsd').value=f.sale_usd_input??(Number(f.sale_pkr)>0&&Number(f.fx_pkr_per_usd)>0?(Number(f.sale_pkr)/Number(f.fx_pkr_per_usd)).toFixed(2):'');
-    $('customerSellingRate').value=f.fx_pkr_per_usd??'';
-    updateCustomerSalePkr();
-  }
   if(state.me.role==='staff'){
     $('detailStatusSelect').value=o.status;
     $('staffNote').value=o.staff_note||'';
@@ -466,128 +460,12 @@ async function saveAndRefresh(path,method,payload,success){
   }catch(ex){toast(ex.message,true)}
 }
 function updateCustomerSalePkr(){
- const saleField=$('customerSellingUsd'),rateField=$('customerSellingRate'),box=$('customerSellingPkr');
- if(!box||!saleField||!rateField)return;
- const usd=Number(saleField.value),fx=Number(rateField.value);
- box.textContent=saleField.value!==''&&rateField.value!==''&&Number.isFinite(usd)&&Number.isFinite(fx)&&usd>0&&fx>0
-  ?'USD 
-  // Direct click wiring does not depend on the separate chat-init bundle.
-  const chatButton=$('floatingChatButton'),chatClose=$('chatClose');
-  if(chatButton){chatButton.onclick=e=>{if(/Android/i.test(navigator.userAgent))return; e.preventDefault();toggleChatSurface()};chatButton.setAttribute('aria-expanded','false')}
-  if(chatClose)chatClose.onclick=()=>toggleChatSurface(false);
-  const directForm=$('directChatForm'),chatAttach=$('chatAttach');
-  if(directForm)directForm.onsubmit=e=>{
-    if(typeof sendDirectChat==='function')return sendDirectChat(e);
-    e.preventDefault();toast('Chat service is loading. Reopen the app.',true);
-  };
-  if(chatAttach)chatAttach.onchange=()=>{
-    const label=$('chatFileName');
-    if(label)label.textContent=chatAttach.files?.[0]?.name||'';
-  };
-  $('passwordToggle').onclick=()=>{
-    const input=$('loginPassword');input.type=input.type==='password'?'text':'password';
-    $('passwordToggle').textContent=input.type==='password'?'Show':'Hide';
-  };
-  $('loginForm').onsubmit=async e=>{
-    e.preventDefault();const btn=$('signInButton');btn.disabled=true;
-    try{
-      const data=await api('/api/login',{method:'POST',body:JSON.stringify({username:$('loginName').value,password:$('loginPassword').value})});
-      $('loginPassword').value='';const requestedView=location.hash;
-      setLoggedIn(data);navigate(requestedView==='#orders'?'orders':'overview');await refresh({silent:true});
-      if(window.FlyxjV8&&requestedView==='#files')window.FlyxjV8.filesCentre();
-      if(window.FlyxjV8&&requestedView==='#more')window.FlyxjV8.moreMenu();
-      toast('Welcome to FlyXJ');
-    }catch(ex){toast(ex.message,true)}
-    finally{btn.disabled=false}
-  };
-  $('logoutButton').onclick=async()=>{try{await api('/api/logout',{method:'POST'})}catch{}resetApp()};
-  $('menuToggle').onclick=()=>$('sidebar').classList.toggle('open');
-  $('refreshButton').onclick=()=>refresh();
-  $('addOrderButton').onclick=openCreate;
-  $('showAllButton').onclick=()=>navigate('orders');
-  $('helpAction').onclick=()=>navigate('orders');
-  for(const el of document.querySelectorAll('[data-nav]'))el.onclick=()=>navigate(el.dataset.nav);
-  const financeScope=$('financeScope');
-  if(financeScope)financeScope.onchange=()=>{if(state.finance)renderFinance()};
-  $('statusFilter').onchange=renderOrders;
-  $('orderSearch').oninput=renderOrders;
-  $('overlay').onclick=closeDrawer;
-  for(const el of document.querySelectorAll('[data-close]'))el.onclick=closeDrawer;
-  document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDrawer()});
-  window.addEventListener('popstate',event=>{
-    if(!state.me)return;
-    // Hardware Back: close the active order form/details instead of exiting the app.
-    closeDrawer({fromHistory:true});
-    if(event.state?.flyxjView&&event.state.view&&event.state.view!==state.view)
-      navigate(event.state.view,{fromHistory:true});
-  });
-  $('dressPhotos').onchange=e=>{
-    const newFiles=Array.from(e.target.files||[]);
-    for(const file of newFiles){
-      if(state.files.length>=8){toast('Maximum 8 photos allowed',true);break}
-      if(!['image/jpeg','image/png','image/webp'].includes(file.type)){toast('Please select JPG, PNG or WebP images',true);continue}
-      if(file.size>12000000){toast('This photo is too large (12 MB maximum original)',true);continue}
-      state.files.push(file);
-    }
-    e.target.value='';
-    renderImagePreview();
-  };
-  $('newOrderForm').onsubmit=submitOrder;
-  $('customerSellingUsd').addEventListener('input',updateCustomerSalePkr);
-  $('customerSellingRate').addEventListener('input',updateCustomerSalePkr);
-  $('customerSellingForm').onsubmit=async e=>{
-    e.preventDefault();
-    if(state.me?.role!=='customer')return toast('Only User A can edit USD selling price',true);
-    await saveAndRefresh('/selling-price','PATCH',window.FlyxjDashboardMoney.payload('sale'),'Selling price saved in USD and PKR');
-  };
-  $('earningForm').onsubmit=async e=>{
-    e.preventDefault();
-    if(state.me?.role!=='customer')return toast('Only User A can edit earning',true);
-    await saveAndRefresh('/customer-earning','PATCH',window.FlyxjDashboardMoney.payload('earning'),'User A earning saved for User B');
-  };
-  $('statusForm').onsubmit=async e=>{
-    e.preventDefault();
-    const status=$('detailStatusSelect').value;
-    const payload={status,staff_note:$('staffNote').value};
-    if(['shipped','delivered','completed'].includes(status)){
-      payload.shipping={courier:$('shippingCourier').value,tracking_id:$('shippingId').value,tracking_url:$('shippingUrl').value};
-      payload.shipped_quantity=Number($('shippingPieces').value);
-      // Preserve the separately saved User A selling price and User B costs.
-    }
-    await saveAndRefresh('/status','PATCH',payload,'Production status updated');
-  };
-  $('shippingForm').onsubmit=async e=>{
-    e.preventDefault();
-    await saveAndRefresh('/shipping','PATCH',{courier:$('shippingCourier').value,tracking_id:$('shippingId').value,tracking_url:$('shippingUrl').value,shipped_quantity:Number($('shippingPieces').value)},'Tracking and shipped quantity saved');
-  };
-  $('returnForm').onsubmit=async e=>{
-    e.preventDefault();
-    await saveAndRefresh('/return','POST',{courier:$('returnCourier').value,tracking_id:$('returnId').value,note:$('returnNote').value},'Return tracking sent to FlyXJ');
-  };
-  $('messageForm').onsubmit=async e=>{
-    e.preventDefault();const message=$('messageInput').value;
-    await saveAndRefresh('/messages','POST',{message},'Message sent');
-    $('messageInput').value='';
-  };
-  // Defer looking up the optional module until the other deferred scripts have loaded.
-  // Passing initExtraFeatures directly throws ReferenceError before the module exists.
-  setTimeout(()=>{
-    if(typeof initExtraFeatures==='function'){
-      try{initExtraFeatures()}catch(err){console.error('FlyXJ extra UI initialization error:',err)}
-    }else console.warn('FlyXJ extra script missing. Essential chat click remains available.');
-  },0);
-  try{const me=await api('/api/me');const requestedView=location.hash;setLoggedIn(me);navigate(requestedView==='#orders'?'orders':'overview');await refresh({silent:true});
-    if(window.FlyxjV8&&requestedView==='#files')window.FlyxjV8.filesCentre();
-    if(window.FlyxjV8&&requestedView==='#more')window.FlyxjV8.moreMenu();
-  }catch{resetApp()}
-  document.addEventListener('visibilitychange',()=>{
-    if(state.me&&document.visibilityState==='visible')refresh({silent:true});
-  });
-  setInterval(()=>{if(state.me&&document.visibilityState==='visible')refresh({silent:true})},45000);
-}
-/* v3 extra feature handlers appended below */
-init();+usd.toFixed(2)+' × PKR '+fx.toLocaleString('en-GB')+' = PKR '+(Math.round(usd*fx*100)/100).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})
-  :'Enter USD and your agreed PKR/USD rate to calculate.';
+ const out=$('customerSellingPkr'),control=window.FlyxjDashboardMoney?.control('sale');
+ if(!out||!control)return;
+ const pkr=control.pkr(),fx=control.rate();
+ out.textContent=pkr==null||fx<=0?'Enter an amount and agreed PKR/USD rate.':
+ 'Selling price: PKR '+pkr.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})+
+ ' / USD $'+(pkr/fx).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
 }
 async function init(){
   // Direct click wiring does not depend on the separate chat-init bundle.
@@ -652,10 +530,18 @@ async function init(){
     renderImagePreview();
   };
   $('newOrderForm').onsubmit=submitOrder;
+  $('customerSellingUsd').addEventListener('input',updateCustomerSalePkr);
+  $('customerSellingRate').addEventListener('input',updateCustomerSalePkr);
+  $('customerSellingForm').addEventListener('change',updateCustomerSalePkr);
+  $('customerSellingForm').onsubmit=async e=>{
+    e.preventDefault();
+    if(state.me?.role!=='customer')return toast('Only User A can edit selling price',true);
+    await saveAndRefresh('/selling-price','PATCH',window.FlyxjDashboardMoney.payload('sale'),'Selling price saved in USD and PKR');
+  };
   $('earningForm').onsubmit=async e=>{
     e.preventDefault();
     if(state.me?.role!=='customer')return toast('Only User A can edit earning',true);
-    await saveAndRefresh('/customer-earning','PATCH',{customer_earning_pkr:$('customerEarningEdit').value},'User A earning saved for User B');
+    await saveAndRefresh('/customer-earning','PATCH',window.FlyxjDashboardMoney.payload('earning'),'User A earning saved for User B');
   };
   $('statusForm').onsubmit=async e=>{
     e.preventDefault();
@@ -664,7 +550,7 @@ async function init(){
     if(['shipped','delivered','completed'].includes(status)){
       payload.shipping={courier:$('shippingCourier').value,tracking_id:$('shippingId').value,tracking_url:$('shippingUrl').value};
       payload.shipped_quantity=Number($('shippingPieces').value);
-      payload.finance=financeInputs();
+      // Finance values are saved separately by their authorised account.
     }
     await saveAndRefresh('/status','PATCH',payload,'Production status updated');
   };
