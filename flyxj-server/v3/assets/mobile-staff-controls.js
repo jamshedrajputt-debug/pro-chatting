@@ -1,118 +1,114 @@
 'use strict';
 (function(){
-const $=id=>document.getElementById(id);
-const match=/^\/order\/([1-9][0-9]{0,8})\/?$/.exec(location.pathname);
-if(!match)return;
-const orderId=match[1];
-let user=null,order=null;
-const amount=n=>'PKR '+Number(n||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
-async function request(path,method='GET',body){
- const headers={'accept':'application/json'};
- if(body!==undefined){headers['content-type']='application/json';headers['x-csrf-token']=user.csrf}
- const response=await fetch(path,{method,credentials:'same-origin',headers,body:body===undefined?undefined:JSON.stringify(body),cache:'no-store'});
- const data=await response.json().catch(()=>({}));
- if(!response.ok)throw Error(data.detail||'Could not save changes');
- return data;
-}
-function field(form,name){return form.elements.namedItem(name)}
-function feedback(form,message,error=false){
- const x=form.querySelector('[data-feedback]');if(x){x.textContent=message;x.style.color=error?'#b03240':'#11774f'}
-}
-async function save(form,endpoint,data){
- const button=form.querySelector('button[type=submit]');button.disabled=true;
- feedback(form,'Saving securely…');
- try{
-  const result=await request('/api/orders/'+orderId+endpoint,'PATCH',data);
-  order=result.order;
-  render();
-  feedback(form,'✓ Saved. Both accounts will see the updated order.');
- }catch(e){feedback(form,e.message,true)}
- finally{button.disabled=false}
-}
-function render(){
- if(!order)return;
- const shipped=Number.isInteger(order.shipped_quantity)?order.shipped_quantity:
-   ['shipped','delivered','completed'].includes(order.status)?Number(order.quantity)||0:0;
- const tracking=order.shipping||{};
- const info=$('fx9ShipmentSummary');
- if(info)info.textContent='Status: '+order.status.replaceAll('_',' ')+'\nShipped pieces: '+shipped+' / '+order.quantity+
- '\nCourier: '+(tracking.courier||'Not entered')+'\nShipping ID: '+(tracking.tracking_id||'Not entered');
- const finance=order.finance||{};
- const earning=Number(order.customer_earning_pkr)||0;
- const valid=finance.sale_pkr!==null&&finance.sale_pkr!==undefined&&Number(finance.fx_pkr_per_usd)>0;
- const price=Number(finance.sale_pkr)||0,making=Number(finance.making_pkr)||0,cost=Number(finance.shipping_pkr)||0;
- const profit=price-making-cost-earning;
- const staff=$('flyxjMobileStaffControls');
- if(staff)staff.classList.toggle('hidden',user?.role!=='staff');
- const earningCard=$('fx9EarningCard');
- if(earningCard)earningCard.classList.toggle('hidden',user?.role!=='customer');
- if(user?.role==='staff'){
-  const ship=$('fx9ShipForm'),calc=$('fx9FinanceForm'),stage=$('fx9StatusForm');
-  field(ship,'courier').value=tracking.courier||'';
-  field(ship,'tracking_id').value=tracking.tracking_id||'';
-  field(ship,'tracking_url').value=tracking.tracking_url||'';
-  field(ship,'total_quantity').value=order.quantity;
-  field(ship,'shipped_quantity').max=String(order.quantity);
-  field(ship,'shipped_quantity').value=shipped;
-  for(const name of ['sale_pkr','making_pkr','shipping_pkr','fx_pkr_per_usd'])
-   field(calc,name).value=finance[name]??'';
-  field(stage,'status').value=order.status;
-  field(stage,'staff_note').value=order.staff_note||'';
-  $('fx9ProfitView').textContent=valid?
-   'User A earning: '+amount(earning)+'\nMaking: '+amount(making)+
-   '\nShipping: '+amount(cost)+'\nGross profit: '+amount(profit)+
-   '\nUSD profit: $'+(profit/Number(finance.fx_pkr_per_usd)).toFixed(2):
-   'Enter selling price, making, shipping cost and exchange rate to calculate profit.';
- }else if(user?.role==='customer'){
-  field($('fx9EarningForm'),'customer_earning_pkr').value=earning;
-  $('fx9CustomerProfit').textContent='My earning: '+amount(earning)+
-   '\nStatus: '+order.status.replaceAll('_',' ')+'\nShipped: '+shipped+' / '+order.quantity;
+ const $=id=>document.getElementById(id),match=/^\/order\/([1-9][0-9]{0,8})\/?$/.exec(location.pathname);
+ if(!match)return;
+ const id=match[1];let user=null,order=null,earningMoney=null,makingMoney=null,shippingMoney=null;
+ const field=(form,name)=>form?.elements.namedItem(name);
+ const fmt=n=>'PKR '+Number(n||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
+ async function api(path,method='GET',payload){
+  const headers={accept:'application/json'};
+  if(payload!==undefined){headers['content-type']='application/json';headers['x-csrf-token']=user.csrf}
+  const response=await fetch(path,{method,credentials:'same-origin',headers,
+   body:payload===undefined?undefined:JSON.stringify(payload),cache:'no-store'});
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok)throw Error(data.detail||'Unable to save order');
+  return data;
  }
-}
-async function start(){
- try{
-  user=await request('/api/me');
-  order=(await request('/api/orders/'+orderId)).order;
-  const ship=$('fx9ShipForm'),finance=$('fx9FinanceForm'),stage=$('fx9StatusForm'),earning=$('fx9EarningForm');
-  if(!ship||!finance||!stage||!earning)return;
-  if(user.role==='staff'){
-   ship.onsubmit=e=>{
-    e.preventDefault();
-    save(ship,'/shipping',{courier:field(ship,'courier').value.trim(),
-      tracking_id:field(ship,'tracking_id').value.trim(),
-      tracking_url:field(ship,'tracking_url').value.trim(),
-      shipped_quantity:Number(field(ship,'shipped_quantity').value)});
-   };
-   finance.onsubmit=e=>{
-    e.preventDefault();
-    const body={};
-    for(const key of ['sale_pkr','making_pkr','shipping_pkr','fx_pkr_per_usd'])body[key]=field(finance,key).value;
-    save(finance,'/finance',body);
-   };
-   stage.onsubmit=e=>{
-    e.preventDefault();
-    save(stage,'/status',{status:field(stage,'status').value,staff_note:field(stage,'staff_note').value,
-      shipped_quantity:Number(field(ship,'shipped_quantity').value)});
-   };
-   finance.addEventListener('input',()=>{
-    const sale=Number(field(finance,'sale_pkr').value)||0;
-    const making=Number(field(finance,'making_pkr').value)||0;
-    const shipping=Number(field(finance,'shipping_pkr').value)||0;
-    const earning=Number(order.customer_earning_pkr)||0;
-    const fx=Number(field(finance,'fx_pkr_per_usd').value);
-    const p=sale-making-shipping-earning;
-    $('fx9ProfitView').textContent='Gross profit: '+amount(p)+(fx>0?'  ·  USD $'+(p/fx).toFixed(2):'')+
-      '\nCalculation: Selling − Making − Shipping − User A earning';
-   });
+ function notice(form,text,bad=false){const x=form?.querySelector('[data-feedback]');if(x){x.textContent=text;x.style.color=bad?'#b03240':'#11774f'}}
+ async function save(form,route,body){
+  const button=form.querySelector('button[type=submit]');button.disabled=true;notice(form,'Saving…');
+  try{
+   order=(await api('/api/orders/'+id+route,'PATCH',body)).order;
+   render();notice(form,'✓ Saved. Both accounts will see the updated order.');
+  }catch(e){notice(form,e.message,true)}
+  finally{button.disabled=false}
+ }
+ function updateProfit(){
+  if(!order||user?.role!=='staff')return;
+  const box=$('fx9ProfitView'),rate=Number(field($('fx9FinanceForm'),'fx_pkr_per_usd').value);
+  const making=makingMoney?.pkr(),shipping=shippingMoney?.pkr();
+  const income=order.customer_earning_pkr;
+  if(income==null||making===null||shipping===null||!Number.isFinite(rate)||rate<=0){
+    box.textContent='User A net earning: '+(income==null?'Not entered yet':fmt(income))+
+     '\nEnter making/shipping amounts and order FX rate to calculate real profit.';
+    return;
   }
-  if(user.role==='customer')earning.onsubmit=e=>{
-   e.preventDefault();
-   save(earning,'/customer-earning',{customer_earning_pkr:field(earning,'customer_earning_pkr').value});
-  };
-  render();
- }catch(e){
-  const info=$('fx9ShipmentSummary');if(info)info.textContent='Unable to load mobile finance: '+e.message;
+  const profit=FlyxjCurrency.round(Number(income)-making-shipping);
+  box.textContent='User A net earning: '+fmt(income)+'\nMaking cost: '+fmt(making)+
+   '\nShipping cost: '+fmt(shipping)+'\nReal profit: '+fmt(profit)+
+   ' / USD $'+(profit/rate).toFixed(2);
  }
-}
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
+ function render(){
+  if(!order)return;
+  const finance=order.finance||{},fx=finance.fx_pkr_per_usd;
+  const shipped=Number.isInteger(order.shipped_quantity)?order.shipped_quantity:
+    ['shipped','delivered','completed'].includes(order.status)?order.quantity:0;
+  const ship=order.shipping||{};
+  $('fx9ShipmentSummary').textContent='Status: '+order.status.replaceAll('_',' ')+
+    '\nShipped: '+shipped+'/'+order.quantity+'\nCourier: '+(ship.courier||'Not entered')+
+    '\nTracking ID: '+(ship.tracking_id||'Not entered');
+  $('flyxjMobileStaffControls')?.classList.toggle('hidden',user.role!=='staff');
+  $('fx9EarningCard')?.classList.toggle('hidden',user.role!=='customer');
+  if(user.role==='staff'){
+   const form=$('fx9FinanceForm'),sf=$('fx9ShipForm'),stage=$('fx9StatusForm');
+   field(sf,'courier').value=ship.courier||'';field(sf,'tracking_id').value=ship.tracking_id||'';
+   field(sf,'tracking_url').value=ship.tracking_url||'';field(sf,'shipped_quantity').value=shipped;
+   field(sf,'shipped_quantity').max=String(order.quantity);field(sf,'total_quantity').value=order.quantity;
+   field(form,'fx_pkr_per_usd').value=fx??'';
+   makingMoney.load(finance.making_pkr,fx);
+   shippingMoney.load(finance.shipping_pkr,fx);
+   field(stage,'status').value=order.status;field(stage,'staff_note').value=order.staff_note||'';
+   updateProfit();
+  }else{
+   const earningForm=$('fx9EarningForm');
+   field(earningForm,'earning_rate').value=fx??'';
+   earningMoney.load(order.customer_earning_pkr,fx);
+   const x=$('fx9CustomerProfit'),n=order.customer_earning_pkr;
+   x.textContent='My Etsy net earning: '+(n==null?'Not entered':fmt(n)+
+     (Number(fx)>0?' / USD $'+(Number(n)/Number(fx)).toFixed(2):''))+
+     '\nShipped: '+shipped+'/'+order.quantity;
+  }
+ }
+ async function boot(){
+  try{
+   user=await api('/api/me');order=(await api('/api/orders/'+id)).order;
+   const sf=$('fx9ShipForm'),form=$('fx9FinanceForm'),stage=$('fx9StatusForm'),earn=$('fx9EarningForm');
+   if(!sf||!form||!stage||!earn||!window.FlyxjCurrency)throw Error('Finance controls missing. Refresh app.');
+   if(user.role==='staff'){
+    const rate=field(form,'fx_pkr_per_usd');
+    makingMoney=FlyxjCurrency.connect(field(form,'making_pkr'),field(form,'making_currency'),rate,$('fx9CostConversion'));
+    shippingMoney=FlyxjCurrency.connect(field(form,'shipping_pkr'),field(form,'shipping_currency'),rate,null);
+    form.addEventListener('input',updateProfit);form.addEventListener('change',updateProfit);
+    form.onsubmit=e=>{
+     e.preventDefault();
+     const making=makingMoney.pkr(),shipping=shippingMoney.pkr();
+     if(making===null||shipping===null)return notice(form,'Enter making, shipping and a valid FX rate',true);
+     save(form,'/finance',{making_pkr:making,shipping_pkr:shipping,fx_pkr_per_usd:rate.value});
+    };
+    sf.onsubmit=e=>{
+     e.preventDefault();
+     save(sf,'/shipping',{courier:field(sf,'courier').value.trim(),
+      tracking_id:field(sf,'tracking_id').value.trim(),tracking_url:field(sf,'tracking_url').value.trim(),
+      shipped_quantity:Number(field(sf,'shipped_quantity').value)});
+    };
+    stage.onsubmit=e=>{
+     e.preventDefault();
+     save(stage,'/status',{status:field(stage,'status').value,
+      staff_note:field(stage,'staff_note').value,
+      shipped_quantity:Number(field(sf,'shipped_quantity').value)});
+    };
+   }else{
+    earningMoney=FlyxjCurrency.connect(field(earn,'customer_earning_pkr'),
+      field(earn,'earning_currency'),field(earn,'earning_rate'),$('fx9EarningConversion'));
+    earn.onsubmit=e=>{
+     e.preventDefault();
+     const data=earningMoney.payload();
+     if(earningMoney.pkr()===null)return notice(earn,'Enter net earning and FX rate',true);
+     save(earn,'/customer-earning',data);
+    };
+   }
+   render();
+  }catch(e){if($('fx9ShipmentSummary'))$('fx9ShipmentSummary').textContent='Unable to load order finance: '+e.message}
+ }
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 })();

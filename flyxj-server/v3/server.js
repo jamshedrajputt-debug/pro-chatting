@@ -96,25 +96,29 @@ const financeDefault=()=>({sale_pkr:null,making_pkr:null,shipping_pkr:null,fx_pk
 const validEarning=n=>n!==null&&n!==undefined&&n!==''&&Number.isFinite(Number(n))&&Number(n)>=0&&Number(n)<=1e9;
 const isShipped=o=>['shipped','delivered','completed'].includes(o.status);
 function validFinance(f) {
- return !!f&&['sale_pkr','making_pkr','shipping_pkr','fx_pkr_per_usd'].every(k=>f[k]!=null&&String(f[k]).trim()!==''&&Number.isFinite(Number(f[k]))&&Number(f[k])>=0&&Number(f[k])<=1e9)&&Number(f.sale_pkr)>0&&Number(f.fx_pkr_per_usd)>0;
+ return !!f&&['making_pkr','shipping_pkr','fx_pkr_per_usd'].every(k=>f[k]!=null&&String(f[k]).trim()!==''&&Number.isFinite(Number(f[k]))&&Number(f[k])>=0&&Number(f[k])<=1e9)&&Number(f.fx_pkr_per_usd)>0;
 }
 function normalizeFinance(body,old){
  if(!validFinance(body))return null;
  const f={updated_at:now(),recognized_at:old?.recognized_at||null};
- for(const k of ['sale_pkr','making_pkr','shipping_pkr','fx_pkr_per_usd'])f[k]=Math.round(Number(body[k])*100)/100;
+ for(const k of ['making_pkr','shipping_pkr','fx_pkr_per_usd'])f[k]=Math.round(Number(body[k])*100)/100;
+ // Retain legacy selling prices for history, but they have no role in profit.
+ f.sale_pkr=old?.sale_pkr??null;
  return f;
 }
 function financeRow(o){
- const f=o.finance;if(!validFinance(f))return null;
+ const f=o.finance;if(!validFinance(f)||!validEarning(o.customer_earning_pkr))return null;
  const round=n=>Math.round(n*100)/100, fx=Number(f.fx_pkr_per_usd);
- const sale=Number(f.sale_pkr),making=Number(f.making_pkr),shipping=Number(f.shipping_pkr);
+ const sale=f.sale_pkr==null?0:Number(f.sale_pkr),making=Number(f.making_pkr),shipping=Number(f.shipping_pkr);
  const earning=validEarning(o.customer_earning_pkr)?Number(o.customer_earning_pkr):0;
- const cost=round(making+shipping+earning),profit=round(sale-cost);
+ // Only User A net earning (after Etsy fees) is revenue, never list selling price.
+ const revenue=earning;
+ const cost=round(making+shipping),profit=round(revenue-cost);
  const usd=n=>round(n/fx);
  return {id:o.id,reference:ref(o),title:o.title,quantity:o.quantity||1,status:o.status,
  date:f.recognized_at||o.shipped_at||o.updated_at||o.created_at,courier:o.shipping?.courier||'',
- tracking_id:o.shipping?.tracking_id||'',sale_pkr:sale,making_pkr:making,shipping_pkr:shipping,customer_earning_pkr:earning,
- cost_pkr:cost,profit_pkr:profit,sale_usd:usd(sale),making_usd:usd(making),shipping_usd:usd(shipping),
+ tracking_id:o.shipping?.tracking_id||'',sale_pkr:sale,income_pkr:revenue,making_pkr:making,shipping_pkr:shipping,customer_earning_pkr:earning,
+ cost_pkr:cost,profit_pkr:profit,sale_usd:usd(sale),income_usd:usd(revenue),making_usd:usd(making),shipping_usd:usd(shipping),
  cost_usd:usd(cost),profit_usd:usd(profit),customer_earning_usd:usd(earning),fx_pkr_per_usd:fx};
 }
 const MAX_PDF_BYTES=30*1024*1024;
@@ -564,6 +568,9 @@ app.post('/api/orders',auth,csrf,async(req,res)=>{
   if(title.length<2||!colour||!SIZES.includes(size)&&!SHOE_SIZES.includes(size)&&!(size.startsWith('CUSTOM:')&&size.length<=80))return err(res,400,'Enter dress title, valid size and colour');
   if(shoe_size&&!SHOE_SIZES.includes(shoe_size)&&!(shoe_size.startsWith('CUSTOM:')&&shoe_size.length<=30))return err(res,400,'Invalid shoes size');
   if(!validEarning(v.customer_earning_pkr))return err(res,400,'Enter User A earning in PKR (0 or higher)');
+  if(v.fx_pkr_per_usd!==undefined&&v.fx_pkr_per_usd!==null&&v.fx_pkr_per_usd!==''&&
+     (!Number.isFinite(Number(v.fx_pkr_per_usd))||Number(v.fx_pkr_per_usd)<=0||Number(v.fx_pkr_per_usd)>1e6))
+    return err(res,400,'Enter a valid PKR per USD order exchange rate');
   if(!Number.isInteger(qty)||qty<1||qty>1000)return err(res,400,'Quantity must be 1–1000');
   if(!Array.isArray(list)||list.length<1||list.length>MAX_IMAGES)return err(res,400,'Attach 1–8 dress pictures');
   let total=0;const parsed=[];
@@ -588,7 +595,7 @@ app.post('/api/orders',auth,csrf,async(req,res)=>{
       image_files.push(filename);
     }
     const o={id,reference,title,colour,size,shoe_size,assigned_to:'',customer_earning_pkr:Math.round(Number(v.customer_earning_pkr)*100)/100,quantity:qty,comments,status:'pending',
-      pdf_file:pdfName,measurements,finished_files:[],finance:financeDefault(),
+      pdf_file:pdfName,measurements,finished_files:[],finance:{...financeDefault(),fx_pkr_per_usd:v.fx_pkr_per_usd?Math.round(Number(v.fx_pkr_per_usd)*100)/100:null},
       approval:{status:'not_requested',note:'',updated_at:null},
       expected_date:/^\d{4}-\d{2}-\d{2}$/.test(v.expected_date||'')?v.expected_date:'',
       priority:['normal','high','urgent'].includes(v.priority)?v.priority:'normal',
@@ -639,7 +646,7 @@ app.patch('/api/orders/:id/status',auth,csrf,async(req,res)=>{
   }
   if(req.body?.finance){
     const f=normalizeFinance(req.body.finance,o.finance);
-    if(!f)return err(res,400,'Enter selling price, making cost, shipping cost in PKR, and PKR/USD rate');
+    if(!f)return err(res,400,'Enter making cost, shipping cost in PKR, and PKR/USD rate');
     nextFinance=f;
   }
   const nextShippedQuantity=req.body?.shipped_quantity===undefined
@@ -648,7 +655,7 @@ app.patch('/api/orders/:id/status',auth,csrf,async(req,res)=>{
   if(!Number.isInteger(nextShippedQuantity)||nextShippedQuantity<0||nextShippedQuantity>o.quantity)
     return err(res,400,'Shipped quantity must be between 0 and ordered quantity');
   if(['shipped','delivered','completed'].includes(status)&&(!validFinance(nextFinance)||!nextShipping?.courier||!nextShipping?.tracking_id))
-    return err(res,400,'Shipping requires courier, tracking ID, selling price, making cost, shipping cost and PKR per USD rate');
+    return err(res,400,'Shipping requires courier, tracking ID, making cost, shipping cost and PKR per USD rate');
   if(['cutting','stitching'].includes(status)&&o.pdf_file&&o.approval?.status!=='approved')
     return err(res,400,'Customer approval required before cutting or stitching');
   o.shipping=nextShipping;o.finance=nextFinance;
@@ -891,22 +898,39 @@ app.post('/api/orders/:id/approve',auth,csrf,async(req,res)=>{
 app.patch('/api/orders/:id/customer-earning',auth,csrf,async(req,res)=>{
  if(req.user.role!=='customer')return err(res,403,'Only User A may edit their earning');
  const o=loadOrder(req,res);if(!o)return;
- if(!validEarning(req.body?.customer_earning_pkr))return err(res,400,'Enter a valid PKR earning');
+ let earningPkr;
+ const raw=req.body?.amount,currency=req.body?.currency;
+ if(raw!==undefined){
+   const amount=Number(raw),rate=Number(req.body?.fx_pkr_per_usd??o.finance?.fx_pkr_per_usd);
+   if(!['USD','PKR'].includes(currency)||raw===''||!Number.isFinite(amount)||amount<0||amount>1e9||
+       !Number.isFinite(rate)||rate<=0||rate>1e6)
+     return err(res,400,'Enter an earning amount, USD/PKR currency and order FX rate');
+   const existing=Number(o.finance?.fx_pkr_per_usd);
+   if(existing>0&&Math.abs(rate-existing)>0.005)
+     return err(res,400,'Order FX rate is already set. Use the same rate or ask User B to correct it first');
+   earningPkr=Math.round((currency==='USD'?amount*rate:amount)*100)/100;
+   if(!validEarning(earningPkr))return err(res,400,'Converted earning exceeds allowed amount');
+   if(!(existing>0))o.finance={...(o.finance||financeDefault()),fx_pkr_per_usd:Math.round(rate*100)/100};
+ }else{
+   if(!validEarning(req.body?.customer_earning_pkr))return err(res,400,'Enter a valid PKR earning');
+   earningPkr=Math.round(Number(req.body.customer_earning_pkr)*100)/100;
+ }
  const original=o.customer_earning_pkr;
- o.customer_earning_pkr=Math.round(Number(req.body.customer_earning_pkr)*100)/100;
+ const oldFinance=structuredClone(o.finance||financeDefault());
+ o.customer_earning_pkr=earningPkr;
  history(o,req.user.username,'User A earning updated','finance');
  try{await save();pushOrder(o,'finance','User A earning updated');return res.json({order:publicOrder(o)})}
- catch(e){o.customer_earning_pkr=original;return err(res,503,'Could not save earning')}
+ catch(e){o.customer_earning_pkr=original;o.finance=oldFinance;return err(res,503,'Could not save earning')}
 });
 app.patch('/api/orders/:id/finance',auth,csrf,async(req,res)=>{
  if(req.user.role!=='staff')return err(res,403,'Staff only');
  const o=loadOrder(req,res);if(!o)return;
  const f=normalizeFinance(req.body,o.finance);
- if(!f)return err(res,400,'Enter sale, making, shipping PKR prices and exchange rate PKR/USD');
+ if(!f)return err(res,400,'Enter making and shipping PKR costs and PKR/USD rate');
  if(isShipped(o)&&!f.recognized_at)f.recognized_at=now();
  o.finance=f;
- history(o,req.user.username,'Sale/making/shipping costs updated','finance');
- try{await save();pushOrder(o,'finance','Order pricing updated');res.json({order:publicOrder(o)})}catch{err(res,500,'Pricing save failed')}
+ history(o,req.user.username,'Making and shipping costs updated','finance');
+ try{await save();pushOrder(o,'finance','Making and shipping costs updated');res.json({order:publicOrder(o)})}catch{err(res,500,'Pricing save failed')}
 });
 
 
@@ -914,7 +938,7 @@ function financialReport(req){
  const allPriced=orders.filter(o=>canActive(req.user,o)).map(financeRow).filter(Boolean)
    .sort((a,b)=>new Date(a.date).getTime()-new Date(b.date).getTime());
  const list=allPriced.filter(o=>['shipped','delivered','completed'].includes(o.status));
- const keys=['sale_pkr','making_pkr','shipping_pkr','customer_earning_pkr','cost_pkr','profit_pkr','sale_usd','making_usd','shipping_usd','customer_earning_usd','cost_usd','profit_usd'];
+ const keys=['sale_pkr','income_pkr','making_pkr','shipping_pkr','customer_earning_pkr','cost_pkr','profit_pkr','sale_usd','income_usd','making_usd','shipping_usd','customer_earning_usd','cost_usd','profit_usd'];
  const sum=(rows,k)=>Math.round(rows.reduce((n,o)=>n+(Number(o[k])||0),0)*100)/100;
  const totals=Object.fromEntries(keys.map(k=>[k,sum(list,k)]));
  const periods=(type,count,entries=list)=>{
@@ -958,11 +982,11 @@ function financialReport(req){
    all_rows:allRows,all_count:allRows.length,all_totals:estimatedTotals,
    all_weekly:periods('weekly',10,allPriced),all_monthly:periods('monthly',12,allPriced),
    pending_count:pendingCount,
-   disclaimer:'Gross profit = sale minus making, shipping and User A earning. All Priced includes ESTIMATES for orders not shipped. Shipped Only shows recognised shipments. Does not include marketplace fees, taxes, refunds or other expenses.'};
+   disclaimer:'Real profit = User A net earning after Etsy fees minus making and shipping costs. Selling price is excluded entirely. All Priced includes ESTIMATES for unshipped orders; Shipped Only shows recognised shipments. Excludes other unentered expenses, taxes and refunds.'};
 }
 app.get('/api/finance',auth,(req,res)=>res.json(financialReport(req)));
 app.get('/api/finance.csv',auth,(req,res)=>{
- const data=financialReport(req),keys=['reference','title','date','status','courier','tracking_id','sale_pkr','making_pkr','shipping_pkr','customer_earning_pkr','cost_pkr','profit_pkr','sale_usd','making_usd','shipping_usd','customer_earning_usd','cost_usd','profit_usd','cumulative_profit_pkr','cumulative_profit_usd','fx_pkr_per_usd'];
+ const data=financialReport(req),keys=['reference','title','date','status','courier','tracking_id','customer_earning_pkr','income_pkr','making_pkr','shipping_pkr','cost_pkr','profit_pkr','customer_earning_usd','income_usd','making_usd','shipping_usd','cost_usd','profit_usd','cumulative_profit_pkr','cumulative_profit_usd','fx_pkr_per_usd'];
  const cell=v=>'"'+String(v??'').replaceAll('"','""')+'"';
  res.set('Content-Type','text/csv; charset=utf-8');
  res.set('Content-Disposition','attachment; filename="FLYXJ-financial-report.csv"');
@@ -1045,10 +1069,10 @@ app.get('/api/orders/:id/summary.pdf',auth,(req,res)=>{
  'Ordered: '+o.created_at,'Size: '+o.size+'  Colour: '+o.colour+'  Quantity: '+o.quantity,
  'Status: '+o.status,'Courier: '+(shipping.courier||'Not assigned'),
  'Tracking ID: '+(shipping.tracking_id||'Not assigned'),'',
- 'Selling price: '+fmt('sale_pkr','PKR'),'Making cost: '+fmt('making_pkr','PKR'),
+ 'User A net earning: '+fmt('customer_earning_pkr','PKR'),'Making cost: '+fmt('making_pkr','PKR'),
  'Shipping cost: '+fmt('shipping_pkr','PKR'),'Total cost: '+fmt('cost_pkr','PKR'),
  'Gross profit: '+fmt('profit_pkr','PKR'),'',
- 'Selling price: '+fmt('sale_usd','USD'),'Making cost: '+fmt('making_usd','USD'),
+ 'User A net earning: '+fmt('customer_earning_usd','USD'),'Making cost: '+fmt('making_usd','USD'),
  'Shipping cost: '+fmt('shipping_usd','USD'),'Total cost: '+fmt('cost_usd','USD'),
  'Gross profit: '+fmt('profit_usd','USD'),
  'PKR per USD: '+(f?f.fx_pkr_per_usd:'Not set'),'',

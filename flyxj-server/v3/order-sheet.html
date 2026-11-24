@@ -21,7 +21,8 @@ a[aria-disabled="true"]{opacity:.55;pointer-events:none}
 <script defer src="/assets/share-files.js?v=flyxj-android-v8-all-photos"></script>
 <script defer src="/assets/order-actions.js?v=manual-file-share-20261122"></script>
 <script defer src="/assets/order-sheet.js?v=flyxj-v8-mobile-20261124"></script>
-<script defer src="/assets/mobile-staff-controls.js?v=flyxj-v8-mobile-20261124"></script>
+<script defer src="/assets/flyxj-money-inputs.js?v=net-etsy-20261124"></script>
+<script defer src="/assets/mobile-staff-controls.js?v=flyxj-net-earning-20261124"></script>
 <script defer src="/assets/v8-page-nav.js?v=v8-20261124"></script>
 </head><body>
 <header class="bar"><a href="/#orders" id="backOrders">‹ Orders</a><div><strong>FLYXJ · Order Sheet</strong><small id="barRef">Staff quick view · all details together</small></div></header>
@@ -72,8 +73,8 @@ a[aria-disabled="true"]{opacity:.55;pointer-events:none}
 <button class="pdf-button" type="submit">Save Shipping ID + Quantity</button><p data-feedback class="muted" aria-live="polite"></p>
 </form>
 <form id="fx9FinanceForm" class="flyxj-control-form">
-<h3>Making Cost & Profit</h3>
-<div class="fx9-grid"><label>Selling price (PKR)<input name="sale_pkr" type="number" min="0.01" step="0.01" required></label><label>Making cost (PKR)<input name="making_pkr" type="number" min="0" step="0.01" required></label><label>Shipping cost (PKR)<input name="shipping_pkr" type="number" min="0" step="0.01" required></label><label>PKR per USD<input name="fx_pkr_per_usd" type="number" min="0.01" step="0.01" required></label></div>
+<h3>Making + Shipping Cost</h3>
+<div class="fx9-grid"><label>Making cost<input name="making_pkr" type="number" min="0" step="0.01" required></label><label>Making currency<select name="making_currency"><option value="USD">USD $</option><option value="PKR">PKR Rs</option></select></label><label>Shipping cost<input name="shipping_pkr" type="number" min="0" step="0.01" required></label><label>Shipping currency<select name="shipping_currency"><option value="USD">USD $</option><option value="PKR">PKR Rs</option></select></label><label>PKR per 1 USD<input name="fx_pkr_per_usd" type="number" min="0.01" step="0.01" required></label></div><p class="muted" id="fx9CostConversion" aria-live="polite">Converted amounts shown here.</p>
 <div id="fx9ProfitView" class="fx9-summary">Enter figures to calculate gross profit.</div>
 <button class="pdf-button" type="submit">Save Making Cost + Profit</button><p data-feedback class="muted" aria-live="polite"></p>
 </form>
@@ -83,8 +84,8 @@ a[aria-disabled="true"]{opacity:.55;pointer-events:none}
 <button class="pdf-button" type="submit">Update Order Status</button><p data-feedback class="muted" aria-live="polite"></p>
 </form>
 </section>
-<section class="card hidden" id="fx9EarningCard"><div class="section-title"><h2>User A · My Earning</h2></div>
-<form id="fx9EarningForm" class="flyxj-control-form"><label>My earning (PKR)<input name="customer_earning_pkr" type="number" min="0" max="1000000000" step="0.01" required></label><button class="pdf-button" type="submit">Save My Earning</button><p data-feedback class="muted" aria-live="polite"></p></form>
+<section class="card hidden" id="fx9EarningCard"><div class="section-title"><h2>User A · Net Etsy Earning</h2></div>
+<form id="fx9EarningForm" class="flyxj-control-form"><label>My net Etsy earning (after Etsy fees)<input name="customer_earning_pkr" type="number" min="0" max="1000000000" step="0.01" required></label><div class="fx9-grid"><label>Currency<select name="earning_currency"><option value="USD">USD $</option><option value="PKR">PKR Rs</option></select></label><label>PKR per 1 USD<input name="earning_rate" type="number" min="0.01" step="0.01" required placeholder="e.g. 270"></label></div><p class="muted" id="fx9EarningConversion" aria-live="polite">Enter net earning and exchange rate.</p><button class="pdf-button" type="submit">Save My Net Earning</button><p data-feedback class="muted" aria-live="polite"></p></form>
 <div id="fx9CustomerProfit" class="fx9-summary"></div>
 </section>
 <section class="card"><div class="section-title"><h2>Shipment Summary</h2></div><div id="fx9ShipmentSummary" class="fx9-summary">Checking shipment details…</div></section>

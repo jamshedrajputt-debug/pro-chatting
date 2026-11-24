@@ -329,21 +329,24 @@ async function compress(file){
     return result;
   }finally{URL.revokeObjectURL(url)}
 }
+let newOrderEarningMoney=null;
 async function submitOrder(event){
   event.preventDefault();
   if(!state.files.length){toast('Please attach at least one dress picture',true);return}
+  const earningPkr=newOrderEarningMoney?.pkr();
+  if(earningPkr===null||earningPkr===undefined)return toast('Enter net Etsy earning and the order PKR/USD rate',true);
   const btn=$('submitOrderButton');btn.disabled=true;btn.textContent='Uploading...';
   try{
     const images=await Promise.all(state.files.map(compress));
     const body={
-      title:$('dressTitle').value,size:$('dressSize').value,shoe_size:$('shoeSize').value,customer_earning_pkr:$('customerEarning').value,colour:$('dressColour').value,
+      title:$('dressTitle').value,size:$('dressSize').value,shoe_size:$('shoeSize').value,customer_earning_pkr:earningPkr,fx_pkr_per_usd:$('newEarningRate').value,colour:$('dressColour').value,
       quantity:Number($('dressQty').value),comments:$('dressComments').value,images,
       pdf:await readRequiredPdf(),priority:$('orderPriority').value,expected_date:$('orderDeadline').value,
       measurements:readMeasurements()
     };
     const data=await api('/api/orders',{method:'POST',body:JSON.stringify(body)});
     if(window.FlyxjV8)window.FlyxjV8.afterOrderCreated();
-    $('newOrderForm').reset();state.files=[];renderImagePreview();closeDrawer();
+    $('newOrderForm').reset();newOrderEarningMoney?.load(null,null);state.files=[];renderImagePreview();closeDrawer();
     await refresh({silent:true});
     navigate('orders');toast('Order '+data.order.reference+' created successfully');
     openDetail(data.order.id);
@@ -424,6 +427,7 @@ function renderDetail(o){
     gallery.append(img);
   }
   renderShipping(o);renderMessages(o);renderHistory(o);renderExtraDetails(o);
+  window.FlyxjDashboardMoney?.init(o);
   const earning=$('customerEarningEdit');if(earning)earning.value=o.customer_earning_pkr??0;
   if(state.me.role==='staff'){
     $('detailStatusSelect').value=o.status;
@@ -520,11 +524,15 @@ async function init(){
     e.target.value='';
     renderImagePreview();
   };
+  if(window.FlyxjCurrency)newOrderEarningMoney=FlyxjCurrency.connect(
+    $('customerEarning'),$('newEarningCurrency'),$('newEarningRate'),$('newEarningPreview'));
   $('newOrderForm').onsubmit=submitOrder;
   $('earningForm').onsubmit=async e=>{
     e.preventDefault();
     if(state.me?.role!=='customer')return toast('Only User A can edit earning',true);
-    await saveAndRefresh('/customer-earning','PATCH',{customer_earning_pkr:$('customerEarningEdit').value},'User A earning saved for User B');
+    const earning=window.FlyxjDashboardMoney?.earning();
+    if(!earning)return toast('Enter valid net earning and order FX rate',true);
+    await saveAndRefresh('/customer-earning','PATCH',earning,'User A net Etsy earning saved');
   };
   $('statusForm').onsubmit=async e=>{
     e.preventDefault();
