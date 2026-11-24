@@ -469,7 +469,10 @@ async function init(){
     e.preventDefault();const btn=$('signInButton');btn.disabled=true;
     try{
       const data=await api('/api/login',{method:'POST',body:JSON.stringify({username:$('loginName').value,password:$('loginPassword').value})});
-      $('loginPassword').value='';setLoggedIn(data);navigate(location.hash==='#orders'?'orders':'overview');await refresh({silent:true});toast('Welcome to FlyXJ');
+      $('loginPassword').value='';setLoggedIn(data);navigate(location.hash==='#orders'?'orders':'overview');await refresh({silent:true});
+      if(window.FlyxjV8&&location.hash==='#files')window.FlyxjV8.filesCentre();
+      if(window.FlyxjV8&&location.hash==='#more')window.FlyxjV8.moreMenu();
+      toast('Welcome to FlyXJ');
     }catch(ex){toast(ex.message,true)}
     finally{btn.disabled=false}
   };
