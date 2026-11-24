@@ -12,7 +12,7 @@ function renderFinance(){
  const totals=(all?f.all_totals:f.totals)||{};
  const selectedRows=(all?f.all_rows:f.rows)||[];
  const show=(id,value,currency)=>$(id).textContent=formatAmount(value||0,currency);
- show('fSalesPkr',totals.sale_pkr);show('fSalesUsd',totals.sale_usd,'USD');
+ show('fSalesPkr',totals.income_pkr);show('fSalesUsd',totals.income_usd,'USD');
  show('fCostPkr',totals.cost_pkr);show('fCostUsd',totals.cost_usd,'USD');
  show('fProfitPkr',totals.profit_pkr);show('fProfitUsd',totals.profit_usd,'USD');
  $('financeCount').textContent=all?(f.all_count||0)+' priced orders · '+(f.pending_count||0)+' estimated / not shipped':(f.count||0)+' shipped order(s) · recognised';
@@ -47,7 +47,7 @@ function drawFinanceChart(periods){
  const svg=document.createElementNS(ns,'svg');svg.setAttribute('viewBox','0 0 '+width+' '+height);
  svg.setAttribute('role','img');svg.setAttribute('aria-label','Weekly or monthly sales cost and gross profit chart');
  svg.style.width='100%';svg.style.height='auto';
- const types=[{key:'sale_pkr',color:'#4a6ec4',name:'Sales'},{key:'making_pkr',color:'#dc9e42',name:'Making + shipping',other:'shipping_pkr'},
+ const types=[{key:'income_pkr',color:'#4a6ec4',name:'Income'},{key:'making_pkr',color:'#dc9e42',name:'Making + shipping',other:'shipping_pkr'},
  {key:'profit_pkr',color:'#219972',name:'Gross profit'},{key:'cumulative_profit_pkr',color:'#845ec8',name:'Cumulative profit'}];
  const value=(point,type)=>Number(point[type.key]||0)+(type.other?Number(point[type.other]||0):0);
  const numbers=[0,...periods.flatMap(p=>types.map(t=>value(p,t)))];
