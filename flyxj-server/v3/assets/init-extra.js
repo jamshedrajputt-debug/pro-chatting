@@ -23,7 +23,7 @@ function initExtraFeatures(){
  $('periodMonth').onclick=()=>{state.financePeriod='monthly';renderFinance()};
  $('financeCsv').onclick=()=>{window.location.href='/api/finance.csv'};
  $('financeForm').onsubmit=async e=>{
-  e.preventDefault();await saveAndRefresh('/finance','PATCH',financeInputs(),'Order price & cost saved');
+  e.preventDefault();await saveAndRefresh('/production-costs','PATCH',window.FlyxjDashboardMoney.costs(),'Making and shipping costs saved in USD/PKR');
   if(state.view==='finance')loadFinance();
  };
  $('finishedForm').onsubmit=async e=>{

@@ -424,6 +424,7 @@ function renderDetail(o){
     gallery.append(img);
   }
   renderShipping(o);renderMessages(o);renderHistory(o);renderExtraDetails(o);
+  window.FlyxjDashboardMoney?.init(o);
   const earning=$('customerEarningEdit');if(earning)earning.value=o.customer_earning_pkr??0;
   if(state.me.role==='staff'){
     $('detailStatusSelect').value=o.status;
@@ -457,6 +458,14 @@ async function saveAndRefresh(path,method,payload,success){
     await refresh({silent:true});
     toast(success);
   }catch(ex){toast(ex.message,true)}
+}
+function updateCustomerSalePkr(){
+ const out=$('customerSellingPkr'),control=window.FlyxjDashboardMoney?.control('sale');
+ if(!out||!control)return;
+ const pkr=control.pkr(),fx=control.rate();
+ out.textContent=pkr==null||fx<=0?'Enter an amount and agreed PKR/USD rate.':
+ 'Selling price: PKR '+pkr.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})+
+ ' / USD $'+(pkr/fx).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
 }
 async function init(){
   // Direct click wiring does not depend on the separate chat-init bundle.
@@ -521,10 +530,18 @@ async function init(){
     renderImagePreview();
   };
   $('newOrderForm').onsubmit=submitOrder;
+  $('customerSellingUsd').addEventListener('input',updateCustomerSalePkr);
+  $('customerSellingRate').addEventListener('input',updateCustomerSalePkr);
+  $('customerSellingForm').addEventListener('change',updateCustomerSalePkr);
+  $('customerSellingForm').onsubmit=async e=>{
+    e.preventDefault();
+    if(state.me?.role!=='customer')return toast('Only User A can edit selling price',true);
+    await saveAndRefresh('/selling-price','PATCH',window.FlyxjDashboardMoney.payload('sale'),'Selling price saved in USD and PKR');
+  };
   $('earningForm').onsubmit=async e=>{
     e.preventDefault();
     if(state.me?.role!=='customer')return toast('Only User A can edit earning',true);
-    await saveAndRefresh('/customer-earning','PATCH',{customer_earning_pkr:$('customerEarningEdit').value},'User A earning saved for User B');
+    await saveAndRefresh('/customer-earning','PATCH',window.FlyxjDashboardMoney.payload('earning'),'User A earning saved for User B');
   };
   $('statusForm').onsubmit=async e=>{
     e.preventDefault();
@@ -533,7 +550,7 @@ async function init(){
     if(['shipped','delivered','completed'].includes(status)){
       payload.shipping={courier:$('shippingCourier').value,tracking_id:$('shippingId').value,tracking_url:$('shippingUrl').value};
       payload.shipped_quantity=Number($('shippingPieces').value);
-      payload.finance=financeInputs();
+      // Finance values are saved separately by their authorised account.
     }
     await saveAndRefresh('/status','PATCH',payload,'Production status updated');
   };

@@ -1,0 +1,19 @@
+name: FLYXJ multi-currency sales costs earnings tests
+on:
+  push:
+    branches: [flyxj-usera-usd-selling-price-20261124]
+  workflow_dispatch:
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: node tests/flyxj-dual-currency-static.js
+      - run: node tests/flyxj-dual-currency-integration.js
+      - run: node tests/flyxj-mobile-shipping-integration.js
+      - run: node tests/flyxj-v8-check.js
+      - run: node tests/flyxj-v6-integration.js
