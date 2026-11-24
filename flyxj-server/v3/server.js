@@ -568,6 +568,9 @@ app.post('/api/orders',auth,csrf,async(req,res)=>{
   if(title.length<2||!colour||!SIZES.includes(size)&&!SHOE_SIZES.includes(size)&&!(size.startsWith('CUSTOM:')&&size.length<=80))return err(res,400,'Enter dress title, valid size and colour');
   if(shoe_size&&!SHOE_SIZES.includes(shoe_size)&&!(shoe_size.startsWith('CUSTOM:')&&shoe_size.length<=30))return err(res,400,'Invalid shoes size');
   if(!validEarning(v.customer_earning_pkr))return err(res,400,'Enter User A earning in PKR (0 or higher)');
+  if(v.fx_pkr_per_usd!==undefined&&v.fx_pkr_per_usd!==null&&v.fx_pkr_per_usd!==''&&
+     (!Number.isFinite(Number(v.fx_pkr_per_usd))||Number(v.fx_pkr_per_usd)<=0||Number(v.fx_pkr_per_usd)>1e6))
+    return err(res,400,'Enter a valid PKR per USD order exchange rate');
   if(!Number.isInteger(qty)||qty<1||qty>1000)return err(res,400,'Quantity must be 1–1000');
   if(!Array.isArray(list)||list.length<1||list.length>MAX_IMAGES)return err(res,400,'Attach 1–8 dress pictures');
   let total=0;const parsed=[];
@@ -592,7 +595,7 @@ app.post('/api/orders',auth,csrf,async(req,res)=>{
       image_files.push(filename);
     }
     const o={id,reference,title,colour,size,shoe_size,assigned_to:'',customer_earning_pkr:Math.round(Number(v.customer_earning_pkr)*100)/100,quantity:qty,comments,status:'pending',
-      pdf_file:pdfName,measurements,finished_files:[],finance:financeDefault(),
+      pdf_file:pdfName,measurements,finished_files:[],finance:{...financeDefault(),fx_pkr_per_usd:v.fx_pkr_per_usd?Math.round(Number(v.fx_pkr_per_usd)*100)/100:null},
       approval:{status:'not_requested',note:'',updated_at:null},
       expected_date:/^\d{4}-\d{2}-\d{2}$/.test(v.expected_date||'')?v.expected_date:'',
       priority:['normal','high','urgent'].includes(v.priority)?v.priority:'normal',
