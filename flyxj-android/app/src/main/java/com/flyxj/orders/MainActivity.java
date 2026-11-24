@@ -43,7 +43,7 @@ public class MainActivity extends Activity {
         // Native Android chooser for simultaneous PDF + combined PNG sharing.
         webView.addJavascriptInterface(new ShareBridge(this, webView), "FlyxjShare");
         // Explicit version marker lets the hosted dashboard avoid repeating old update prompts.
-        settings.setUserAgentString(settings.getUserAgentString()+" FlyXJAndroid/7");
+        settings.setUserAgentString(settings.getUserAgentString()+" FlyXJAndroid/8");
         settings.setDomStorageEnabled(true);
         settings.setAllowFileAccess(true);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
