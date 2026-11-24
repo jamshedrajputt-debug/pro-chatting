@@ -424,6 +424,7 @@ function renderDetail(o){
     gallery.append(img);
   }
   renderShipping(o);renderMessages(o);renderHistory(o);renderExtraDetails(o);
+  if(window.FlyxjDashboardMoney)window.FlyxjDashboardMoney.init(o);
   const earning=$('customerEarningEdit');if(earning)earning.value=o.customer_earning_pkr??0;
   if(state.me?.role==='customer'){
     const f=o.finance||{};
@@ -537,13 +538,12 @@ function updateCustomerSalePkr(){
   $('customerSellingForm').onsubmit=async e=>{
     e.preventDefault();
     if(state.me?.role!=='customer')return toast('Only User A can edit USD selling price',true);
-    await saveAndRefresh('/selling-price','PATCH',{sale_usd:$('customerSellingUsd').value,
-      fx_pkr_per_usd:$('customerSellingRate').value},'Selling price saved in USD and PKR');
+    await saveAndRefresh('/selling-price','PATCH',window.FlyxjDashboardMoney.payload('sale'),'Selling price saved in USD and PKR');
   };
   $('earningForm').onsubmit=async e=>{
     e.preventDefault();
     if(state.me?.role!=='customer')return toast('Only User A can edit earning',true);
-    await saveAndRefresh('/customer-earning','PATCH',{customer_earning_pkr:$('customerEarningEdit').value},'User A earning saved for User B');
+    await saveAndRefresh('/customer-earning','PATCH',window.FlyxjDashboardMoney.payload('earning'),'User A earning saved for User B');
   };
   $('statusForm').onsubmit=async e=>{
     e.preventDefault();
@@ -552,7 +552,7 @@ function updateCustomerSalePkr(){
     if(['shipped','delivered','completed'].includes(status)){
       payload.shipping={courier:$('shippingCourier').value,tracking_id:$('shippingId').value,tracking_url:$('shippingUrl').value};
       payload.shipped_quantity=Number($('shippingPieces').value);
-      payload.finance=financeInputs();
+      // Preserve the separately saved User A selling price and User B costs.
     }
     await saveAndRefresh('/status','PATCH',payload,'Production status updated');
   };
