@@ -896,35 +896,70 @@ app.post('/api/orders/:id/approve',auth,csrf,async(req,res)=>{
 app.patch('/api/orders/:id/customer-earning',auth,csrf,async(req,res)=>{
  if(req.user.role!=='customer')return err(res,403,'Only User A may edit their earning');
  const o=loadOrder(req,res);if(!o)return;
- if(!validEarning(req.body?.customer_earning_pkr))return err(res,400,'Enter a valid PKR earning');
- const original=o.customer_earning_pkr;
- o.customer_earning_pkr=Math.round(Number(req.body.customer_earning_pkr)*100)/100;
+ const previous=structuredClone(o);
+ const legacy=req.body?.amount===undefined;
+ let value;
+ if(legacy){
+  if(!validEarning(req.body?.customer_earning_pkr))return err(res,400,'Enter a valid earning');
+  value=Math.round(Number(req.body.customer_earning_pkr)*100)/100;
+ }else{
+  const money=parseOrderMoney(req.body,o.finance?.fx_pkr_per_usd,true);
+  if(!money)return err(res,400,'Enter valid earning in USD/PKR and the order exchange rate');
+  if(o.finance?.fx_pkr_per_usd!=null&&Math.abs(Number(o.finance.fx_pkr_per_usd)-money.rate)>0.00005)
+    return err(res,400,'Order exchange rate differs. Reload to use its saved FX rate');
+  value=money.pkr;
+  if(o.finance?.fx_pkr_per_usd==null)o.finance={...(o.finance||financeDefault()),fx_pkr_per_usd:money.rate};
+ }
+ o.customer_earning_pkr=value;
  history(o,req.user.username,'User A earning updated','finance');
  try{await save();pushOrder(o,'finance','User A earning updated');return res.json({order:publicOrder(o)})}
- catch(e){o.customer_earning_pkr=original;return err(res,503,'Could not save earning')}
+ catch{Object.assign(o,previous);return err(res,503,'Could not save earning')}
 });
-// User A owns their USD selling-price entry on any old or new order.
-// Preserve User B's making/shipping costs. Never fabricate an FX rate.
+// Canonical accounting storage is PKR. Each order has one explicit historical FX rate.
+function parseOrderMoney(body,defaultRate,allowZero=false){
+ const currency=body?.currency||'USD',raw=body?.amount;
+ const amount=Number(raw),rateRaw=body?.fx_pkr_per_usd??defaultRate,rate=Number(rateRaw);
+ if(!['USD','PKR'].includes(currency)||raw===null||raw===undefined||raw===''||
+    !Number.isFinite(amount)||amount<0||(!allowZero&&amount===0)||amount>1e9||
+    !/^\d{1,10}(?:\.\d{1,2})?$/.test(String(raw)))return null;
+ if(!Number.isFinite(rate)||rate<=0||rate>1e6||!/^\d{1,7}(?:\.\d{1,4})?$/.test(String(rateRaw)))return null;
+ const pkr=Math.round((currency==='USD'?amount*rate:amount)*100)/100;
+ if(pkr>1e9||(!allowZero&&pkr===0))return null;
+ return {pkr,rate:Math.round(rate*10000)/10000,amount,currency};
+}
+// User A may edit selling price on ANY old/new order. User B's costs are never overwritten.
 app.patch('/api/orders/:id/selling-price',auth,csrf,async(req,res)=>{
- if(req.user.role!=='customer')return err(res,403,'Only User A can edit their USD selling price');
+ if(req.user.role!=='customer')return err(res,403,'Only User A may change selling price');
  const o=loadOrder(req,res);if(!o)return;
- const usdRaw=req.body?.sale_usd,fxRaw=req.body?.fx_pkr_per_usd;
- const usd=Number(usdRaw),fx=Number(fxRaw);
- if(usdRaw==null||usdRaw===''||fxRaw==null||fxRaw===''||
-   !Number.isFinite(usd)||!Number.isFinite(fx)||usd<=0||usd>1e7||fx<=0||fx>1e6||
-   !/^\\d{1,8}(?:\\.\\d{1,2})?$/.test(String(usdRaw))||
-   !/^\\d{1,7}(?:\\.\\d{1,4})?$/.test(String(fxRaw)))
-   return err(res,400,'Enter USD selling price and a valid PKR per USD exchange rate');
- const pkr=Math.round(usd*fx*100)/100;
- if(!Number.isFinite(pkr)||pkr<=0||pkr>1e9)return err(res,400,'Converted PKR selling price exceeds allowed range');
- const previous=structuredClone(o.finance||financeDefault());
- const priorUpdated=o.updated_at,priorHistory=Array.isArray(o.history)?o.history.slice():[];
- o.finance={...previous,sale_pkr:pkr,sale_usd_input:usd,fx_pkr_per_usd:Math.round(fx*10000)/10000,updated_at:now()};
- history(o,req.user.username,'User A selling price updated: USD '+usd+' at '+fx+' PKR/USD','finance');
- try{
-   await save();pushOrder(o,'finance','Selling price updated by User A');
-   return res.json({order:publicOrder(o),sale_usd:usd,sale_pkr:pkr});
- }catch(e){o.finance=previous;o.updated_at=priorUpdated;o.history=priorHistory;return err(res,503,'Could not save USD selling price')}
+ const previous=structuredClone(o.finance||financeDefault()),before=structuredClone(o);
+ const money=parseOrderMoney(
+  req.body?.amount===undefined?{amount:req.body?.sale_usd,currency:'USD',fx_pkr_per_usd:req.body?.fx_pkr_per_usd}:req.body,
+  previous.fx_pkr_per_usd);
+ if(!money)return err(res,400,'Enter a valid selling price, USD/PKR currency and order exchange rate');
+ o.finance={...previous,sale_pkr:money.pkr,fx_pkr_per_usd:money.rate,updated_at:now()};
+ if(money.currency==='USD')o.finance.sale_usd_input=money.amount;
+ else delete o.finance.sale_usd_input;
+ history(o,req.user.username,'User A selling price updated ('+money.currency+')','finance');
+ try{await save();pushOrder(o,'finance','User A selling price updated');return res.json({order:publicOrder(o)})}
+ catch{Object.assign(o,before);return err(res,503,'Could not save selling price')}
+});
+// User B may edit manufacturing and shipping costs without a selling price yet.
+app.patch('/api/orders/:id/production-costs',auth,csrf,async(req,res)=>{
+ if(req.user.role!=='staff')return err(res,403,'Only User B can edit making and shipping costs');
+ const o=loadOrder(req,res);if(!o)return;
+ const previous=structuredClone(o.finance||financeDefault()),before=structuredClone(o);
+ const rate=previous.fx_pkr_per_usd??req.body?.fx_pkr_per_usd;
+ const making=parseOrderMoney(req.body?.making,rate,true);
+ const shipping=parseOrderMoney(req.body?.shipping,rate,true);
+ if(!making||!shipping)return err(res,400,'Enter making and shipping amount, USD/PKR and valid order FX rate');
+ if(Math.abs(making.rate-shipping.rate)>0.00005)return err(res,400,'Use one order exchange rate for both costs');
+ if(previous.fx_pkr_per_usd!=null&&Math.abs(Number(previous.fx_pkr_per_usd)-making.rate)>0.00005)
+   return err(res,400,'Order FX rate changed. Reload the order and use its saved rate');
+ o.finance={...previous,making_pkr:making.pkr,shipping_pkr:shipping.pkr,
+   fx_pkr_per_usd:making.rate,updated_at:now()};
+ history(o,req.user.username,'User B making and shipping costs updated','finance');
+ try{await save();pushOrder(o,'finance','User B costs updated');return res.json({order:publicOrder(o)})}
+ catch{Object.assign(o,before);return err(res,503,'Could not save production costs')}
 });
 app.patch('/api/orders/:id/finance',auth,csrf,async(req,res)=>{
  if(req.user.role!=='staff')return err(res,403,'Staff only');
