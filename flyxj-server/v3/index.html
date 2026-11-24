@@ -11,7 +11,7 @@
 <link rel="stylesheet" href="/assets/order-actions.css?v=edit-delete-wa-2">
 <link rel="stylesheet" href="/assets/v6-professional.css?v=flyxj-v6-20261123">
 <link rel="stylesheet" href="/assets/v8-experience.css?v=flyxj-v8-20261124">
-<script defer src="/assets/app.js?v=shoe-earning-20261122"></script>
+<script defer src="/assets/app.js?v=flyxj-v8-mobile-shipping-finance-20261124"></script>
 <script defer src="/assets/android-update.js?v=flyxj-v5-webview-fallback"></script>
 <script defer src="/assets/share-files.js?v=flyxj-android-v8-all-photos"></script>
 <script defer src="/assets/order-actions.js?v=manual-file-share-20261122"></script>
@@ -20,7 +20,7 @@
 <script defer src="/assets/finance-extra.js"></script>
 <script defer src="/assets/init-extra.js?v=androidchat-20261116"></script>
 <script defer src="/assets/v6-professional.js?v=flyxj-v6-20261123"></script>
-<script defer src="/assets/v8-experience.js?v=flyxj-v8-20261124"></script>
+<script defer src="/assets/v8-experience.js?v=flyxj-v8-logout-20261124"></script>
 </head>
 <body>
 <div class="login-shell" id="loginShell">
@@ -66,7 +66,7 @@
       <section class="stats-grid" id="statsGrid" aria-label="Order statistics">
         <div class="stat-card"><div class="stat-label">Total orders <span class="stat-icon indigo">▣</span></div><strong id="statTotal">—</strong><small>All submitted orders</small></div>
         <div class="stat-card"><div class="stat-label">Active orders <span class="stat-icon gold">◉</span></div><strong id="statActive">—</strong><small>Currently being processed</small></div>
-        <div class="stat-card"><div class="stat-label">In transit <span class="stat-icon blue">➤</span></div><strong id="statShipped">—</strong><small>Shipped or delivered</small></div>
+        <div class="stat-card"><div class="stat-label">In transit <span class="stat-icon blue">➤</span></div><strong id="statShipped">—</strong><small id="statShippedPieces">Shipped / delivered / completed orders</small></div>
         <div class="stat-card"><div class="stat-label">Completed <span class="stat-icon green">✓</span></div><strong id="statDone">—</strong><small>Finished orders</small></div>
       </section>
 
@@ -127,7 +127,7 @@
     <div class="detail-section"><h3>PDF specification & measurements</h3><div id="orderPdfLink"></div><div class="measure-grid readonly-grid" id="detailMeasurements"></div><p class="muted tiny" id="detailDeadline"></p></div>
     <div class="detail-section"><h3>Finished dress gallery</h3><div class="photo-gallery" id="finishedGallery"></div><form class="staff-only hidden" id="finishedForm"><label>Upload completed dress photo (staff)</label><input type="file" id="finishedPhoto" accept="image/jpeg,image/png,image/webp" required><button type="submit" class="btn btn-soft">Upload photo</button></form></div>
     <div class="detail-section"><h3>Design approval</h3><div class="tracking-box" id="approvalInfo"></div><form class="staff-only hidden" id="requestApprovalForm"><textarea id="approvalRequestNote" rows="2" maxlength="1000" placeholder="Details to approve"></textarea><button type="submit" class="btn btn-soft">Request customer approval</button></form><form class="customer-only hidden" id="approvalDecisionForm"><textarea id="approvalDecisionNote" rows="2" maxlength="1000" placeholder="Optional approval comments"></textarea><div class="field-grid"><button type="button" class="btn btn-primary" id="approveDesign">✓ Approve design</button><button type="button" class="btn btn-soft" id="requestChanges">Request changes</button></div></form></div>
-    <div class="detail-section"><h3>Shipping & tracking</h3><div id="shippingInfo" class="tracking-box"></div><form id="shippingForm" class="staff-only hidden"><div class="field-grid"><div class="field"><label>Courier</label><input id="shippingCourier" maxlength="100" placeholder="DHL / Royal Mail"></div><div class="field"><label>Tracking ID</label><input id="shippingId" maxlength="120" placeholder="Tracking number"></div></div><div class="field"><label>Courier tracking link (optional)</label><input type="url" id="shippingUrl" placeholder="https://..."></div><button class="btn btn-soft" type="submit">Save shipping tracking</button></form></div>
+    <div class="detail-section"><h3>Shipping & tracking</h3><div id="shippingInfo" class="tracking-box"></div><form id="shippingForm" class="staff-only hidden"><div class="field-grid"><div class="field"><label>Courier</label><input id="shippingCourier" maxlength="100" placeholder="DHL / Royal Mail"></div><div class="field"><label>Tracking ID</label><input id="shippingId" maxlength="120" placeholder="Tracking number"></div><div class="field"><label>Pieces shipped</label><input id="shippingPieces" type="number" min="0" step="1" placeholder="0"></div></div><div class="field"><label>Courier tracking link (optional)</label><input type="url" id="shippingUrl" placeholder="https://..."></div><button class="btn btn-soft" type="submit">Save shipping tracking</button></form></div>
     <div class="detail-section customer-only hidden" id="earningSection"><h3>User A earning (PKR)</h3><form id="earningForm"><div class="field"><label for="customerEarningEdit">My earning for this order</label><input type="number" min="0" max="1000000000" step="0.01" id="customerEarningEdit" required></div><button class="btn btn-soft" type="submit">Save my earning</button></form></div>
     <div class="detail-section"><h3>Pricing & profit — PKR / USD</h3><div id="detailFinanceView" class="tracking-box"></div>
       <form class="staff-only hidden" id="financeForm"><div class="field-grid"><div class="field"><label>Selling price (PKR)</label><input id="salePkr" type="number" min="0.01" step="0.01" placeholder="e.g. 40000" required></div><div class="field"><label>Making cost (PKR)</label><input id="makingPkr" type="number" min="0" step="0.01" required></div></div><div class="field-grid"><div class="field"><label>Shipping cost (PKR)</label><input id="shippingPkr" type="number" min="0" step="0.01" required></div><div class="field"><label>PKR for 1 USD</label><input id="usdRate" type="number" min="0.01" step="0.01" placeholder="Enter actual order FX rate" required></div></div><button type="submit" class="btn btn-soft">Save pricing</button></form></div>
