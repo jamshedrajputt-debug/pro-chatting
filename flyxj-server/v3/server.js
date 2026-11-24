@@ -985,7 +985,7 @@ function financialReport(req){
 }
 app.get('/api/finance',auth,(req,res)=>res.json(financialReport(req)));
 app.get('/api/finance.csv',auth,(req,res)=>{
- const data=financialReport(req),keys=['reference','title','date','status','courier','tracking_id','sale_pkr','income_pkr','making_pkr','shipping_pkr','customer_earning_pkr','cost_pkr','profit_pkr','sale_usd','income_usd','making_usd','shipping_usd','customer_earning_usd','cost_usd','profit_usd','cumulative_profit_pkr','cumulative_profit_usd','fx_pkr_per_usd'];
+ const data=financialReport(req),keys=['reference','title','date','status','courier','tracking_id','customer_earning_pkr','income_pkr','making_pkr','shipping_pkr','cost_pkr','profit_pkr','customer_earning_usd','income_usd','making_usd','shipping_usd','cost_usd','profit_usd','cumulative_profit_pkr','cumulative_profit_usd','fx_pkr_per_usd'];
  const cell=v=>'"'+String(v??'').replaceAll('"','""')+'"';
  res.set('Content-Type','text/csv; charset=utf-8');
  res.set('Content-Disposition','attachment; filename="FLYXJ-financial-report.csv"');
