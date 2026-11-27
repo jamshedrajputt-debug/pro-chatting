@@ -270,6 +270,42 @@ app.get('/api/events',auth,(req,res)=>{
   },25000);
   res.on('close',()=>{clearInterval(heartbeat);trackingClients.delete(client);pushPresence()});
 });
+// Durable per-account notification feed generated from existing persisted order
+// history and direct messages; no migrations, no new tables and no public data.
+app.get('/api/notifications',auth,(req,res)=>{
+ const account=req.user.username,staff=req.user.role==='staff';
+ const feed=[];
+ const kinds=new Set(['created','message','shipping','status','approval','photo','return','assignment']);
+ for(const order of orders){
+  if(!canActive(req.user,order))continue;
+  const customer=order.customer||order.ordered_by;
+  for(const entry of order.history||[]){
+   if(!entry||!entry.id||!entry.at||!kinds.has(entry.kind))continue;
+   const from=entry.by||'';
+   if(!from||from===account)continue;
+   if(staff){
+    // Only customer-originated activity belongs in staff inbox.
+    if(from!==customer||!['created','message','return'].includes(entry.kind))continue;
+   } else {
+    if(account!==customer||entry.kind==='created')continue;
+   }
+   const title=entry.kind==='created'?'New order from User A':
+     entry.kind==='shipping'?'Shipping / tracking updated':
+     entry.kind==='status'?'Order status updated':
+     entry.kind==='message'?'New order message':'Order updated';
+   feed.push({id:'order:'+entry.id,at:entry.at,type:entry.kind,order_id:order.id,
+    title,body:ref(order)+' · '+text(entry.label||'New activity',120),
+    url:'/order/'+order.id});
+  }
+ }
+ for(const m of directChat){
+  if(!m||!m.id||!m.at||m.to!==account||m.from===account)continue;
+  feed.push({id:'chat:'+m.id,at:m.at,type:'chat',title:'New message from '+m.from,
+   body:text(m.body||'Photo received',120),url:'/chat'});
+ }
+ feed.sort((a,b)=>b.at.localeCompare(a.at)||b.id.localeCompare(a.id));
+ res.json({notifications:feed.slice(0,100),account,checked_at:now()});
+});
 app.get('/api/dashboard',auth,(req,res)=>{
   const allowed=orders.filter(o=>canActive(req.user,o));
   res.json({stats:slimStats(allowed),recent:allowed.slice(-5).reverse().map(publicOrder),statuses:STATUSES});
