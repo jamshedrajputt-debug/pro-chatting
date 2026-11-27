@@ -61,7 +61,9 @@ function pushEvent(name,body,allow) {
  for(const c of trackingClients)if(allow(c)){try{c.response.write(message)}catch{trackingClients.delete(c)}}
 }
 function pushOrder(o,event,description){
- pushEvent(event,{order_id:o.id,reference:ref(o),description,updated_at:o.updated_at},
+ const activity=(o.history||[]).at(-1)||{};
+ pushEvent(event,{order_id:o.id,reference:ref(o),description,updated_at:o.updated_at,
+   actor:activity.by||'',activity_id:activity.id||''},
  c=>c.role==='staff'||c.username===(o.customer||o.ordered_by));
 }
 function pushPresence(){
