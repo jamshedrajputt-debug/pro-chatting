@@ -49,6 +49,7 @@ function toggleChatSurface(open){
 }
 function resetApp(){
   if(window.FlyxjV8)window.FlyxjV8.onLogout();
+  window.FlyxjNotifications?.clear();
   if(state.events){state.events.close();state.events=null}
   state.me=null;state.orders=[];state.selected=null;state.announcedTracking.clear();state.chatOpen=false;
   $('floatingChatButton').classList.add('hidden');$('floatingChatPanel').classList.add('hidden');
@@ -65,6 +66,7 @@ function setLoggedIn(me){
   for(const e of document.querySelectorAll('.customer-only'))e.classList.toggle('hidden',me.role!=='customer');
   $('floatingChatButton').classList.remove('hidden');
   connectTrackingEvents();
+  window.FlyxjNotifications?.attach(me);
   if(window.FlyxjV8)window.FlyxjV8.onLogin();
 }
 // Live updates through a session-authenticated private stream.
@@ -90,6 +92,7 @@ function connectTrackingEvents(){
           alertNotification((payload.description||'Order updated')+' · '+(payload.reference||''));
         }
         if(typeof window.flyxjV6Notify==='function')window.flyxjV6Notify(payload.description||'Order updated',payload.reference||'',eventName);
+        if(['order','shipping','status','message','approval'].includes(eventName))window.FlyxjNotifications?.show(eventName,payload);
         refresh({silent:true});if(state.view==='finance')loadFinance();
       }catch(e){}
     });
@@ -99,6 +102,7 @@ function connectTrackingEvents(){
     try{
       const message=JSON.parse(ev.data);
       if(!state.chat.some(x=>x.id===message.id))state.chat.push(message);
+      if(message.from!==state.me?.username)window.FlyxjNotifications?.show('chat',message);
       if(message.from!==state.me?.username&&!state.chatOpen){
         state.unread++;updateChatBadge();alertNotification('New direct chat message');
         if(typeof window.flyxjV6Notify==='function')window.flyxjV6Notify('New direct chat message','', 'message');
