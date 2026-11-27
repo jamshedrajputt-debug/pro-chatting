@@ -89,6 +89,7 @@ function moreMenu(){
  const ui=modal('FLYXJ Quick Menu','Tools for your daily work.');
  const buttons=el('div','fx8-button-row');ui.body.append(buttons);
  for(const [title,fn] of [
+  ['Notifications inbox',()=>window.FlyxjNotifications?.inbox()],
   ['Enable phone notifications',()=>window.FlyxjNotifications?.permission()],
   ['App Health Centre',health],
   ['Files Centre',filesCentre],
