@@ -42,8 +42,9 @@ public class MainActivity extends Activity {
         settings.setJavaScriptEnabled(true);
         // Native Android chooser for simultaneous PDF + combined PNG sharing.
         webView.addJavascriptInterface(new ShareBridge(this, webView), "FlyxjShare");
+        webView.addJavascriptInterface(new AlertBridge(this, webView), "FlyxjAlerts");
         // Explicit version marker lets the hosted dashboard avoid repeating old update prompts.
-        settings.setUserAgentString(settings.getUserAgentString()+" FlyXJAndroid/8");
+        settings.setUserAgentString(settings.getUserAgentString()+" FlyXJAndroid/9");
         settings.setDomStorageEnabled(true);
         settings.setAllowFileAccess(true);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
@@ -116,9 +117,20 @@ public class MainActivity extends Activity {
             }
         });
         if(savedInstanceState!=null) webView.restoreState(savedInstanceState);
-        else webView.loadUrl(HOME);
+        else openFromNotification(getIntent());
         updateManager = new UpdateManager(this);
         updateManager.check();
+    }
+
+    private void openFromNotification(Intent intent){
+        String relative=intent==null?null:intent.getStringExtra("FLYXJ_OPEN_PATH");
+        if(relative!=null&&relative.matches("/(?:order/[1-9][0-9]{0,8}|chat)"))
+            webView.loadUrl("https://flyxj-order-manager-free.onrender.com"+relative);
+        else webView.loadUrl(HOME);
+    }
+    @Override protected void onNewIntent(Intent intent){
+        super.onNewIntent(intent);setIntent(intent);
+        if(webView!=null)openFromNotification(intent);
     }
 
     private void download(String url,String agent,String disposition,String mime){
