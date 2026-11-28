@@ -8,6 +8,12 @@ for(const file of ['server.js','maker-compose.js','assets/v10-batch-share.js','a
 }
 const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
 assert.match(html,/v10-batch-share\.js/);assert.match(html,/v10-professional\.css/);
+assert.match(html,/v11-orderwise-share\\.js/, 'V11 order-wise script loads'); 
+const orderwise=fs.readFileSync(path.join(root,'assets/v11-orderwise-share.js'),'utf8');
+assert.doesNotThrow(()=>new vm.Script(orderwise),'V11 order-wise JS parses');
+for(const fragment of ["kind:'photo'","kind:'batch-maker'","cardLast:true","shareFiles","navigator.share","Photo ","Next Order"])
+ assert.ok(orderwise.includes(fragment),'V11 contains '+fragment);
+
 const client=fs.readFileSync(path.join(root,'assets/v10-batch-share.js'),'utf8');
 assert.match(client,/SIZE:/);assert.match(client,/COLOUR:/);assert.match(client,/kind:'batch-maker'/);
 assert.match(client,/function summary/);assert.match(client,/sequence:i\+1/);
@@ -70,6 +76,14 @@ async function run(){
  assert((await sharp(bytes).metadata()).width===1200);
  assert((await sharp(bytes).metadata()).height===1400);
  assert.equal((await send('/api/orders/1/mobile-file',cookie,csrf,'POST',{kind:'batch-maker',sequence:7,total:7})).response.status,400);
+ r=await send('/api/orders/1/mobile-file',cookie,csrf,'POST',{kind:'photo',index:0,sequence:1,total:2});
+ assert.equal(r.response.status,200,'numbered original photo is available');
+ assert.match(r.data.filename,/^01-OF-02-01-/,'original photo keeps sequence');
+ r=await send('/api/orders/1/mobile-file',cookie,csrf,'POST',{kind:'batch-maker',sequence:1,total:2,cardLast:true});
+ assert.equal(r.response.status,200,'last info card available');
+ assert.match(r.data.filename,/^01-OF-02-99-/,'details card follows original photos');
+ const detailFile=await fetch(base+r.data.url);
+ assert.equal(detailFile.status,200,'detail image ticket still works');
  const customer=await send('/api/login',null,null,'POST',{username:'usera',password:'customer-test-password-12345'});
  assert.equal(customer.response.status,200);
  assert.equal((await send('/api/orders/1/mobile-file',customer.response.headers.get('set-cookie').split(';')[0],customer.data.csrf,'POST',{kind:'batch-maker',sequence:1,total:1})).response.status,403);
