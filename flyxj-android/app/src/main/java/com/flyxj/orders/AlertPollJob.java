@@ -14,6 +14,7 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
+import java.net.URI;
 
 /** Background notification fallback. Android schedules at roughly 15-min intervals;
  * this is not an instant Firebase/FCM push channel and may be delayed by Doze.
@@ -35,7 +36,7 @@ public final class AlertPollJob extends JobService {
             HttpURLConnection connection=null;
             try{
                 connection=(HttpURLConnection)new URL("https://"+AlertBridge.HOST+"/api/notifications").openConnection();
-                connection.setConnectTimeout(12000);connection.setReadTimeout(12000);
+                connection.setConnectTimeout(70000);connection.setReadTimeout(70000);
                 connection.setInstanceFollowRedirects(false);
                 connection.setRequestProperty("Cookie",cookie);
                 connection.setRequestProperty("Accept","application/json");

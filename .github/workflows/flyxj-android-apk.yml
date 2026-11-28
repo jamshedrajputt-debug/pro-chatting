@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - flyxj-android-apk-build-20261123
+      - flyxj-android-v10-batch-share-20261128
       - flyxj-android-v9-notifications-20261127
     paths:
       - 'flyxj-android/**'

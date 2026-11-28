@@ -47,7 +47,7 @@ public final class AlertBridge {
             if(scheduler!=null){
                 JobInfo job=new JobInfo.Builder(JOB,new ComponentName(activity,AlertPollJob.class))
                     .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
-                    .setPeriodic(15*60*1000L).setPersisted(false).build();
+                    .setPeriodic(15*60*1000L).setPersisted(true).build();
                 scheduler.schedule(job);
             }
             requestPermission();
