@@ -33,7 +33,7 @@
   const shell=node('section','fx10-pane fx11-shell');shell.setAttribute('role','dialog');shell.setAttribute('aria-modal','true');
   const heading=node('header','fx10-heading'),title=node('div');
   title.append(node('small','','FLYXJ · USER B WHATSAPP'),node('h2','','Order-wise WhatsApp Pack'),
-   node('p','','Send one professional image with each order's photos above matching details. No PDF.'));
+   node('p','','Send one professional image: photos and matching details for each order. No PDF.'));
   const close=node('button','fx10-close','×');close.type='button';close.setAttribute('aria-label','Close');
   close.onclick=()=>pane.remove();heading.append(title,close);
   const content=node('div','fx10-body'),rows=node('div','fx10-pack-rows'),status=node('p','fx10-feedback','Select the photos for each order.');
@@ -191,7 +191,7 @@
     if(native){
      window.FlyxjShare.shareFiles(JSON.stringify({files:[link.href],types:['image/jpeg'],
       title:'FLYXJ · '+orders.length+' orders in exact sequence',
-      text:'FLYXJ production pack. One long image shows each order's photos directly above SIZE, COLOUR and QUANTITY.'}));
+      text:'FLYXJ production pack. One long image shows the photos for each order directly above SIZE, COLOUR and QUANTITY.'}));
      status.textContent='One image with '+orders.length+' order sections and '+data.photos+' photos opened in Android share menu. Choose WhatsApp.';
     }else{
      const result=await fetch(link.href,{credentials:'same-origin',cache:'no-store'});
@@ -278,7 +278,7 @@
    if(step+1<orders.length){step++;ready=null;status.textContent='Now prepare '+orders[step].reference+'.';update();}
    else{status.textContent='All '+orders.length+' orders opened for WhatsApp sharing. Verify messages inside WhatsApp.';pane.remove();}
   };
-  const combinedTip=node('p','fx10-warning','RECOMMENDED: Exact Image sends ONE professional JPG with every order's selected photos and SIZE, COLOUR, QTY immediately underneath, in the correct sequence. No PDF. Original images mode may mix attachments.');
+  const combinedTip=node('p','fx10-warning','RECOMMENDED: Exact Image sends ONE professional JPG with the selected photos for every order and SIZE, COLOUR, QTY immediately underneath, in the correct sequence. No PDF. Original images mode may mix attachments.');
   const bulkActions=node('div','fx11-step-buttons');bulkActions.append(exact,download,shareAll);
   controls.append(send,next);content.append(rows,combinedTip,bulkActions,imagePreview,guide,progress,controls,status);shell.append(heading,content);pane.append(shell);
   pane.onclick=e=>{if(e.target===pane)pane.remove()};document.body.append(pane);refresh();update();close.focus();
