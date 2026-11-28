@@ -35,7 +35,9 @@ public class MainActivity extends Activity {
     @Override public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         webView = new WebView(this);
-        webView.setBackgroundColor(Color.WHITE);
+        getWindow().setStatusBarColor(Color.rgb(17,47,57));
+        getWindow().setNavigationBarColor(Color.rgb(17,47,57));
+        webView.setBackgroundColor(Color.rgb(247,249,246));
         webView.setLayoutParams(new ViewGroup.LayoutParams(-1,-1));
         setContentView(webView);
         WebSettings settings = webView.getSettings();
@@ -44,7 +46,7 @@ public class MainActivity extends Activity {
         webView.addJavascriptInterface(new ShareBridge(this, webView), "FlyxjShare");
         webView.addJavascriptInterface(new AlertBridge(this, webView), "FlyxjAlerts");
         // Explicit version marker lets the hosted dashboard avoid repeating old update prompts.
-        settings.setUserAgentString(settings.getUserAgentString()+" FlyXJAndroid/10");
+        settings.setUserAgentString(settings.getUserAgentString()+" FlyXJAndroid/19");
         settings.setDomStorageEnabled(true);
         settings.setAllowFileAccess(true);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
