@@ -14,9 +14,7 @@
   return [...set].sort((a,b)=>a-b);
  }
  function caption(o,i,total){
-  return 'ORDER '+String(i).padStart(2,'0')+'/'+String(total).padStart(2,'0')+
-   '\nReference: '+o.reference+'\nProduct: '+o.title+'\nSIZE: '+o.size+
-   '\nCOLOUR: '+o.colour+'\nQuantity: '+o.quantity+'\nStatus: '+o.status;
+  return 'Reference: '+o.reference+'\nSize: '+o.size+'\nColor: '+o.colour;
  }
  function reset(){step=0;ready=null;allReady=null;shared.clear()}
  function mount(){
