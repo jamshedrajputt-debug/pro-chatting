@@ -5,16 +5,18 @@
  const E=(tag,cls,value)=>{const e=document.createElement(tag);e.className=cls||'';if(value!==undefined)e.textContent=String(value);return e};
  const staff=()=>typeof state!=='undefined'&&state.me?.role==='staff';
  const all=()=>[...selected.keys()].map(id=>state.orders.find(o=>String(o.id)===String(id))).filter(Boolean).map(record);
- const record=o=>({id:o.id,reference:o.reference||'FXJ-'+o.id,title:o.title||'Order',
+ const shareReference=o=>{
+  const date=new Date(o.createdAt||o.created_at||'');
+  const id=Number(o.id);
+  if(Number.isInteger(id)&&id>0&&Number.isFinite(date.getTime()))
+   return 'FXJ-'+date.getUTCFullYear()+'-'+String(date.getUTCMonth()+1).padStart(2,'0')+'-'+String(id).padStart(6,'0');
+  return o.reference||'FXJ-'+String(o.id).padStart(6,'0');
+ };
+ const shareDetails=o=>'Reference: '+shareReference(o)+'\nSize: '+(o.size||'Not set')+'\nColor: '+(o.colour||'Not set');
+ const record=o=>({id:o.id,createdAt:o.created_at||'',reference:o.reference||'FXJ-'+o.id,title:o.title||'Order',
     size:o.size||'Not set',colour:o.colour||'Not set',quantity:o.quantity||1,status:o.status||'pending',
     photoCount:Array.isArray(o.photos)?o.photos.length:0,updatedAt:o.updated_at||''});
- function summary(items){
-  return 'FLYXJ · NUMBERED PRODUCTION ORDER PACK\n'+items.length+' orders · Check SIZE, COLOUR & quantity for EACH reference.\n\n'+
-    items.map((o,i)=>'ORDER '+String(i+1).padStart(2,'0')+'/'+String(items.length).padStart(2,'0')+
-      '\nReference: '+o.reference+'\nDress: '+o.title+'\nSIZE: '+o.size+
-      '\nCOLOUR: '+o.colour+'\nQuantity: '+o.quantity+'\nStatus: '+o.status.replace(/_/g,' ')+'\n').join('\n')+
-    '\nEND · '+items.length+' separate orders. Confirm every reference.';
- }
+ function summary(items){return items.map(shareDetails).join('\n\n');}
  function sync(){
   const body=document.getElementById('orderRows');if(!body)return;
   let bar=document.getElementById('fx10Toolbar');
@@ -136,5 +138,5 @@
    prepared={key,files,at:Date.now()};status.textContent='Pack ready with current sizes, colours and quantities. Tap Share numbered images again.';
   }catch(e){status.textContent='Share failed: '+e.message}finally{button.disabled=false}
  }
- window.FlyxjBatch={sync,clear:()=>{selected.clear();prepared=null;sync()},summary,selected:()=>all(),openLegacy:show};
+ window.FlyxjBatch={sync,clear:()=>{selected.clear();prepared=null;sync()},summary,shareDetails,shareReference,selected:()=>all(),openLegacy:show};
 })();
