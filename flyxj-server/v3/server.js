@@ -52,7 +52,34 @@ if(users.some(u=>u.password.length<12)||users[0].name.toLowerCase()===users[1].n
   console.error('Set separate secure FLYXJ_CUSTOMER_PASSWORD and FLYXJ_STAFF_PASSWORD (12+ characters).');
   process.exit(1);
 }
-const sessions=new Map();
+const sessions=new Map(); // Transitional V9 sessions until the next service restart.
+const revokedSessions=new Map();
+// V10 login cookies are authenticated by a secret derived from configured
+// server-side passwords, so sleeping/restarting a free Render instance does
+// not erase valid logins. The key rotates whenever either main password changes.
+const sessionKey=crypto.scryptSync(users.map(u=>u.password).join('\0'),'flyxj-v10-session-cookie-key',32);
+function signSession(session){
+ const body=Buffer.from(JSON.stringify({...session,version:10})).toString('base64url');
+ const mac=crypto.createHmac('sha256',sessionKey).update(body).digest('base64url');
+ return body+'.'+mac;
+}
+function verifySession(token){
+ if(typeof token!=='string'||token.length>1400)return null;
+ const bits=token.split('.');if(bits.length!==2)return null;
+ const expected=crypto.createHmac('sha256',sessionKey).update(bits[0]).digest();
+ let received;try{received=Buffer.from(bits[1],'base64url')}catch{return null}
+ if(received.length!==expected.length||!crypto.timingSafeEqual(received,expected))return null;
+ let value;try{value=JSON.parse(Buffer.from(bits[0],'base64url').toString())}catch{return null}
+ if(value.version!==10||typeof value.username!=='string'||typeof value.role!=='string'||
+    !/^[a-f0-9]{48}$/.test(value.csrf||'')||
+    !Number.isSafeInteger(value.expires)||value.expires<Date.now()||
+    typeof value.nonce!=='string'||! /^[a-f0-9]{32}$/.test(value.nonce))return null;
+ if(revokedSessions.has(token))return null;
+ const user=users.find(u=>u.name===value.username&&u.role===value.role)||
+   additionalStaff.find(u=>u.name===value.username&&u.role===value.role&&u.active!==false);
+ return user?{username:value.username,role:value.role,csrf:value.csrf,expires:value.expires}:null;
+}
+
 const loginTries=new Map();
 // Live tracking events are visible only to the order's authenticated customer.
 const trackingClients=new Set();
@@ -199,7 +226,7 @@ function publicOrder(o) {
 }
 function cookieToken(req){const m=/(?:^|;\s*)flyxj_session=([^;]+)/.exec(req.headers.cookie||'');return m?m[1]:null}
 function auth(req,res,next){
-  const token=cookieToken(req),session=token&&sessions.get(token);
+  const token=cookieToken(req),session=token&&(sessions.get(token)||verifySession(token));
   if(!session||session.expires<Date.now()){if(token)sessions.delete(token);return err(res,401,'Login required');}
   req.user=session;req.token=token;next();
 }
@@ -244,15 +271,18 @@ app.post('/api/login',(req,res)=>{
     return err(res,401,'Incorrect username or password');
   }
   loginTries.delete(key);
-  const token=crypto.randomBytes(32).toString('hex');
-  const session={username:account.name,role:account.role,csrf:crypto.randomBytes(24).toString('hex'),expires:Date.now()+30*86400000};
-  sessions.set(token,session);
+  const session={username:account.name,role:account.role,csrf:crypto.randomBytes(24).toString('hex'),expires:Date.now()+30*86400000,nonce:crypto.randomBytes(16).toString('hex')};
+  const token=signSession(session);
   res.set('Set-Cookie','flyxj_session='+token+'; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=2592000');
   res.json({username:session.username,role:session.role,csrf:session.csrf});
 });
 app.get('/api/me',auth,(req,res)=>res.json({username:req.user.username,role:req.user.role,csrf:req.user.csrf}));
 app.post('/api/logout',auth,csrf,(req,res)=>{
   sessions.delete(req.token);
+  // Explicit logout invalidates this token immediately on this running server;
+  // browser cookie is also removed. Rotating account passwords revokes all tokens.
+  revokedSessions.set(req.token,req.user.expires);
+  if(revokedSessions.size>2000)for(const [key,expiry] of revokedSessions)if(expiry<Date.now())revokedSessions.delete(key);
   res.set('Set-Cookie','flyxj_session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0');
   res.json({ok:true});
 });
