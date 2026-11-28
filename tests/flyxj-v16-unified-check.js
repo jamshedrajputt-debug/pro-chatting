@@ -12,11 +12,11 @@ for(const [name,s] of Object.entries({batch,order,v6,pro,legacy,v8,app,notify}))
  assert.doesNotThrow(()=>new vm.Script(s),name+' valid JavaScript');
 assert.match(html,/v17-exact-only-20261128/,'Android WebView and web load exact-image-only script');
 assert.match(batch,/Share Exact Image/,'only one main Share Exact Image entry');
-assert.match(batch,/window\\.FlyxjOrderWise\\?\\.open/,'single button opens exact image flow');
-assert.match(order,/window\\.FlyxjOrderWise=\\{open\\}/,'modern image dialog is exposed');
+assert.ok(batch.includes('window.FlyxjOrderWise?.open?.()'),'single button opens exact image flow');
+assert.ok(order.includes('window.FlyxjOrderWise={open}'),'modern image dialog is exposed');
 assert.doesNotMatch(order,/fx16-advanced|openLegacy|Original Images \\(WhatsApp may mix\\)|Share ALL Orders Together/,'old share modes no longer visible');
 assert.match(order,/ordered-share-image/,'only exact image share route used');
-assert.match(order,/body\\.append\\(rows,buttons,preview,status\\)/,'simple share dialog layout');
+assert.ok(order.includes('body.append(rows,buttons,preview,status)'),'simple share dialog layout');
 assert.match(legacy,/\$\('notificationButton'\)\.onclick=\(\)=>window\.FlyxjNotifications\?\.inbox\(\)/,'one bell opens authenticated inbox');
 assert.doesNotMatch(v6,/function notificationCenter/,'duplicate V6 notification panel removed');
 assert.doesNotMatch(app,/window\.flyxjV6Notify/,'no double event notification');
