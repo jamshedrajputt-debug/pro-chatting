@@ -44,7 +44,8 @@ async function stop(){
 }
 async function send(p,cookie,csrf,method='GET',body){
  const headers={};if(cookie)headers.cookie=cookie;
- if(body!==undefined){headers['content-type']='application/json';headers['x-csrf-token']=csrf}
+ if(body!==undefined)headers['content-type']='application/json';
+ if(cookie&&method!=='GET')headers['x-csrf-token']=csrf;
  const r=await fetch(base+p,{method,headers,body:body===undefined?undefined:JSON.stringify(body)});
  return {response:r,data:await r.json().catch(()=>({}))};
 }
