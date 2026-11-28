@@ -17,10 +17,11 @@
 <link rel="stylesheet" href="/assets/v10-professional.css?v=flyxj-v10-20261128">
 <link rel="stylesheet" href="/assets/v13-command-center.css?v=flyxj-v16-unified-20261128">
 <link rel="stylesheet" href="/assets/v19-atelier-premium.css?v=flyxj-v19-20261128">
+<link rel="stylesheet" href="/assets/v20-delivery-table.css?v=flyxj-v20-20261128">
 <script defer src="/assets/flyxj-money-inputs.js?v=net-etsy-20261124"></script>
 <script defer src="/assets/flyxj-money-dashboard.js?v=net-etsy-20261124"></script>
 <script defer src="/assets/two-way-notifications.js?v=flyxj-v14-open-alert-20261128"></script>
-<script defer src="/assets/app.js?v=flyxj-v16-unified-20261128"></script>
+<script defer src="/assets/app.js?v=flyxj-v20-delivery-20261128"></script>
 <script defer src="/assets/android-update.js?v=flyxj-v5-webview-fallback"></script>
 <script defer src="/assets/share-files.js?v=flyxj-android-v8-all-photos"></script>
 <script defer src="/assets/order-actions.js?v=manual-file-share-20261122"></script>
@@ -103,7 +104,7 @@
           <div class="section-header"><div><h2 id="listHeading">Recent orders</h2><p class="muted" id="listSubtitle">Follow the latest order activity</p></div><div class="section-actions"><button type="button" class="btn btn-soft" id="showAllButton">View all orders</button></div></div>
           <div class="flyxj-trash-toolbar"><button type="button" class="btn btn-soft" id="flyxjTrashButton">Recently Deleted</button></div><div class="filter-bar" id="filterBar"><div class="search-box"><span>⌕</span><input id="orderSearch" placeholder="Search ID, dress, colour, tracking..." aria-label="Search orders"></div><select id="statusFilter" aria-label="Filter by status">
             <option value="all">All statuses</option><option value="pending">Pending</option><option value="awaiting_approval">Awaiting approval</option><option value="confirmed">Confirmed</option><option value="cutting">Cutting</option><option value="stitching">Stitching</option><option value="in_progress">In progress</option><option value="quality_check">Quality check</option><option value="shipped">Shipped</option><option value="delivered">Delivered</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></div>
-          <div class="order-table-wrap"><table class="order-table"><thead><tr><th>ORDER / DRESS</th><th>CUSTOMER</th><th>DATE</th><th>STATUS</th><th>TRACKING</th><th></th></tr></thead><tbody id="orderRows"></tbody></table><div id="emptyState" class="empty-state hidden"><div class="empty-icon">▤</div><h3>No orders found</h3><p>Try adjusting the filters or create a new order.</p></div></div>
+          <div class="order-table-wrap"><table class="order-table"><thead><tr><th>ORDER / DRESS</th><th>DELIVERY DATE</th><th>ORDER DATE</th><th>STATUS</th><th>TRACKING</th><th></th></tr></thead><tbody id="orderRows"></tbody></table><div id="emptyState" class="empty-state hidden"><div class="empty-icon">▤</div><h3>No orders found</h3><p>Try adjusting the filters or create a new order.</p></div></div>
           <div class="table-footer"><span id="resultCount" class="muted">0 orders</span><span class="muted">Click any order to view details</span></div>
         </div>
         <aside class="right-column"><section class="insight-card"><div class="section-header"><h2>Order workflow</h2><span class="dot-menu">•••</span></div><p class="muted">Current order distribution</p><div class="workflow-list" id="workflowList"></div><div class="insight-footer">Updated when you refresh</div></section>

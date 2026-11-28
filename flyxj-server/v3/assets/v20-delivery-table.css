@@ -1,0 +1,90 @@
+/* FlyXJ V20 · Luxury order ledger · same experience on web + Android WebView. */
+:root{--fx20-gold:#d5b17e;--fx20-gold-ink:#785a31;--fx20-navy:#112d3a;--fx20-panel:#fffdfa;--fx20-line:#e9e0d4}
+.order-table-wrap{
+ border:1px solid #e6d1b2!important;
+ border-radius:20px!important;
+ background:var(--fx20-panel)!important;
+ box-shadow:0 14px 38px rgba(24,36,45,.085),0 1px 0 #fff8 inset!important;
+ overflow-x:auto;
+}
+.order-table{width:100%;min-width:690px;border-collapse:separate;border-spacing:0;table-layout:auto}
+.order-table thead tr{background:linear-gradient(120deg,#faf7f0,#f6f8f7)}
+.order-table thead th{
+ color:#556677!important;font-size:10px!important;font-weight:850!important;
+ letter-spacing:.095em!important;text-transform:uppercase;
+ padding:18px 15px!important;border-bottom:1px solid #e9e3dc!important;
+ white-space:nowrap;
+}
+.order-table thead th:first-child{padding-left:23px!important}
+.order-table tbody tr{
+ background:#fffdfa;
+ transition:background .17s ease,box-shadow .17s ease;
+ cursor:pointer;
+}
+.order-table tbody tr:nth-child(even){background:#fbfaf7}
+.order-table tbody tr:hover,.order-table tbody tr:focus-visible{
+ background:#f4f8f4!important;outline:0;
+ box-shadow:inset 3px 0 var(--fx20-gold);
+}
+.order-table tbody td{
+ padding:18px 14px!important;
+ border-bottom:1px solid #efeae3!important;
+ color:#344854;font-size:12px;vertical-align:middle;
+}
+.order-table tbody td:first-child{padding-left:22px!important;min-width:195px}
+.order-table tbody tr:last-child td{border-bottom:0!important}
+.order-table .order-desc{gap:12px}
+.order-table .order-desc img{
+ width:55px;height:63px;border-radius:12px;object-fit:cover;
+ border:1px solid #dbbd90;box-shadow:0 4px 11px rgba(24,42,41,.13);
+ background:#f2f3ee;
+}
+.order-table .order-txt b{
+ display:block;font-size:13px;font-weight:820;color:#1c3440;
+ white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:190px;
+ letter-spacing:-.025em;
+}
+.order-table .order-txt small{font-size:11px;color:#87959d}
+.order-table .fx20-delivery-cell{min-width:135px}
+.fx20-delivery-badge{
+ display:inline-flex;align-items:center;gap:7px;
+ padding:9px 11px;border:1px solid #edddc4;
+ background:linear-gradient(120deg,#fffcf6,#faf0df);
+ color:#644b30;border-radius:12px;font-size:12px;font-weight:770;
+ font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+.fx20-calendar{font-size:16px;line-height:1;color:#a17b4f}
+.fx20-delivery-overdue{background:#fff0ed;border-color:#ecc2ba;color:#a34d39}
+.fx20-delivery-overdue .fx20-calendar{color:#c26d52}
+.fx20-delivery-unset{
+ display:inline-flex;align-items:center;padding:8px 11px;
+ background:#f4f6f5;border:1px dashed #d7e2dd;
+ border-radius:11px;color:#71837f;font-size:11px;font-weight:700;
+}
+.order-table .fx20-order-date{font-variant-numeric:tabular-nums;white-space:nowrap;color:#647582}
+.order-table .status-pill{border-radius:999px;padding:8px 11px;font-weight:800}
+.order-table .order-sheet-link,.order-table .order-maker-image{
+ background:#e9f5ed!important;border:1px solid #bddfcc!important;
+ color:#17634f!important;border-radius:11px!important;
+ min-height:36px;display:inline-flex;align-items:center;white-space:nowrap;
+}
+.order-table .flyxj-actions-trigger{
+ border-radius:10px;border:1px solid #e0e7e3;
+ background:#f8faf7;min-height:34px;
+}
+.order-table tbody tr:focus-visible{outline:3px solid #b6cfa9;outline-offset:-3px}
+@media(max-width:900px){
+ .order-table{min-width:670px}
+ .order-table thead th{padding:14px 10px!important;font-size:9px!important}
+ .order-table tbody td{padding:13px 10px!important}
+ .order-table tbody td:first-child{padding-left:13px!important}
+ .order-table .order-desc img{width:45px;height:53px}
+ .order-table .order-txt b{max-width:130px}
+ .fx20-delivery-badge{padding:8px;font-size:11px}
+}
+@media(max-width:600px){
+ .order-table-wrap{border-radius:15px!important;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+ .order-table{min-width:680px}
+ .order-table .fx20-delivery-cell{min-width:124px}
+}
+@media(prefers-reduced-motion:reduce){.order-table tbody tr{transition:none}}
