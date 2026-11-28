@@ -119,7 +119,6 @@ function filesCentre(){
    const details=el('div','fx8-result-meta');details.append(el('b','',order.reference||'Order'),el('span','',order.title||''),el('small','',(order.photos||[]).length+' photos · '+(order.pdf_url?'PDF attached':'PDF missing')));
    const actions=el('div','fx8-button-row');
    actions.append(actionBtn('Preview',()=>{ui.hide();preview(order)}));
-   if(isStaff())actions.append(actionBtn('Share',()=>{ui.hide();sharePreset(order)}));
    row.append(photo,details,actions);list.append(row);
   }
  }
@@ -146,7 +145,6 @@ function preview(order){
    const link=el('a','fx8-button','Open original PDF');link.href=order.pdf_url;link.target='_blank';link.rel='noopener noreferrer';controls.append(link);
  }
  const orderLink=el('a','fx8-button','Open full order');orderLink.href='/order/'+encodeURIComponent(order.id);controls.append(orderLink);
- if(isStaff())controls.append(actionBtn('Share files',()=>{ui.hide();sharePreset(order)},true));
  ui.body.append(controls);
  ui.body.append(el('p','fx8-mini-caption','Full PDF preview opens through an authenticated order link. Files are not stored in the Files Centre.'));
 }
