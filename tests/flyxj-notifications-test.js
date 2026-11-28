@@ -5,8 +5,17 @@ const {spawn}=require('node:child_process');
 const folder=path.join(__dirname,'../flyxj-server/v3');
 for(const x of ['server.js','assets/app.js','assets/two-way-notifications.js','assets/v8-experience.js'])
  assert.doesNotThrow(()=>new vm.Script(fs.readFileSync(path.join(folder,x),'utf8'),{filename:x}));
+const pro=fs.readFileSync(path.join(folder,'assets/v13-command-center.js'),'utf8');
+assert.doesNotThrow(()=>new vm.Script(pro,{filename:'v13-command-center.js'}));
+assert.match(pro,/onNotifications/,'dashboard receives missed alerts');
+assert.match(pro,/Enable alerts/,'Android or web notification permission control exists');
+const notifyClient=fs.readFileSync(path.join(folder,'assets/two-way-notifications.js'),'utf8');
+assert.match(notifyClient,/if\(!old\)/,'first login surfaces recent updates');
+assert.match(notifyClient,/window\.FlyxjPro\?\.onNotifications/,'missed updates reach dashboard');
 const html=fs.readFileSync(path.join(folder,'index.html'),'utf8');
 assert.match(html,/two-way-notifications\.js/);
+assert.match(html,/v13-command-center\.js/);
+assert.match(html,/v13-command-center\.css/);
 const temp=fs.mkdtempSync(path.join(os.tmpdir(),'flyxj-alert-test-'));
 const now=new Date().toISOString(),id='b7a7f234-bb11-4d34-a878-124abfc82200';
 const orders=[{id:1,reference:'FXJ-TEST-000001',title:'Test Jacket',size:'M',colour:'Black',quantity:1,

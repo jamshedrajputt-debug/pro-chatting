@@ -7,6 +7,8 @@ for(const file of ['server.js','maker-compose.js','assets/v10-batch-share.js','a
  assert.doesNotThrow(()=>new vm.Script(fs.readFileSync(path.join(root,file),'utf8'),{filename:file}),file+' syntax');
 }
 const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
+assert.doesNotThrow(()=>new vm.Script(fs.readFileSync(path.join(root,'assets/v13-command-center.js'),'utf8')));
+assert.match(html,/Production Command Centre/);
 assert.match(html,/v10-batch-share\.js/);assert.match(html,/v10-professional\.css/);
 assert.match(html,/v11-orderwise-share\.js/, 'V11 order-wise script loads'); 
 const orderwise=fs.readFileSync(path.join(root,'assets/v11-orderwise-share.js'),'utf8');

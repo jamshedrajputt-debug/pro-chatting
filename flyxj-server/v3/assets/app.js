@@ -50,6 +50,7 @@ function toggleChatSurface(open){
 function resetApp(){
   if(window.FlyxjV8)window.FlyxjV8.onLogout();
   window.FlyxjNotifications?.clear();
+  window.FlyxjPro?.onLogout();
   window.FlyxjBatch?.clear();
   if(state.events){state.events.close();state.events=null}
   state.me=null;state.orders=[];state.selected=null;state.announcedTracking.clear();state.chatOpen=false;
@@ -68,6 +69,7 @@ function setLoggedIn(me){
   $('floatingChatButton').classList.remove('hidden');
   connectTrackingEvents();
   window.FlyxjNotifications?.attach(me);
+  window.FlyxjPro?.onLogin(me);
   if(window.FlyxjV8)window.FlyxjV8.onLogin();
 }
 // Live updates through a session-authenticated private stream.
@@ -137,6 +139,7 @@ async function refresh({silent=false}={}){
     state.orders=next;state.stats=dash.stats;
     $('navOrderCount').textContent=state.orders.length;
     renderStats();renderOrders();renderWorkflow();
+    window.FlyxjPro?.onRefresh();
     if(typeof window.flyxjV6Refresh==='function')window.flyxjV6Refresh();
     if(state.selected){
       const current=state.orders.find(o=>o.id===state.selected.id);
