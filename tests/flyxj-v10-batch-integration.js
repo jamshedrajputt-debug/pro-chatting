@@ -20,7 +20,7 @@ assert.match(alerts,/function launchSummary/,'Android opens with one non-spam ca
 assert.doesNotThrow(()=>new vm.Script(orderwise),'V11 order-wise JS parses');
 assert.match(orderwise,/Share Exact Image/,'only one sharing mode is visible');
 assert.match(orderwise,/ordered-share-image/,'JPEG endpoint is selected');
-assert.match(orderwise,/image\\/jpeg/,'Android shares JPEG MIME');
+assert.ok(orderwise.includes("'image/jpeg'"),'Android shares JPEG MIME');
 for(const hidden of ['Original Images (WhatsApp may mix)','Share ALL Orders Together','WhatsApp Text Only','Next Order','fx16-advanced'])
  assert.ok(!orderwise.includes(hidden),'legacy share option hidden: '+hidden);
 assert.match(orderwise,/Reference: /,'brief text includes reference');
