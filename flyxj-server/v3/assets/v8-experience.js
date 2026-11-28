@@ -47,7 +47,7 @@ async function health(){
  const account=healthValue(grid,'Signed-in role',state.me.role+' · '+state.me.username);
  const sync=healthValue(grid,'Last check','Checking…');
  const app=healthValue(grid,'Android app version',(/FlyXJAndroid\/(\d+)/.exec(navigator.userAgent)||[])[1]||'Web / earlier app');
- healthValue(grid,'Dashboard version','V10');
+ healthValue(grid,'Dashboard version','V13 · Live web dashboard');
  const release=healthValue(grid,'Latest release','Checking…');
  const connection=healthValue(grid,'Internet',navigator.onLine?'Connected':'Offline');
  const status=el('div','fx8-status');ui.body.append(status);
@@ -102,7 +102,7 @@ function moreMenu(){
   if(title==='Staff & Backup'&&!isStaff())continue;
   buttons.append(actionBtn(title,()=>{ui.hide();fn()}))
  }
- const p=el('p','fx8-mini-caption','V8 web tools work inside your existing FlyXJ app. No app reinstallation is required for these dashboard changes.');
+ const p=el('p','fx8-mini-caption','V13 web dashboard features load in your current FlyXJ Android WebView. New native Android features require a separately built and signed APK.');
  ui.body.append(p);
 }
 function filesCentre(){
