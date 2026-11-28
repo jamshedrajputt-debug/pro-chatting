@@ -16,10 +16,10 @@ assert.match(batch,/window\.FlyxjOrderWise\?\.open/,'main entry opens ordered sh
 assert.match(order,/window\.FlyxjOrderWise=\{open\}/,'modern dialog is exposed');
 assert.doesNotMatch(order,/actions\.append\(btn\)/,'second toolbar share button is not mounted');
 assert.match(order,/node\('details','fx16-advanced'\)/,'old share modes in advanced');
-assert.match(order,/bulkActions\.append\(exact,download\)/,'exact image default');
+assert.doesNotMatch(order,/Share ALL · Exact Image|ordered-share-image|exact\.onclick/,'only Exact Image UI is removed');
 assert.match(order,/advancedBody\.append\(shareAll,quick,oneByOne\)/,'all legacy share modes retained');
 assert.match(batch,/openLegacy:show/,'numbered and text sharing remain reachable');
-assert.match(order,/ordered-share-image/,'exact image remains main format');
+assert.match(order,/advanced\.open=true/,'remaining share modes are visible by default');
 assert.match(legacy,/\$\('notificationButton'\)\.onclick=\(\)=>window\.FlyxjNotifications\?\.inbox\(\)/,'one bell opens authenticated inbox');
 assert.doesNotMatch(v6,/function notificationCenter/,'duplicate V6 notification panel removed');
 assert.doesNotMatch(app,/window\.flyxjV6Notify/,'no double event notification');

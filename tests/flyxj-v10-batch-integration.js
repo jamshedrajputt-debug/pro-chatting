@@ -18,9 +18,9 @@ const alerts=fs.readFileSync(path.join(root,'assets/two-way-notifications.js'),'
 assert.match(alerts,/function launchSummary/,'Android opens with one non-spam catch-up alert');
 
 assert.doesNotThrow(()=>new vm.Script(orderwise),'V11 order-wise JS parses');
-assert.match(orderwise,/Share ALL · Exact Image/,'exact sequence image is primary');
-assert.match(orderwise,/ordered-share-image/,'single JPEG endpoint is used');
-assert.match(orderwise,/image\/jpeg/,'native Android shares JPEG MIME');
+assert.doesNotMatch(orderwise,/Share ALL · Exact Image|ordered-share-image|exact\.onclick/,'Exact Image UI removed');
+assert.match(orderwise,/Original Images \(WhatsApp may mix\)/,'original share stays');
+assert.match(orderwise,/Quick Numbered Pack \/ WhatsApp Text Only/,'quick and text share stay');
 
 assert.match(orderwise,/Share ALL Orders Together/,'bulk share button exists');
 assert.match(orderwise,/for\(const p of plans\)/,'order-wise bulk iterates in sequence');
