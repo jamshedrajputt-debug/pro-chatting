@@ -21,8 +21,8 @@
   if(!staff()){selected.clear();bar?.remove();return;}
   if(!bar){
    bar=E('div','fx10-toolbar');bar.id='fx10Toolbar';
-   const title=E('div','fx10-bar-title');title.append(E('strong','','Multi-Order Dispatch'),
-     E('small','','Select up to 6 orders. Numbered images show colour, size & quantity.'));
+   const title=E('div','fx10-bar-title');title.append(E('strong','','Order Dispatch'),
+     E('small','','Select up to 6 orders. Share photos and details from one menu.'));
    const actions=E('div','fx10-bar-actions');
    const select=E('button','fx10-btn fx10-muted','Select visible');select.type='button';select.onclick=()=>{
      for(const row of body.querySelectorAll('tr[data-id]')){
@@ -31,7 +31,7 @@
      }sync();
    };
    const reset=E('button','fx10-btn fx10-muted','Clear');reset.type='button';reset.onclick=()=>{selected.clear();prepared=null;sync()};
-   const open=E('button','fx10-btn fx10-primary','Share selected');open.type='button';open.id='fx10ShareOpen';open.onclick=show;
+   const open=E('button','fx10-btn fx10-primary','Share Orders');open.type='button';open.id='fx10ShareOpen';open.onclick=()=>{if(window.FlyxjOrderWise?.open)window.FlyxjOrderWise.open();else show()};
    actions.append(select,reset,open);bar.append(title,actions);
    document.getElementById('filterBar')?.after(bar);
   }
@@ -53,7 +53,7 @@
    label.querySelector('input').checked=selected.has(id);
    row.classList.toggle('fx10-row-active',selected.has(id));
   }
-  const button=document.getElementById('fx10ShareOpen');if(button){button.disabled=!selected.size;button.textContent='Share selected ('+selected.size+'/'+MAX+')';}
+  const button=document.getElementById('fx10ShareOpen');if(button){button.disabled=!selected.size;button.textContent='Share Orders ('+selected.size+'/'+MAX+')';}
  }
  function show(){
   if(!staff()||!selected.size)return;
@@ -136,5 +136,5 @@
    prepared={key,files,at:Date.now()};status.textContent='Pack ready with current sizes, colours and quantities. Tap Share numbered images again.';
   }catch(e){status.textContent='Share failed: '+e.message}finally{button.disabled=false}
  }
- window.FlyxjBatch={sync,clear:()=>{selected.clear();prepared=null;sync()},summary,selected:()=>all()};
+ window.FlyxjBatch={sync,clear:()=>{selected.clear();prepared=null;sync()},summary,selected:()=>all(),openLegacy:show};
 })();
