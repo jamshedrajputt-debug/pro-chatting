@@ -6,25 +6,26 @@ const sharp=require('sharp');
 const W=1200,H=1700;
 const safe=v=>String(v??'').replace(/[\u0000-\u001f\u007f]/g,' ').trim().slice(0,110);
 const esc=v=>safe(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
+function displayReference(order){
+ const id=Number(order.id);
+ const created=new Date(order.created_at||order.createdAt||'');
+ const date=Number.isNaN(created.getTime())?null:created;
+ const existing=String(order.reference||'').trim();
+ if(!Number.isInteger(id)||id<=0||!date)return existing||'FXJ-'+String(id||0).padStart(6,'0');
+ return 'FXJ-'+date.getUTCFullYear()+'-'+String(date.getUTCMonth()+1).padStart(2,'0')+'-'+String(id).padStart(6,'0');
+}
 function panelSvg(order,index,total,photoCount){
- const label=esc(order.reference||('FXJ-'+order.id));
- const size=esc(order.size||'Not set'),colour=esc(order.colour||'Not set'),qty=esc(order.quantity||1);
- const title=esc(order.title||'Custom order'),status=esc(String(order.status||'pending').replace(/_/g,' '));
+ const reference=esc(displayReference(order)),size=esc(order.size||'Not set'),colour=esc(order.colour||'Not set');
  return Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1700">'+
-  '<rect width="1200" height="1700" fill="#f1f6f9"/>'+
-  '<rect width="1200" height="190" fill="#102c42"/><rect width="1200" height="9" fill="#18a28f"/>'+
-  '<text x="58" y="67" font-family="Arial,sans-serif" font-size="34" fill="#91e1d1" font-weight="bold">FLYXJ · ORDER STUDIO</text>'+
-  '<text x="58" y="138" font-family="Arial,sans-serif" font-size="45" fill="#ffffff" font-weight="bold">'+label+'</text>'+
-  '<text x="1020" y="105" font-family="Arial,sans-serif" font-size="31" fill="#ffffff" text-anchor="middle">'+
-  String(index).padStart(2,'0')+' / '+String(total).padStart(2,'0')+'</text>'+
-  '<text x="54" y="240" font-family="Arial,sans-serif" fill="#507187" font-size="25">ORIGINAL REFERENCE PHOTOS · '+photoCount+' SELECTED</text>'+
-  '<rect x="35" y="1444" width="1130" height="223" rx="22" fill="#ffffff" stroke="#cfdee6" stroke-width="3"/>'+
-  '<rect x="35" y="1444" width="11" height="223" rx="5" fill="#118f80"/>'+
-  '<text x="77" y="1505" font-family="Arial,sans-serif" font-weight="bold" font-size="32" fill="#12364e">'+title+'</text>'+
-  '<text x="77" y="1564" font-family="Arial,sans-serif" font-weight="bold" font-size="29" fill="#173e58">SIZE: '+size+'</text>'+
-  '<text x="650" y="1564" font-family="Arial,sans-serif" font-weight="bold" font-size="29" fill="#173e58">COLOUR: '+colour+'</text>'+
-  '<text x="77" y="1620" font-family="Arial,sans-serif" font-size="27" fill="#315872">QUANTITY: '+qty+'  ·  STATUS: '+status+'</text>'+
-  '<text x="58" y="1683" font-family="Arial,sans-serif" font-size="19" fill="#547084">Production reference · Order '+index+' of '+total+' · Details belong to photos above</text>'+
+  '<rect width="1200" height="1700" fill="#f5f8fa"/>'+
+  '<rect width="1200" height="195" fill="#112d43"/>'+
+  '<rect width="1200" height="9" fill="#139789"/>'+
+  '<text x="56" y="86" font-family="Arial,sans-serif" font-weight="bold" font-size="42" fill="#a7e5d8">REFERENCE</text>'+
+  '<text x="56" y="156" font-family="Arial,sans-serif" font-size="49" font-weight="bold" fill="#fff">'+reference+'</text>'+
+  '<rect x="35" y="1440" width="1130" height="215" rx="22" fill="#ffffff" stroke="#d9e6e9" stroke-width="3"/>'+
+  '<rect x="35" y="1440" width="11" height="215" rx="5" fill="#118c80"/>'+
+  '<text x="75" y="1523" font-family="Arial,sans-serif" font-weight="bold" font-size="39" fill="#173e55">SIZE: '+size+'</text>'+
+  '<text x="75" y="1610" font-family="Arial,sans-serif" font-weight="bold" font-size="39" fill="#173e55">COLOR: '+colour+'</text>'+
  '</svg>');
 }
 async function page(order,photos,index,total){
@@ -88,4 +89,4 @@ async function makeImage(orders){
  if(output.length>13*1024*1024)throw Error('Image too large: select fewer photos');
  return output;
 }
-module.exports={make,makeImage,pdfFromJpegs,page};
+module.exports={make,makeImage,pdfFromJpegs,page,displayReference,panelSvg};
