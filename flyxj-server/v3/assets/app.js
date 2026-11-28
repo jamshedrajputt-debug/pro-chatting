@@ -206,8 +206,27 @@ function renderOrders(){
     const first=node('td');const desc=node('div','order-desc');
     const img=node('img');img.src=o.photos?.[0]||'';img.alt='Dress image';img.loading='lazy';img.onerror=()=>{img.style.visibility='hidden'};
     const txt=node('div','order-txt');txt.append(node('b','',o.title),node('small','mono',o.reference));desc.append(img,txt);first.append(desc);
-    const customer=node('td','',moneyless(o.customer));
-    const date=node('td','',day(o.created_at));
+    // The deadline is the customer-entered delivery date (expected_date).
+    // Never substitute an invented date or expose the customer username here.
+    const delivery=node('td','fx20-delivery-cell');
+    const due=typeof o.expected_date==='string'&&/^\\d{4}-\\d{2}-\\d{2}$/.test(o.expected_date)?o.expected_date:'';
+    if(due){
+      const dateParts=due.split('-').map(Number);
+      const valid=new Date(Date.UTC(dateParts[0],dateParts[1]-1,dateParts[2]));
+      if(valid.getUTCFullYear()===dateParts[0]&&valid.getUTCMonth()===dateParts[1]-1&&valid.getUTCDate()===dateParts[2]){
+        const value=new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'}).format(valid);
+        const chip=node('span','fx20-delivery-badge',value);
+        chip.prepend(node('span','fx20-calendar','▦'));
+        const today=new Date().toISOString().slice(0,10);
+        if(due<today&&!['delivered','completed','cancelled'].includes(o.status)){
+          chip.classList.add('fx20-delivery-overdue');
+          chip.title='Past requested delivery date';
+        }
+        delivery.append(chip);
+      }
+    }
+    if(!delivery.childNodes.length)delivery.append(node('span','fx20-delivery-unset','Not set'));
+    const date=node('td','fx20-order-date',day(o.created_at));
     const st=node('td');st.append(node('span','status-pill status-'+o.status,statusName(o.status)));
     const tracking=node('td','mono');
     if(o.shipping?.tracking_id){
@@ -255,7 +274,7 @@ function renderOrders(){
       menu.classList.toggle('hidden');
     };
     actions.append(trigger,menu);arrow.append(actions);
-    tr.append(first,customer,date,st,tracking,arrow);
+    tr.append(first,delivery,date,st,tracking,arrow);
     tr.addEventListener('click',()=>openDetail(o.id));
     tr.addEventListener('keydown',e=>{if(e.target===tr&&(e.key==='Enter'||e.key===' ')){e.preventDefault();openDetail(o.id)}});
     tbody.append(tr);
