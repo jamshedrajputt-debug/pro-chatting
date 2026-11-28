@@ -23,7 +23,9 @@ assert.match(server,/app\.post\('\/api\/staff',auth,csrf,async\(req,res\)=>\{\n 
 assert.match(server,/app\.get\('\/api\/orders\/:id\/summary\.pdf',auth,\(req,res\)=>\{\n if\(req\.user\.role!=='staff'\)/);
 assert.match(ui,/window\.flyxjV6Filters/);
 assert.match(ui,/window\.flyxjV6Assign/);
-assert.match(ui,/window\.flyxjV6Notify/);
+assert.doesNotMatch(ui,/window\.flyxjV6Notify/,'obsolete V6 double-alert dispatch retired');
+assert.doesNotMatch(enhance,/function notificationCenter/,'duplicate V6 inbox retired');
+assert.match(read('assets/init-extra.js'),/window\.FlyxjNotifications\?\.inbox\(\)/,'single bell opens real inbox');
 assert.match(enhance,/window\.flyxjV6Refresh/);
 assert.match(html,/v6-professional\.js/);
 assert.match(html,/v6-professional\.css/);
