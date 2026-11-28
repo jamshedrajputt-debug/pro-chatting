@@ -124,7 +124,7 @@ async function run(){
   orders:[{id:1,updatedAt:order.updated_at,photoIndexes:[0]}]
  });
  assert.equal(r.response.status,200,'staff generates one ordered PDF');
- assert.match(r.data.filename,/IN-SEQUENCE\.pdf$/);
+ assert.match(r.data.filename,/EXACT-SEQUENCE\.pdf$/);
  const exactPdf=await fetch(base+r.data.url);
  assert.equal(exactPdf.status,200,'temporary exact sequence PDF can be downloaded');
  assert.match(exactPdf.headers.get('content-type'),/application\/pdf/);
