@@ -6,8 +6,8 @@ android {
         applicationId 'com.flyxj.orders.downloadfix'
         minSdk 23
         targetSdk 35
-        versionCode 9
-        versionName '9.0-notifications'
+        versionCode 10
+        versionName '10.0-batch-dispatch'
     }
     signingConfigs {
         flyxjRelease {
