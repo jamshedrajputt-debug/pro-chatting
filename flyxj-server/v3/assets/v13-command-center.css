@@ -90,3 +90,29 @@ body{color:var(--fx13-ink)}
 #fx15ImageDownload{background:#e5f6f0;color:#136654;border-color:#9bd3be}
 .fx11-shell .fx11-step-buttons .fx10-btn.fx10-green{font-size:13px;letter-spacing:.01em}
 @media(max-width:650px){.fx15-preview{padding:10px}.fx15-preview-image{max-height:290px}.fx11-shell .fx11-step-buttons .fx10-btn{white-space:normal;line-height:1.3;min-height:48px}}
+
+/* V16 unified workspace: one sharing entry, one inbox, one dashboard, one sync */
+.fx16-insights{margin:12px 0 20px;border:1px solid #dce8ed;border-radius:14px;background:#fff;overflow:hidden;box-shadow:0 5px 17px #15364908}
+.fx16-insights-toggle{cursor:pointer;padding:14px 17px;font-size:12px;font-weight:800;color:#174e64;background:linear-gradient(110deg,#f6fbfa,#eef7f4);list-style-position:inside}
+.fx16-insights-toggle:focus-visible{outline:3px solid #33b6a0;outline-offset:-3px}
+.fx16-insights:not([open])>.v6-ops-head,.fx16-insights:not([open])>.v6-ops-cards,.fx16-insights:not([open])>.v6-ops-bottom{display:none!important}
+.fx16-insights[open]>.v6-ops-head{margin-top:10px}
+.fx16-insights[open]>.v6-ops-cards{margin:10px 15px 12px}
+.fx16-insights[open]>.v6-ops-bottom{padding:0 16px 13px}
+.fx16-advanced{margin-top:16px;border:1px solid #d7e4ea;border-radius:13px;background:#f8fafc;overflow:hidden}
+.fx16-advanced>summary{padding:15px 16px;font-size:12px;line-height:1.5;font-weight:800;color:#26536d;cursor:pointer;background:#f1f7f8}
+.fx16-advanced>summary:focus-visible{outline:3px solid #29b89b;outline-offset:-3px}
+.fx16-advanced[open]>summary{border-bottom:1px solid #d9e8e9}
+.fx16-advanced-body{padding:14px;display:grid;gap:12px}
+.fx16-advanced-body>.fx10-btn{min-height:44px}
+.fx16-advanced-sequence{padding:12px;border:1px solid #e0ebf0;border-radius:11px;background:#fff;display:grid;gap:12px}
+.fx16-advanced-sequence .fx11-progress{display:block}
+.fx11-shell .fx10-body>.fx11-step-buttons{margin:12px 0}
+#fx10ShareOpen{background:linear-gradient(125deg,#08796f,#085b64);border-color:#08796f;box-shadow:0 5px 16px #086c6332;font-weight:850}
+#refreshButton{font-weight:800}
+#notificationButton{position:relative}
+@media(max-width:650px){
+ .fx16-insights-toggle{padding:13px;font-size:11px}
+ .fx16-advanced-body{padding:11px}
+ #fx10ShareOpen{min-height:45px}
+}
