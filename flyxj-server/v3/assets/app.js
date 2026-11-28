@@ -107,7 +107,6 @@ function connectTrackingEvents(){
       if(message.from!==state.me?.username)window.FlyxjNotifications?.show('chat',message);
       if(message.from!==state.me?.username&&!state.chatOpen){
         state.unread++;updateChatBadge();alertNotification('New direct chat message');
-        if(typeof window.flyxjV6Notify==='function')window.flyxjV6Notify('New direct chat message','', 'message');
       }
       renderDirectChat();
     }catch(e){}
