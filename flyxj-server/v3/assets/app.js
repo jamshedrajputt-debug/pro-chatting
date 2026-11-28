@@ -50,6 +50,7 @@ function toggleChatSurface(open){
 function resetApp(){
   if(window.FlyxjV8)window.FlyxjV8.onLogout();
   window.FlyxjNotifications?.clear();
+  window.FlyxjBatch?.clear();
   if(state.events){state.events.close();state.events=null}
   state.me=null;state.orders=[];state.selected=null;state.announcedTracking.clear();state.chatOpen=false;
   $('floatingChatButton').classList.add('hidden');$('floatingChatPanel').classList.add('hidden');
@@ -258,6 +259,7 @@ function renderOrders(){
     tr.addEventListener('keydown',e=>{if(e.target===tr&&(e.key==='Enter'||e.key===' ')){e.preventDefault();openDetail(o.id)}});
     tbody.append(tr);
   }
+  window.FlyxjBatch?.sync();
 }
 function navigate(view,{fromHistory=false}={}){
   state.view=view;
