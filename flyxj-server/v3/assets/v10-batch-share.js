@@ -5,7 +5,7 @@
  const E=(tag,cls,value)=>{const e=document.createElement(tag);e.className=cls||'';if(value!==undefined)e.textContent=String(value);return e};
  const staff=()=>typeof state!=='undefined'&&state.me?.role==='staff';
  const all=()=>[...selected.keys()].map(id=>state.orders.find(o=>String(o.id)===String(id))).filter(Boolean).map(record);
- const record=o=>({id:o.id,reference:o.reference||'FXJ-'+o.id,title:o.title||'Order',
+ const record=o=>({id:o.id,createdAt:o.created_at||'',reference:o.reference||'FXJ-'+o.id,title:o.title||'Order',
     size:o.size||'Not set',colour:o.colour||'Not set',quantity:o.quantity||1,status:o.status||'pending',
     photoCount:Array.isArray(o.photos)?o.photos.length:0,updatedAt:o.updated_at||''});
  function summary(items){
@@ -31,7 +31,7 @@
      }sync();
    };
    const reset=E('button','fx10-btn fx10-muted','Clear');reset.type='button';reset.onclick=()=>{selected.clear();prepared=null;sync()};
-   const open=E('button','fx10-btn fx10-primary','Share Orders');open.type='button';open.id='fx10ShareOpen';open.onclick=()=>{if(window.FlyxjOrderWise?.open)window.FlyxjOrderWise.open();else show()};
+   const open=E('button','fx10-btn fx10-primary','Share Exact Image');open.type='button';open.id='fx10ShareOpen';open.onclick=()=>window.FlyxjOrderWise?.open?.();
    actions.append(select,reset,open);bar.append(title,actions);
    document.getElementById('filterBar')?.after(bar);
   }
@@ -53,7 +53,7 @@
    label.querySelector('input').checked=selected.has(id);
    row.classList.toggle('fx10-row-active',selected.has(id));
   }
-  const button=document.getElementById('fx10ShareOpen');if(button){button.disabled=!selected.size;button.textContent='Share Orders ('+selected.size+'/'+MAX+')';}
+  const button=document.getElementById('fx10ShareOpen');if(button){button.disabled=!selected.size;button.textContent='Share Exact Image ('+selected.size+'/'+MAX+')';}
  }
  function show(){
   if(!staff()||!selected.size)return;
