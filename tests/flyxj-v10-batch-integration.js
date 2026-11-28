@@ -30,8 +30,14 @@ for(const fragment of ["kind:'photo'","kind:'batch-maker'","cardLast:true","shar
  assert.ok(orderwise.includes(fragment),'V11 contains '+fragment);
 
 const client=fs.readFileSync(path.join(root,'assets/v10-batch-share.js'),'utf8');
-assert.match(client,/SIZE:/);assert.match(client,/COLOUR:/);assert.match(client,/kind:'batch-maker'/);
+assert.match(client,/Size: /);assert.match(client,/Color: /);assert.match(client,/kind:'batch-maker'/);
 assert.match(client,/function summary/);assert.match(client,/sequence:i\+1/);
+assert.match(client,/items\.map\(shareDetails\)/,'all-order text is exactly three fields per order');
+assert.match(client,/getUTCFullYear/,'canonical share reference includes creation year');
+assert.match(client,/getUTCMonth/,'canonical share reference includes creation month');
+assert.match(orderwise,/FlyxjBatch\?\.shareDetails/,'single-order captions share the same three-field formatter');
+assert.doesNotMatch(orderwise,/\\nQuantity:|\\nStatus:|\\nProduct:/,'outgoing order caption has no extra fields');
+
 assert.match(client,/selected\.keys\(\)\]\.map\(id=>state\.orders\.find/, 'selection always reads the newest order state');
 assert.match(client,/key=JSON\.stringify\(items\)/,'prepared attachment cache includes live order details');
 assert.match(client,/JSON\.stringify\(all\(\)\)!==key/,'refuse stale photo packs when orders change during preparation');
