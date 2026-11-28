@@ -1,0 +1,34 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'com.flyxj.orders'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.flyxj.orders.downloadfix'
+        minSdk 23
+        targetSdk 35
+        versionCode 10
+        versionName '10.0-batch-dispatch'
+    }
+    signingConfigs {
+        flyxjRelease {
+            storeFile file(System.getenv('FLYXJ_KEYSTORE_PATH') ?: 'signing-keystore-not-configured.jks')
+            storePassword System.getenv('FLYXJ_STORE_PASSWORD') ?: ''
+            keyAlias System.getenv('FLYXJ_KEY_ALIAS') ?: 'flyxj'
+            keyPassword System.getenv('FLYXJ_KEY_PASSWORD') ?: ''
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            // Only sign inside CI when private key secrets are configured.
+            // Otherwise produce an unsigned release APK for secure offline signing.
+            if (System.getenv('FLYXJ_KEYSTORE_PATH')) {
+                signingConfig signingConfigs.flyxjRelease
+            }
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

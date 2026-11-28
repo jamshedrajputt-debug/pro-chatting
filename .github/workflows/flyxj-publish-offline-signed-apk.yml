@@ -1,0 +1,53 @@
+name: Publish FlyXJ permanently signed APK update
+on:
+  push:
+    branches:
+      - flyxj-android-apk-build-20261123
+    paths:
+      - 'flyxj-android/releases/*.ready'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+      - name: Restore signed APK and validate signature, package, version
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC=$(find flyxj-android/releases -maxdepth 1 -name 'FLYXJ-v*.ready' | sort -V | tail -1)
+          test -n "$SRC"
+          VERSION=$(basename "$SRC" | sed -n -E 's/^FLYXJ-v([0-9]+)\.ready$/\1/p')
+          test -n "$VERSION"
+          cat flyxj-android/releases/FLYXJ-v"$VERSION".apk.gz.b64.part* | base64 --decode | gzip -dc > signed-app.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose signed-app.apk
+          BADGING=$("$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging signed-app.apk | head -n 1)
+          echo "$BADGING"
+          echo "$BADGING" | grep -q "name='com.flyxj.orders.downloadfix'"
+          echo "$BADGING" | grep -q "versionCode='$VERSION'"
+          echo "RELEASE_VERSION=$VERSION" >> "$GITHUB_ENV"
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="flyxj-android-v$RELEASE_VERSION"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Version $TAG already published; nothing to do."
+            exit 0
+          fi
+          gh release create "$TAG" "signed-app.apk#FLYXJ-Order-Manager-v$RELEASE_VERSION.apk" \
+            --title "FLYXJ Order Manager v$RELEASE_VERSION" \
+            --notes "Official FlyXJ Android app update. Android will request permission before installing the APK." \
+            --latest
+      - name: Provide APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FlyXJ-v4-Signed-Installable-APK
+          path: signed-app.apk
