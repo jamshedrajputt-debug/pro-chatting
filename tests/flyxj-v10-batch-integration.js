@@ -8,7 +8,7 @@ for(const file of ['server.js','maker-compose.js','assets/v10-batch-share.js','a
 }
 const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
 assert.match(html,/v10-batch-share\.js/);assert.match(html,/v10-professional\.css/);
-assert.match(html,/v11-orderwise-share\\.js/, 'V11 order-wise script loads'); 
+assert.match(html,/v11-orderwise-share\.js/, 'V11 order-wise script loads'); 
 const orderwise=fs.readFileSync(path.join(root,'assets/v11-orderwise-share.js'),'utf8');
 assert.doesNotThrow(()=>new vm.Script(orderwise),'V11 order-wise JS parses');
 for(const fragment of ["kind:'photo'","kind:'batch-maker'","cardLast:true","shareFiles","navigator.share","Photo ","Next Order"])
