@@ -18,16 +18,16 @@ const alerts=fs.readFileSync(path.join(root,'assets/two-way-notifications.js'),'
 assert.match(alerts,/function launchSummary/,'Android opens with one non-spam catch-up alert');
 
 assert.doesNotThrow(()=>new vm.Script(orderwise),'V11 order-wise JS parses');
-assert.match(orderwise,/Share ALL · Exact Image/,'exact sequence image is primary');
-assert.match(orderwise,/ordered-share-image/,'single JPEG endpoint is used');
-assert.match(orderwise,/image\/jpeg/,'native Android shares JPEG MIME');
-
-assert.match(orderwise,/Share ALL Orders Together/,'bulk share button exists');
-assert.match(orderwise,/for\(const p of plans\)/,'order-wise bulk iterates in sequence');
-assert.match(orderwise,/tickets\.push\(await issue\(p\.o,\{kind:'photo'/,'each original photo is included');
-assert.match(orderwise,/tickets\.push\(await issue\(p\.o,\{kind:'batch-maker'/,'detail card follows each order photos');
-for(const fragment of ["kind:'photo'","kind:'batch-maker'","cardLast:true","shareFiles","navigator.share","Photo ","Next Order"])
- assert.ok(orderwise.includes(fragment),'V11 contains '+fragment);
+assert.match(orderwise,/Share Exact Image/,'only one sharing mode is visible');
+assert.match(orderwise,/ordered-share-image/,'JPEG endpoint is selected');
+assert.match(orderwise,/image\\/jpeg/,'Android shares JPEG MIME');
+for(const hidden of ['Original Images (WhatsApp may mix)','Share ALL Orders Together','WhatsApp Text Only','Next Order','fx16-advanced'])
+ assert.ok(!orderwise.includes(hidden),'legacy share option hidden: '+hidden);
+assert.match(orderwise,/Reference: /,'brief text includes reference');
+assert.match(orderwise,/Size: /,'brief text includes size');
+assert.match(orderwise,/Color: /,'brief text includes color');
+assert.doesNotMatch(orderwise,/\\nQuantity:|\\nStatus:|\\nProduct:/,'no unnecessary WhatsApp text');
+assert.match(orderwise,/FXJ-.*getUTCFullYear/,'reference year and month formatter exists');
 
 const client=fs.readFileSync(path.join(root,'assets/v10-batch-share.js'),'utf8');
 assert.match(client,/SIZE:/);assert.match(client,/COLOUR:/);assert.match(client,/kind:'batch-maker'/);
@@ -77,6 +77,12 @@ async function run(){
  const photo=await sharp({create:{width:120,height:120,channels:3,background:'#bb874c'}}).png().toBuffer();
  order.image='data:image/png;base64,'+photo.toString('base64');
  const pdfMaker=require('../flyxj-server/v3/ordered-share-pdf.js');
+ assert.equal(pdfMaker.displayReference(order),'FXJ-2026-11-000001','reference uses creation year and month');
+ const svg=pdfMaker.panelSvg(order,1,1,1).toString();
+ assert.match(svg,/FXJ-2026-11-000001/);
+ assert.match(svg,/SIZE: XL/);assert.match(svg,/COLOR: Brown/);
+ assert.doesNotMatch(svg,/QUANTITY:|STATUS:|PRODUCTION PULSE|Custom order/,'no extra text in Exact Image');
+
  const pack=await pdfMaker.make([{order,photos:[photo]},{order:{...order,id:2,reference:'FXJ-2'},photos:[photo]}]);
  assert.match(pack.subarray(0,8).toString('ascii'),/^%PDF-1.4/);
  assert.match(pack.toString('latin1'),/\/Count 2/,'two order pages retain order');
