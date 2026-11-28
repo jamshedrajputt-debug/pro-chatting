@@ -12,7 +12,7 @@ assert.match(html,/Production Command Centre/);
 assert.match(html,/v10-batch-share\.js/);assert.match(html,/v10-professional\.css/);
 assert.match(html,/v11-orderwise-share\.js/, 'V11 order-wise script loads'); 
 const orderwise=fs.readFileSync(path.join(root,'assets/v11-orderwise-share.js'),'utf8');
-assert.match(html,/v15-exact-image/,'browser loads latest image sequence UI');
+assert.match(html,/v16-unified-20261128/,'browser loads latest unified image sharing UI');
 assert.match(html,/v14-open-alert/,'app-open notifications cache is refreshed');
 const alerts=fs.readFileSync(path.join(root,'assets/two-way-notifications.js'),'utf8');
 assert.match(alerts,/function launchSummary/,'Android opens with one non-spam catch-up alert');
