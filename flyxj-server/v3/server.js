@@ -647,7 +647,7 @@ app.post('/api/orders',auth,csrf,async(req,res)=>{
   if(orders.length>=1500)return err(res,507,'Order storage limit reached; contact staff');
   const id=Math.max(reservedOrderId,orders.reduce((n,o)=>Math.max(n,Number(o.id)||0),0))+1;
    reservedOrderId=id;
-  const created_at=now(),reference='FXJ-'+new Date().getUTCFullYear()+'-'+String(id).padStart(6,'0');
+  const created_at=now(),createdDate=new Date(created_at),reference='FXJ-'+createdDate.getUTCFullYear()+'-'+String(createdDate.getUTCMonth()+1).padStart(2,'0')+'-'+String(id).padStart(6,'0');
   const pdfBytes=parsePdf(v.pdf);
   if(!pdfBytes)return err(res,400,'Attach a valid PDF under 30 MB. Auto-compressed upload is supported.');
   const keys=['bust','waist','hips','shoulder','sleeve','length','inseam','neck','other'];
