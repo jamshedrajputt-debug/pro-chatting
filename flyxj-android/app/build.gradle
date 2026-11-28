@@ -6,8 +6,8 @@ android {
         applicationId 'com.flyxj.orders.downloadfix'
         minSdk 23
         targetSdk 35
-        versionCode 10
-        versionName '10.0-batch-dispatch'
+        versionCode 19
+        versionName '19.0-atelier-studio'
     }
     signingConfigs {
         flyxjRelease {
