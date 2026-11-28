@@ -252,7 +252,7 @@ function slimStats(list) {
   return {total:list.length,active,shipped,shipped_units,completed:by_status.completed+by_status.delivered,this_week,by_status};
 }
 
-app.get('/api/health',(req,res)=>res.json({ok:true,version:'8.0-web',storage:persistent.enabled?'supabase-private':'ephemeral',orders:orders.filter(o=>!o.deleted_at).length}));
+app.get('/api/health',(req,res)=>res.json({ok:true,version:'10.0-web',storage:persistent.enabled?'supabase-private':'ephemeral',orders:orders.filter(o=>!o.deleted_at).length}));
 app.post('/api/login',(req,res)=>{
   const username=text(req.body&&req.body.username,100);
   const password=req.body&&req.body.password;
@@ -1239,7 +1239,7 @@ async function startFlyxj(){
   console.log('Supabase persistence ready: orders',orders.length,'chat',directChat.length);
  }
  console.log('User B WhatsApp Direct Media:',whatsapp.whatsappConfigured()?'configured':'not connected');
- app.listen(PORT,'0.0.0.0',()=>console.log('FlyXJ dashboard V8 listening on '+PORT));
+ app.listen(PORT,'0.0.0.0',()=>console.log('FlyXJ dashboard V10 listening on '+PORT));
  // Resume only already-queued media transfers after a safe startup.
  if(whatsapp.whatsappConfigured())setTimeout(()=>{
   for(const order of orders)if(!order.deleted_at&&
