@@ -76,4 +76,16 @@ async function make(orders){
  if(pdf.length>28*1024*1024)throw Error('PDF too large: select fewer images');
  return pdf;
 }
-module.exports={make,pdfFromJpegs,page};
+async function makeImage(orders){
+ if(!Array.isArray(orders)||!orders.length||orders.length>6)throw Error('Choose 1 to 6 orders');
+ const layers=[];
+ for(let i=0;i<orders.length;i++){
+  const input=await page(orders[i].order,orders[i].photos,i+1,orders.length);
+  layers.push({input,left:0,top:H*i});
+ }
+ const output=await sharp({create:{width:W,height:H*orders.length,channels:3,background:'#f1f6f9'}})
+  .composite(layers).jpeg({quality:80,mozjpeg:true}).toBuffer();
+ if(output.length>13*1024*1024)throw Error('Image too large: select fewer photos');
+ return output;
+}
+module.exports={make,makeImage,pdfFromJpegs,page};
