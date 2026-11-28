@@ -2,8 +2,8 @@
 /* FLYXJ two-way mobile alerts. Native Android bridge provides lock-screen
    notifications when permitted; browser notifications are opt-in. */
 (function(){
- const desktopSeen=new Set(),pending=[];
- let account='',source=null,initialised=false;
+ const desktopSeen=new Set();
+ let account='',initialised=false,pollTimer=null,polling=false,unread=0;
  const isTrusted=()=>location.origin==='https://flyxj-order-manager-free.onrender.com';
  const native=()=>isTrusted()&&typeof window.FlyxjAlerts?.notify==='function';
  const idOf=(kind,p)=>kind+':'+String(p.order_id||p.id||'')+':'+String(p.updated_at||p.at||'');
@@ -12,11 +12,12 @@
   const actor=p.actor||p.from;
   if(actor&&actor===account)return;
   if(kind==='order'&&window.FlyxjCurrentRole!=='staff')return;
-  if(kind!=='order'&&kind!=='chat'&&window.FlyxjCurrentRole!=='customer')return;
+  if(kind!=='order'&&kind!=='chat'&&window.FlyxjCurrentRole!=='customer'&&!(kind==='message'&&window.FlyxjCurrentRole==='staff'))return;
   if(kind==='chat'&&p.to&&p.to!==account)return;
   const id=kind==='chat'?'chat:'+p.id:(p.activity_id?'order:'+p.activity_id:idOf(kind,p));
   if(desktopSeen.has(id))return;
   desktopSeen.add(id);if(desktopSeen.size>200)desktopSeen.delete(desktopSeen.values().next().value);
+  unread++;renderBadge();
   let title=kind==='order'?'New FLYXJ order':
     kind==='chat'?'New FLYXJ message':kind==='shipping'?'Shipping / tracking updated':
     kind==='status'?'Order status updated':'FLYXJ order update';
@@ -30,6 +31,51 @@
    try{const alert=new Notification(title,{body,tag:id});alert.onclick=()=>{window.focus();location.assign(url)}}catch{}
   }
  }
+ function renderBadge(){
+  const badge=document.getElementById('notificationCount');
+  if(badge){badge.textContent=unread;badge.classList.toggle('hidden',unread<1)}
+ }
+ const storageKey=()=>account?'flyxj-v10-alerts-'+encodeURIComponent(account):'';
+ function readSeen(){
+  try{const data=JSON.parse(localStorage.getItem(storageKey())||'null');
+   return data&&Array.isArray(data.ids)?data.ids.slice(-150):null;
+  }catch{return null}
+ }
+ function persistSeen(ids){
+  try{localStorage.setItem(storageKey(),JSON.stringify({ids:ids.slice(-150),saved:new Date().toISOString()}))}catch{}
+ }
+ async function poll(){
+  if(!account||polling)return;
+  polling=true;const target=account;
+  try{
+   const r=await fetch('/api/notifications',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(80000)});
+   if(!r.ok){if(r.status===401&&native()&&typeof window.FlyxjAlerts.sessionExpired==='function')
+      window.FlyxjAlerts.sessionExpired();return;}
+   const data=await r.json();if(data.account!==target||account!==target)return;
+   const feed=data.notifications||[],old=readSeen(),known=new Set(old||[]);
+   const next=new Set(old||[]);
+   for(const x of feed.slice().reverse()){
+    if(!x||typeof x.id!=='string')continue;
+    if(old&&!known.has(x.id)){
+      const kind=x.type==='created'?'order':x.type;
+      const payload={id:x.id.replace(/^(?:order:|chat:)/,''),activity_id:x.id.replace(/^order:/,''),
+        order_id:x.order_id,reference:x.body,description:x.body,
+        from:undefined,to:target,at:x.at};
+      if(kind==='chat')payload.id=x.id.replace(/^chat:/,'');
+      show(kind,payload);
+    }
+    next.add(x.id);
+   }
+   persistSeen([...next]);
+  }catch(err){if(navigator.onLine===false)return;console.warn('FLYXJ notification feed retry',err.message)}
+  finally{polling=false}
+ }
+ function startPoll(){
+  if(pollTimer)clearInterval(pollTimer);
+  poll();pollTimer=setInterval(poll,18000);
+ }
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden)poll()});
+ window.addEventListener('online',()=>poll());
  function attach(me){
   if(!me||!me.username)return;
   const changed=account!==me.username;
@@ -38,19 +84,18 @@
    try{window.FlyxjAlerts.register(account)}catch{}
   }
   if(!initialised||changed){
-   initialised=true;
-   // Existing events don't trigger notifications on first sign-in.
-   fetch('/api/notifications',{credentials:'same-origin',cache:'no-store'}).then(r=>r.ok?r.json():null)
-    .then(data=>{if(!data||data.account!==account)return;for(const x of data.notifications||[])desktopSeen.add(x.id)})
-    .catch(()=>{});
+   initialised=true;unread=0;renderBadge();
+   startPoll();
   }
  }
  function clear(){
-  account='';window.FlyxjCurrentRole=null;desktopSeen.clear();
+  account='';window.FlyxjCurrentRole=null;desktopSeen.clear();unread=0;initialised=false;renderBadge();
+  if(pollTimer){clearInterval(pollTimer);pollTimer=null}
   if(native()&&typeof window.FlyxjAlerts.unregister==='function')try{window.FlyxjAlerts.unregister()}catch{}
  }
  async function inbox(){
   if(!account)return;
+  unread=0;renderBadge();
   let feed;
   try{
    const response=await fetch('/api/notifications',{credentials:'same-origin',cache:'no-store'});
@@ -90,5 +135,5 @@
   const status=await Notification.requestPermission();
   alert(status==='granted'?'FLYXJ notifications enabled':'Please allow notifications in your browser settings');
  }
- window.FlyxjNotifications={attach,clear,show,permission,inbox};
+ window.FlyxjNotifications={attach,clear,show,permission,inbox,poll};
 })();
