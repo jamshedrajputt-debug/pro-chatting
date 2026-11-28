@@ -11,6 +11,9 @@ assert.match(html,/v10-batch-share\.js/);assert.match(html,/v10-professional\.cs
 const client=fs.readFileSync(path.join(root,'assets/v10-batch-share.js'),'utf8');
 assert.match(client,/SIZE:/);assert.match(client,/COLOUR:/);assert.match(client,/kind:'batch-maker'/);
 assert.match(client,/function summary/);assert.match(client,/sequence:i\+1/);
+assert.match(client,/selected\.keys\(\)\]\.map\(id=>state\.orders\.find/, 'selection always reads the newest order state');
+assert.match(client,/key=JSON\.stringify\(items\)/,'prepared attachment cache includes live order details');
+assert.match(client,/JSON\.stringify\(all\(\)\)!==key/,'refuse stale photo packs when orders change during preparation');
 const {svgCaption}=require('../flyxj-server/v3/maker-compose.js');
 const embedded=svgCaption('XL','Brown','FXJ-2026-123','02/03','QTY 4').toString();
 for(const x of ['XL','Brown','FXJ-2026-123','02/03','QTY 4'])assert.ok(embedded.includes(x),'embedded production marker '+x);
