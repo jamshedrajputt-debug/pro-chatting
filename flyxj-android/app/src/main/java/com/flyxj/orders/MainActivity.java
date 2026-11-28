@@ -44,7 +44,7 @@ public class MainActivity extends Activity {
         webView.addJavascriptInterface(new ShareBridge(this, webView), "FlyxjShare");
         webView.addJavascriptInterface(new AlertBridge(this, webView), "FlyxjAlerts");
         // Explicit version marker lets the hosted dashboard avoid repeating old update prompts.
-        settings.setUserAgentString(settings.getUserAgentString()+" FlyXJAndroid/9");
+        settings.setUserAgentString(settings.getUserAgentString()+" FlyXJAndroid/10");
         settings.setDomStorageEnabled(true);
         settings.setAllowFileAccess(true);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
