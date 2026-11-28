@@ -10,7 +10,7 @@ v8=read('assets/v8-experience.js'),app=read('assets/app.js'),
 notify=read('assets/two-way-notifications.js'),css=read('assets/v13-command-center.css');
 for(const [name,s] of Object.entries({batch,order,v6,pro,legacy,v8,app,notify}))
  assert.doesNotThrow(()=>new vm.Script(s),name+' valid JavaScript');
-assert.match(html,/v16-unified-20261128/,'Android WebView and web load new scripts');
+assert.match(html,/v17-exact-only-20261128/,'Android WebView and web load exact-image-only script');
 assert.match(batch,/Share Exact Image/,'only one main Share Exact Image entry');
 assert.match(batch,/window\\.FlyxjOrderWise\\?\\.open/,'single button opens exact image flow');
 assert.match(order,/window\\.FlyxjOrderWise=\\{open\\}/,'modern image dialog is exposed');
