@@ -15,10 +15,8 @@ function initExtraFeatures(){
  $('chatClose').onclick=()=>toggleDirectChat(false);
  $('directChatForm').onsubmit=sendDirectChat;
  $('chatAttach').onchange=()=>{$('chatFileName').textContent=$('chatAttach').files?.[0]?.name||''};
- $('notificationButton').onclick=()=>{
-  state.notifications=0;$('notificationCount').textContent='0';$('notificationCount').classList.add('hidden');
-  toast('Latest updates are shown in order activity and live chat.');
- };
+ // One notification entry on web and Android: the authenticated inbox.
+ $('notificationButton').onclick=()=>window.FlyxjNotifications?.inbox();
  $('periodWeek').onclick=()=>{state.financePeriod='weekly';renderFinance()};
  $('periodMonth').onclick=()=>{state.financePeriod='monthly';renderFinance()};
  $('financeCsv').onclick=()=>{window.location.href='/api/finance.csv'};
