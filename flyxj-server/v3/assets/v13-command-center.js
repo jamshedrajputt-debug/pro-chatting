@@ -56,7 +56,7 @@
    const live=el('span','fx13-live-pill','● Checking connection');live.id='fx13ServerStatus';live.dataset.status='warn';
    heading.append(copy,live);
    const actions=el('div','fx13-actions');
-   actions.append(button('◎ Enable phone alerts',()=>window.FlyxjNotifications?.permission()),
+   actions.append(button('◎ Enable alerts',()=>window.FlyxjNotifications?.permission()),
     button('▤ All orders',()=>{if(typeof navigate==='function')navigate('orders')}));
    const notice=el('div','fx13-notice');notice.id='fx13Notice';notice.hidden=true;
    const noteText=el('span','','');noteText.id='fx13NoticeText';
