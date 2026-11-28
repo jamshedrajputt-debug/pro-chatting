@@ -16,5 +16,6 @@ jobs:
       - run: node tests/flyxj-v16-unified-check.js
       - run: node tests/flyxj-notifications-test.js
       - run: node tests/flyxj-v8-check.js
+      - run: node tests/flyxj-v6-check.js
       - run: node tests/flyxj-v6-integration.js
       - run: node tests/flyxj-profit-rule-integration.js
