@@ -5,8 +5,9 @@ const sharp=require('sharp');
 const WIDTH=1200,HEIGHT=1400,MARGIN=24,GAP=18,TILE=(WIDTH-2*MARGIN-GAP)/2;
 const safe=s=>String(s??'Not set').replace(/[\u0000-\u001f\u007f]/g,' ').trim().slice(0,48);
 const xml=s=>safe(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
-function svgCaption(size,colour){
+function svgCaption(size,colour,orderLabel='',sequence='',quantity=''){
  const labelSize=xml(size),labelColour=xml(colour);
+ const labelOrder=xml(orderLabel),labelSequence=xml(sequence),labelQuantity=xml(quantity);
  const leftSize=Math.max(24,Math.min(57,Math.floor(55*18/Math.max(18,labelSize.length))));
  const rightSize=Math.max(24,Math.min(57,Math.floor(55*18/Math.max(18,labelColour.length))));
  return Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="205" viewBox="0 0 1200 205">'+
@@ -16,6 +17,7 @@ function svgCaption(size,colour){
   '<text x="620" y="57" fill="#bdcbe1" font-family="Arial,DejaVu Sans,sans-serif" font-weight="bold" font-size="21">COLOR</text>'+
   '<text x="56" y="125" fill="#ffffff" font-family="Arial,DejaVu Sans,sans-serif" font-weight="bold" font-size="'+leftSize+'">'+labelSize+'</text>'+
   '<text x="620" y="125" fill="#ffffff" font-family="Arial,DejaVu Sans,sans-serif" font-weight="bold" font-size="'+rightSize+'">'+labelColour+'</text>'+
+  (labelOrder||labelSequence?'<text x="56" y="179" fill="#dbeafe" font-family="Arial,DejaVu Sans,sans-serif" font-weight="bold" font-size="25">'+labelSequence+'  '+labelOrder+'  '+labelQuantity+'</text>':'')+
  '</svg>');
 }
 async function normalizePhoto(buffer,{quality=83,maxDimension=1600}={}){
@@ -26,7 +28,7 @@ async function normalizePhoto(buffer,{quality=83,maxDimension=1600}={}){
   .rotate().resize({width:maxDimension,height:maxDimension,fit:'inside',withoutEnlargement:true})
   .flatten({background:'#ffffff'}).jpeg({quality,mozjpeg:true}).toBuffer();
 }
-async function makerCollage(photoBuffers,{size,colour}={}){
+async function makerCollage(photoBuffers,{size,colour,orderLabel='',sequence='',quantity=''}={}){
  if(!Array.isArray(photoBuffers)||photoBuffers.length<1||photoBuffers.length>4)
    throw Error('Maker collage requires one to four reference photos');
  const layers=[];
@@ -42,7 +44,7 @@ async function makerCollage(photoBuffers,{size,colour}={}){
    layers.push({input:image,left:x+2,top:y+2});
   }
  }
- layers.push({input:svgCaption(size,colour),left:0,top:1195});
+ layers.push({input:svgCaption(size,colour,orderLabel,sequence,quantity),left:0,top:1195});
  const output=await sharp({create:{width:WIDTH,height:HEIGHT,channels:3,background:'#f2f5fa'}})
   .composite(layers).jpeg({quality:85,mozjpeg:true}).toBuffer();
  if(output.length>4_500_000)throw Error('Maker collage exceeds WhatsApp image size');
