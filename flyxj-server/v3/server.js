@@ -840,7 +840,8 @@ app.post('/api/orders/:id/mobile-file',auth,csrf,async(req,res)=>{
 });
 // One secure PDF preserves exact order-by-order photo + details grouping.
 // Multi-file WhatsApp intents cannot interleave captions between photos.
-app.post('/api/orders/ordered-share-pdf',auth,csrf,async(req,res)=>{
+app.post(['/api/orders/ordered-share-pdf','/api/orders/ordered-share-image'],auth,csrf,async(req,res)=>{
+ const asImage=req.path.endsWith('ordered-share-image');
  if(req.user.role!=='staff')return err(res,403,'Staff only');
  const rows=req.body?.orders;
  if(!Array.isArray(rows)||rows.length<1||rows.length>6)return err(res,400,'Select 1 to 6 orders');
@@ -873,16 +874,19 @@ app.post('/api/orders/ordered-share-pdf',auth,csrf,async(req,res)=>{
    plans.push({order:o,photos});
   }
   if(total>48)return err(res,400,'Maximum 48 original photos');
-  const pdf=await require('./ordered-share-pdf.js').make(plans);
+  const composer=require('./ordered-share-pdf.js');
+  const bytes=asImage?await composer.makeImage(plans):await composer.make(plans);
+  const filename='FLYXJ-'+plans.length+'-ORDERS-EXACT-SEQUENCE.'+(asImage?'jpg':'pdf');
+  const mime=asImage?'image/jpeg':'application/pdf';
   cleanMobileFileTickets(true);
   const token=crypto.randomBytes(32).toString('hex');
-  mobileFileTickets.set(token,{orderId:plans[0].order.id,orderIds:plans.map(x=>x.order.id),kind:'ordered-share-pdf',
-   filename:'FLYXJ-'+plans.length+'-ORDERS-IN-SEQUENCE.pdf',
-   mime:'application/pdf',bytes:pdf,expires:Date.now()+10*60*1000});
+  mobileFileTickets.set(token,{orderId:plans[0].order.id,orderIds:plans.map(x=>x.order.id),
+   kind:asImage?'ordered-share-image':'ordered-share-pdf',
+   filename,mime,bytes,expires:Date.now()+10*60*1000});
   res.set('Cache-Control','private, no-store');
-  return res.json({url:'/api/mobile-file/'+token,filename:'FLYXJ-'+plans.length+'-ORDERS-IN-SEQUENCE.pdf',
-   mime:'application/pdf',orders:plans.length,photos:total,expires_in_seconds:600});
- }catch(e){console.warn('Ordered sharing failed:',e.message);return err(res,503,'Could not prepare ordered PDF. Check files and retry.')}
+  return res.json({url:'/api/mobile-file/'+token,filename,mime,
+   orders:plans.length,photos:total,expires_in_seconds:600});
+ }catch(e){console.warn('Ordered sharing failed:',e.message);return err(res,503,'Could not prepare ordered pack. Check files and retry.')}
 });
 
 app.get('/api/mobile-file/:ticket',async(req,res)=>{

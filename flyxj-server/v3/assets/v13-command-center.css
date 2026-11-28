@@ -81,3 +81,12 @@ body{color:var(--fx13-ink)}
  .fx11-shell .fx11-photo-choice{min-height:39px}
  .fx13-live-pill{white-space:normal}
 }
+
+/* V15: professional order-wise image dispatch, full-width web/mobile preview */
+#fx15ImageDownload[hidden],#fx15ImagePreview[hidden]{display:none!important}
+.fx15-preview{margin:14px 0;padding:14px;border:1px solid #c8dedc;border-radius:14px;background:linear-gradient(135deg,#f8fcfc,#edf7f5)}
+.fx15-preview strong{display:block;font-size:12px;color:#145e57;margin-bottom:10px}
+.fx15-preview-image{display:block;width:100%;height:auto;max-height:440px;object-fit:contain;object-position:top;border:1px solid #cad8df;border-radius:10px;background:#fff}
+#fx15ImageDownload{background:#e5f6f0;color:#136654;border-color:#9bd3be}
+.fx11-shell .fx11-step-buttons .fx10-btn.fx10-green{font-size:13px;letter-spacing:.01em}
+@media(max-width:650px){.fx15-preview{padding:10px}.fx15-preview-image{max-height:290px}.fx11-shell .fx11-step-buttons .fx10-btn{white-space:normal;line-height:1.3;min-height:48px}}
