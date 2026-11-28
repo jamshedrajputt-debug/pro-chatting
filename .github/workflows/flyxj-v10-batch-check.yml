@@ -1,7 +1,7 @@
 name: FLYXJ V10 ordered batch sharing and notification safety
 on:
   push:
-    branches: [flyxj-v10-batch-sharing-notifications-20261128, flyxj-v10-batch-fresh-details-fix, flyxj-v11-order-wise-whatsapp, flyxj-v12-all-orders-one-share, flyxj-v13-professional-notifications, flyxj-v14-sequence-notify-polish, flyxj-v15-image-sequence, flyxj-v16-unified-workspace-cleanup, flyxj-v17-remove-exact-only]
+    branches: [flyxj-v10-batch-sharing-notifications-20261128, flyxj-v10-batch-fresh-details-fix, flyxj-v11-order-wise-whatsapp, flyxj-v12-all-orders-one-share, flyxj-v13-professional-notifications, flyxj-v14-sequence-notify-polish, flyxj-v15-image-sequence, flyxj-v16-unified-workspace-cleanup, flyxj-v17-remove-exact-only, flyxj-v18-minimal-whatsapp-text]
   workflow_dispatch:
 jobs:
   regression:
@@ -14,6 +14,7 @@ jobs:
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: node tests/flyxj-v10-batch-integration.js
       - run: node tests/flyxj-v16-unified-check.js
+      - run: node tests/flyxj-v18-minimal-text.js
       - run: node tests/flyxj-notifications-test.js
       - run: node tests/flyxj-v8-check.js
       - run: node tests/flyxj-v6-check.js
