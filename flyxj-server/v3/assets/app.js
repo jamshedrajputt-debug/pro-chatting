@@ -94,7 +94,6 @@ function connectTrackingEvents(){
         if(eventName==='order'||eventName==='status'||eventName==='approval'||eventName==='shipping'){
           alertNotification((payload.description||'Order updated')+' · '+(payload.reference||''));
         }
-        if(typeof window.flyxjV6Notify==='function')window.flyxjV6Notify(payload.description||'Order updated',payload.reference||'',eventName);
         if(['order','shipping','status','message','approval'].includes(eventName))window.FlyxjNotifications?.show(eventName,payload);
         refresh({silent:true});if(state.view==='finance')loadFinance();
       }catch(e){}
@@ -503,7 +502,7 @@ async function init(){
   };
   $('logoutButton').onclick=async()=>{try{await api('/api/logout',{method:'POST'})}catch{}resetApp()};
   $('menuToggle').onclick=()=>$('sidebar').classList.toggle('open');
-  $('refreshButton').onclick=()=>refresh();
+  $('refreshButton').onclick=async()=>{await refresh();window.FlyxjNotifications?.poll();window.FlyxjPro?.verify?.()};
   $('addOrderButton').onclick=openCreate;
   $('showAllButton').onclick=()=>navigate('orders');
   $('helpAction').onclick=()=>navigate('orders');
