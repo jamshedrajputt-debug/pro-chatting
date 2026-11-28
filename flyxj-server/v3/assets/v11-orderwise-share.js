@@ -18,7 +18,7 @@
    '\nReference: '+o.reference+'\nProduct: '+o.title+'\nSIZE: '+o.size+
    '\nCOLOUR: '+o.colour+'\nQuantity: '+o.quantity+'\nStatus: '+o.status;
  }
- function reset(){step=0;ready=null;allReady=null;imageReady=null;shared.clear()}
+ function reset(){step=0;ready=null;allReady=null;imageReady=null;shared.clear();const d=$('fx15ImageDownload');if(d)d.hidden=true;}
  function mount(){
   const bar=$('fx10Toolbar');if(!bar||!current())return;
   const actions=bar.querySelector('.fx10-bar-actions');if(!actions||$('fx11OrderWiseButton'))return;
@@ -41,6 +41,8 @@
   const controls=node('div','fx11-step-buttons'),send=node('button','fx10-btn fx10-green','Prepare Order 1');
   const shareAll=node('button','fx10-btn fx10-muted','Original Images (WhatsApp may mix)');shareAll.type='button';
   const exact=node('button','fx10-btn fx10-green','Share ALL · Exact Image');exact.type='button';
+  const download=node('a','fx10-btn fx10-muted','Preview / Download Exact Image');
+  download.id='fx15ImageDownload';download.hidden=true;download.target='_blank';download.rel='noopener noreferrer';download.setAttribute('download','FLYXJ-EXACT-SEQUENCE.jpg');
   const next=node('button','fx10-btn fx10-primary','Next Order');send.type='button';next.type='button';next.disabled=true;
   const guide=node('p','fx10-warning','Share chooser: select WhatsApp, choose the recipient and send. Only then tap Next Order. WhatsApp may reorder images or omit captions; the info card and numbered filenames identify the order.');
   const progress=node('strong','fx11-progress','ORDER 01/'+String(orders.length).padStart(2,'0'));
@@ -181,10 +183,11 @@
     if(JSON.stringify(orders.map(o=>({id:o.id,updatedAt:o.updatedAt,photoIndexes:photos(o)})))!==signature||
       orders.some(o=>!live().some(x=>String(x.id)===String(o.id)&&JSON.stringify(x)===JSON.stringify(o))))
      throw Error('Selection changed while preparing. Prepare again.');
+    download.href=link.href;download.setAttribute('download',data.filename||'FLYXJ-EXACT-SEQUENCE.jpg');download.hidden=false;
     if(native){
      window.FlyxjShare.shareFiles(JSON.stringify({files:[link.href],types:['image/jpeg'],
       title:'FLYXJ · '+orders.length+' orders in exact sequence',
-      text:'FLYXJ production pack. Every page shows one order photos followed by SIZE, COLOUR and QUANTITY.'}));
+      text:'FLYXJ production pack. One long image shows each order's photos directly above SIZE, COLOUR and QUANTITY.'}));
      status.textContent='One image with '+orders.length+' order sections and '+data.photos+' photos opened in Android share menu. Choose WhatsApp.';
     }else{
      const result=await fetch(link.href,{credentials:'same-origin',cache:'no-store'});
@@ -272,7 +275,7 @@
    else{status.textContent='All '+orders.length+' orders opened for WhatsApp sharing. Verify messages inside WhatsApp.';pane.remove();}
   };
   const combinedTip=node('p','fx10-warning','RECOMMENDED: Exact Image sends ONE professional JPG with every order's selected photos and SIZE, COLOUR, QTY immediately underneath, in the correct sequence. No PDF. Original images mode may mix attachments.');
-  const bulkActions=node('div','fx11-step-buttons');bulkActions.append(exact,shareAll);
+  const bulkActions=node('div','fx11-step-buttons');bulkActions.append(exact,download,shareAll);
   controls.append(send,next);content.append(rows,combinedTip,bulkActions,guide,progress,controls,status);shell.append(heading,content);pane.append(shell);
   pane.onclick=e=>{if(e.target===pane)pane.remove()};document.body.append(pane);refresh();update();close.focus();
  }
