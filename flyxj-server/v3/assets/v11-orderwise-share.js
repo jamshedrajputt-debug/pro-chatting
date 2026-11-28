@@ -18,7 +18,7 @@
    '\nReference: '+o.reference+'\nProduct: '+o.title+'\nSIZE: '+o.size+
    '\nCOLOUR: '+o.colour+'\nQuantity: '+o.quantity+'\nStatus: '+o.status;
  }
- function reset(){step=0;ready=null;allReady=null;imageReady=null;shared.clear();const d=$('fx15ImageDownload');if(d)d.hidden=true;}
+ function reset(){step=0;ready=null;allReady=null;imageReady=null;shared.clear();const d=$('fx15ImageDownload');if(d)d.hidden=true;const p=$('fx15ImagePreview');if(p)p.hidden=true;}
  function mount(){
   const bar=$('fx10Toolbar');if(!bar||!current())return;
   const actions=bar.querySelector('.fx10-bar-actions');if(!actions||$('fx11OrderWiseButton'))return;
@@ -43,6 +43,9 @@
   const exact=node('button','fx10-btn fx10-green','Share ALL · Exact Image');exact.type='button';
   const download=node('a','fx10-btn fx10-muted','Preview / Download Exact Image');
   download.id='fx15ImageDownload';download.hidden=true;download.target='_blank';download.rel='noopener noreferrer';download.setAttribute('download','FLYXJ-EXACT-SEQUENCE.jpg');
+  const imagePreview=node('div','fx15-preview');imagePreview.id='fx15ImagePreview';imagePreview.hidden=true;
+  const img=node('img','fx15-preview-image');img.alt='Order-wise exact sequence visual preview';img.loading='lazy';
+  imagePreview.append(node('strong','','Live preview · all orders in one image'),img);
   const next=node('button','fx10-btn fx10-primary','Next Order');send.type='button';next.type='button';next.disabled=true;
   const guide=node('p','fx10-warning','Share chooser: select WhatsApp, choose the recipient and send. Only then tap Next Order. WhatsApp may reorder images or omit captions; the info card and numbered filenames identify the order.');
   const progress=node('strong','fx11-progress','ORDER 01/'+String(orders.length).padStart(2,'0'));
@@ -184,6 +187,7 @@
       orders.some(o=>!live().some(x=>String(x.id)===String(o.id)&&JSON.stringify(x)===JSON.stringify(o))))
      throw Error('Selection changed while preparing. Prepare again.');
     download.href=link.href;download.setAttribute('download',data.filename||'FLYXJ-EXACT-SEQUENCE.jpg');download.hidden=false;
+    img.src=link.href;imagePreview.hidden=false;
     if(native){
      window.FlyxjShare.shareFiles(JSON.stringify({files:[link.href],types:['image/jpeg'],
       title:'FLYXJ · '+orders.length+' orders in exact sequence',
@@ -276,7 +280,7 @@
   };
   const combinedTip=node('p','fx10-warning','RECOMMENDED: Exact Image sends ONE professional JPG with every order's selected photos and SIZE, COLOUR, QTY immediately underneath, in the correct sequence. No PDF. Original images mode may mix attachments.');
   const bulkActions=node('div','fx11-step-buttons');bulkActions.append(exact,download,shareAll);
-  controls.append(send,next);content.append(rows,combinedTip,bulkActions,guide,progress,controls,status);shell.append(heading,content);pane.append(shell);
+  controls.append(send,next);content.append(rows,combinedTip,bulkActions,imagePreview,guide,progress,controls,status);shell.append(heading,content);pane.append(shell);
   pane.onclick=e=>{if(e.target===pane)pane.remove()};document.body.append(pane);refresh();update();close.focus();
  }
  function activate(){
