@@ -31,7 +31,8 @@
  }
  function renderCommandCards(){
   const grid=$v('statsGrid');if(!grid||$v('v6Operations'))return;
-  const wrap=n('section','v6-operations');wrap.id='v6Operations';
+  const wrap=n('details','v6-operations fx16-insights');wrap.id='v6Operations';
+  const summary=n('summary','fx16-insights-toggle','Production insights · overdue, due soon, high priority and assignments');wrap.append(summary);
   const head=n('div','v6-ops-head');
   const title=n('div');title.append(n('span','v6-kicker','PRODUCTION PULSE'),n('h2','','Today’s priorities'));
   const actions=n('div','v6-quick-actions');
@@ -251,11 +252,10 @@
  }
  function boot(){
   if(noticeReady)return;noticeReady=true;
-  renderControls();renderCommandCards();secureWhatsApp();printReport();notificationCenter();addKeyboardShortcuts();
+  renderControls();renderCommandCards();secureWhatsApp();printReport();addKeyboardShortcuts();
   if(getUser())window.flyxjV6Refresh();
-  // init-extra.js wires legacy bell button asynchronously, so reapply
-  // V6 handler after legacy module initialization.
-  setTimeout(notificationCenter,350);
+  // The original V6 notification panel is retired; the shared authenticated
+  // notification inbox is connected to the one bell in init-extra.js.
   setInterval(()=>{
    if(getUser()&&!$v('dashboardShell')?.classList.contains('hidden')){
     if(getUser().role==='staff'&&!cachedStaff.length)loadStaff();
