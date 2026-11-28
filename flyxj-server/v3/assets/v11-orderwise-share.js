@@ -4,7 +4,7 @@
    sequence identifiers; detail card is appended after selected original photos. */
 (function(){
  const $=id=>document.getElementById(id),node=(tag,cls,text)=>{const x=document.createElement(tag);x.className=cls||'';if(text!==undefined)x.textContent=String(text);return x};
- const chosen=new Map();let step=0,ready=null,shared=new Set(),orders=[],pane=null;
+ const chosen=new Map();let step=0,ready=null,allReady=null,shared=new Set(),orders=[],pane=null;
  const current=()=>typeof state!=='undefined'&&state.me?.role==='staff';
  const live=()=>window.FlyxjBatch?.selected?.()||[];
  function photos(o){
@@ -18,7 +18,7 @@
    '\nReference: '+o.reference+'\nProduct: '+o.title+'\nSIZE: '+o.size+
    '\nCOLOUR: '+o.colour+'\nQuantity: '+o.quantity+'\nStatus: '+o.status;
  }
- function reset(){step=0;ready=null;shared.clear()}
+ function reset(){step=0;ready=null;allReady=null;shared.clear()}
  function mount(){
   const bar=$('fx10Toolbar');if(!bar||!current())return;
   const actions=bar.querySelector('.fx10-bar-actions');if(!actions||$('fx11OrderWiseButton'))return;
@@ -33,12 +33,13 @@
   const shell=node('section','fx10-pane fx11-shell');shell.setAttribute('role','dialog');shell.setAttribute('aria-modal','true');
   const heading=node('header','fx10-heading'),title=node('div');
   title.append(node('small','','FLYXJ · USER B WHATSAPP'),node('h2','','Order-wise WhatsApp Pack'),
-   node('p','','Each order: selected original photos, then its numbered info card. Send one order at a time.'));
+   node('p','','Each order: selected original photos, then its numbered info card. Share all at once or one order at a time.'));
   const close=node('button','fx10-close','×');close.type='button';close.setAttribute('aria-label','Close');
   close.onclick=()=>pane.remove();heading.append(title,close);
   const content=node('div','fx10-body'),rows=node('div','fx10-pack-rows'),status=node('p','fx10-feedback','Select the photos for each order.');
   status.setAttribute('aria-live','polite');
   const controls=node('div','fx11-step-buttons'),send=node('button','fx10-btn fx10-green','Prepare Order 1');
+  const shareAll=node('button','fx10-btn fx10-primary','Share ALL Orders Together');shareAll.type='button';
   const next=node('button','fx10-btn fx10-primary','Next Order');send.type='button';next.type='button';next.disabled=true;
   const guide=node('p','fx10-warning','Share chooser: select WhatsApp, choose the recipient and send. Only then tap Next Order. WhatsApp may reorder images or omit captions; the info card and numbered filenames identify the order.');
   const progress=node('strong','fx11-progress','ORDER 01/'+String(orders.length).padStart(2,'0'));
@@ -136,12 +137,82 @@
     }
    }catch(e){status.textContent='Share failed: '+e.message;}finally{send.disabled=false;update();}
   };
+
+  // One native WhatsApp share action containing all chosen originals, ordered by
+  // order index, followed by each order's individually numbered details card.
+  // WhatsApp itself may reorder visual media; filenames preserve the sequence.
+  shareAll.onclick=async()=>{
+   if(!current()||shareAll.disabled)return;
+   const latest=live();
+   if(orders.length!==latest.length||orders.some(o=>!latest.some(x=>String(x.id)===String(o.id)&&JSON.stringify(x)===JSON.stringify(o)))){
+    status.textContent='Orders changed. Close and reopen Order-wise Share.';return;
+   }
+   const plans=orders.map((o,i)=>({o,i,indexes:photos(o)}));
+   if(plans.some(p=>!p.indexes.length)){
+    status.textContent='Select at least one original photo for every order.';return;
+   }
+   const total=plans.reduce((n,p)=>n+p.indexes.length+1,0);
+   if(total>54){status.textContent='Too many photos in this share. Maximum 54 images.';return;}
+   const signature=JSON.stringify(plans);
+   const native=/FlyXJAndroid\/(?:10|1[1-9]|[2-9][0-9])/.test(navigator.userAgent)&&
+     typeof window.FlyxjShare?.shareFiles==='function';
+   const message='FLYXJ ORDER-WISE PACK · '+orders.length+' ORDERS\n\n'+orders.map((o,i)=>caption(o,i+1,orders.length)).join('\n\n');
+   if(!native&&allReady?.signature===signature&&Date.now()-allReady.at<5*60000){
+    try{
+     if(!navigator.share)throw Error('Web sharing unavailable; use FlyXJ Android.');
+     if(navigator.canShare&&!navigator.canShare({files:allReady.files}))
+      throw Error('Phone cannot share all '+total+' images. Try fewer photos or individual orders.');
+     await navigator.share({files:allReady.files,text:message,title:'FLYXJ · '+orders.length+' grouped orders'});
+     status.textContent='Share chooser finished. Confirm the WhatsApp recipient and media sequence.';
+    }catch(e){status.textContent=e.name==='AbortError'?'Sharing cancelled':e.message;}
+    return;
+   }
+   shareAll.disabled=true;send.disabled=true;next.disabled=true;
+   try{
+    const r=await fetch('/api/me',{credentials:'same-origin',cache:'no-store'});
+    if(!r.ok)throw Error('Please sign in');
+    const me=await r.json();if(me.role!=='staff')throw Error('User B only');
+    const tickets=[];
+    for(const p of plans){
+     for(const index of p.indexes){
+      status.textContent='Preparing order '+(p.i+1)+'/'+orders.length+', photo '+(index+1)+'/'+p.o.photoCount;
+      tickets.push(await issue(p.o,{kind:'photo',index,sequence:p.i+1,total:orders.length},me.csrf));
+     }
+     status.textContent='Preparing details card '+(p.i+1)+'/'+orders.length;
+     tickets.push(await issue(p.o,{kind:'batch-maker',sequence:p.i+1,total:orders.length,cardLast:true},me.csrf));
+    }
+    if(JSON.stringify(orders.map((o,i)=>({o,i,indexes:photos(o)})))!==signature||
+       orders.some(o=>!live().some(x=>String(x.id)===String(o.id)&&JSON.stringify(x)===JSON.stringify(o))))
+     throw Error('Order details changed during preparation. Reopen sharing.');
+    if(native){
+     window.FlyxjShare.shareFiles(JSON.stringify({files:tickets.map(t=>t.url),types:tickets.map(t=>t.type),
+      title:'FLYXJ · '+orders.length+' grouped orders',text:message}));
+     status.textContent='Opened one Android share menu for all '+orders.length+' orders ('+total+' images). Choose WhatsApp and verify sequence.';
+    }else{
+     if(!navigator.share||typeof File==='undefined')throw Error('Use FlyXJ Android V10+ or a phone browser with file sharing.');
+     const files=[];
+     for(const t of tickets){
+      const result=await fetch(t.url,{credentials:'same-origin',cache:'no-store'});
+      if(!result.ok)throw Error('Image link expired. Prepare again.');
+      const blob=await result.blob();if(blob.size>15*1024*1024)throw Error('Image too large.');
+      files.push(new File([blob],t.name,{type:t.type}));
+     }
+     if(navigator.canShare&&!navigator.canShare({files}))throw Error('Phone cannot share '+total+' images together; select fewer photos.');
+     allReady={signature,files,at:Date.now()};
+     status.textContent='All '+total+' images ready: photos + details card for each order. Tap Share ALL Orders Together again.';
+    }
+   }catch(e){status.textContent='Combined share failed: '+e.message}
+   finally{shareAll.disabled=false;update();}
+  };
+
   next.onclick=()=>{
    const o=orders[step];if(!o||!shared.has(String(o.id)))return;
    if(step+1<orders.length){step++;ready=null;status.textContent='Now prepare '+orders[step].reference+'.';update();}
    else{status.textContent='All '+orders.length+' orders opened for WhatsApp sharing. Verify messages inside WhatsApp.';pane.remove();}
   };
-  controls.append(send,next);content.append(rows,guide,progress,controls,status);shell.append(heading,content);pane.append(shell);
+  const combinedTip=node('p','fx10-warning','ONE SHARE: all selected photos and each order details card in order 01, 02, 03… WhatsApp may rearrange photos; for guaranteed separated groups use individual Next Order sharing.');
+  const bulkActions=node('div','fx11-step-buttons');bulkActions.append(shareAll);
+  controls.append(send,next);content.append(rows,combinedTip,bulkActions,guide,progress,controls,status);shell.append(heading,content);pane.append(shell);
   pane.onclick=e=>{if(e.target===pane)pane.remove()};document.body.append(pane);refresh();update();close.focus();
  }
  function activate(){
