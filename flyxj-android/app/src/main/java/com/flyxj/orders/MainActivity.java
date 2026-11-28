@@ -182,6 +182,10 @@ public class MainActivity extends Activity {
             fileCallback=null;
         }
     }
+    @Override protected void onPause(){
+        try{CookieManager.getInstance().flush();}catch(Exception ignored){}
+        super.onPause();
+    }
     @Override protected void onResume(){
         super.onResume();
         if(updateManager!=null)updateManager.onResume();
