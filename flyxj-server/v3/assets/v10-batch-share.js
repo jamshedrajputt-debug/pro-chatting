@@ -5,15 +5,17 @@
  const E=(tag,cls,value)=>{const e=document.createElement(tag);e.className=cls||'';if(value!==undefined)e.textContent=String(value);return e};
  const staff=()=>typeof state!=='undefined'&&state.me?.role==='staff';
  const all=()=>[...selected.keys()].map(id=>state.orders.find(o=>String(o.id)===String(id))).filter(Boolean).map(record);
- const record=o=>({id:o.id,reference:o.reference||'FXJ-'+o.id,title:o.title||'Order',
+ const shareReference=o=>{
+   const id=Number(o.id),date=new Date(o.created_at||o.createdAt||'');
+   if(Number.isInteger(id)&&id>0&&!Number.isNaN(date.getTime()))
+    return 'FXJ-'+date.getUTCFullYear()+'-'+String(date.getUTCMonth()+1).padStart(2,'0')+'-'+String(id).padStart(6,'0');
+   return String(o.reference||'FXJ-'+o.id);
+ };
+ const record=o=>({id:o.id,reference:shareReference(o),title:o.title||'Order',
     size:o.size||'Not set',colour:o.colour||'Not set',quantity:o.quantity||1,status:o.status||'pending',
     photoCount:Array.isArray(o.photos)?o.photos.length:0,updatedAt:o.updated_at||''});
  function summary(items){
-  return 'FLYXJ · NUMBERED PRODUCTION ORDER PACK\n'+items.length+' orders · Check SIZE, COLOUR & quantity for EACH reference.\n\n'+
-    items.map((o,i)=>'ORDER '+String(i+1).padStart(2,'0')+'/'+String(items.length).padStart(2,'0')+
-      '\nReference: '+o.reference+'\nDress: '+o.title+'\nSIZE: '+o.size+
-      '\nCOLOUR: '+o.colour+'\nQuantity: '+o.quantity+'\nStatus: '+o.status.replace(/_/g,' ')+'\n').join('\n')+
-    '\nEND · '+items.length+' separate orders. Confirm every reference.';
+  return items.map(o=>'Reference: '+o.reference+'\nSize: '+o.size+'\nColor: '+o.colour).join('\n\n');
  }
  function sync(){
   const body=document.getElementById('orderRows');if(!body)return;
