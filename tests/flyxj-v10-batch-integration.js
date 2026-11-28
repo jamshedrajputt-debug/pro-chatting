@@ -11,6 +11,10 @@ assert.match(html,/v10-batch-share\.js/);assert.match(html,/v10-professional\.cs
 assert.match(html,/v11-orderwise-share\.js/, 'V11 order-wise script loads'); 
 const orderwise=fs.readFileSync(path.join(root,'assets/v11-orderwise-share.js'),'utf8');
 assert.doesNotThrow(()=>new vm.Script(orderwise),'V11 order-wise JS parses');
+assert.match(orderwise,/Share ALL Orders Together/,'bulk share button exists');
+assert.match(orderwise,/for\(const p of plans\)/,'order-wise bulk iterates in sequence');
+assert.match(orderwise,/tickets\.push\(await issue\(p\.o,\{kind:'photo'/,'each original photo is included');
+assert.match(orderwise,/tickets\.push\(await issue\(p\.o,\{kind:'batch-maker'/,'detail card follows each order photos');
 for(const fragment of ["kind:'photo'","kind:'batch-maker'","cardLast:true","shareFiles","navigator.share","Photo ","Next Order"])
  assert.ok(orderwise.includes(fragment),'V11 contains '+fragment);
 
@@ -84,6 +88,12 @@ async function run(){
  assert.match(r.data.filename,/^01-OF-02-99-/,'details card follows original photos');
  const detailFile=await fetch(base+r.data.url);
  assert.equal(detailFile.status,200,'detail image ticket still works');
+ const ticketUrls=[];
+ for(let index=0;index<20;index++){
+  const prepared=await send('/api/orders/1/mobile-file',cookie,csrf,'POST',{kind:'photo',index:0,sequence:1,total:2});
+  assert.equal(prepared.response.status,200,'prepare bulk numbered photos');ticketUrls.push(prepared.data.url);
+ }
+ assert.equal((await fetch(base+ticketUrls[0])).status,200,'early image ticket remains valid during a bulk pack');
  const customer=await send('/api/login',null,null,'POST',{username:'usera',password:'customer-test-password-12345'});
  assert.equal(customer.response.status,200);
  assert.equal((await send('/api/orders/1/mobile-file',customer.response.headers.get('set-cookie').split(';')[0],customer.data.csrf,'POST',{kind:'batch-maker',sequence:1,total:1})).response.status,403);
