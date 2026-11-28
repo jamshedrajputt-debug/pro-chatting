@@ -748,8 +748,11 @@ function cleanMobileFileTickets(forInsert=false){
 app.post('/api/orders/:id/mobile-file',auth,csrf,async(req,res)=>{
  const o=loadOrder(req,res);if(!o)return;
  const kind=req.body?.kind;
- if(kind!=='pdf'&&kind!=='maker'&&kind!=='photo')return err(res,400,'Choose PDF, reference photo or Maker Image');
- if(kind==='maker'&&req.user.role!=='staff')return err(res,403,'Maker Image download is User B only');
+ if(!['pdf','maker','batch-maker','photo'].includes(kind))return err(res,400,'Choose PDF, reference photo or Maker Image');
+ if(['maker','batch-maker'].includes(kind)&&req.user.role!=='staff')return err(res,403,'Maker Image download is User B only');
+ const batchIndex=Number(req.body?.sequence),batchTotal=Number(req.body?.total);
+ if(kind==='batch-maker'&&(!Number.isInteger(batchIndex)||batchIndex<1||batchIndex>6||!Number.isInteger(batchTotal)||batchTotal<1||batchTotal>6||batchIndex>batchTotal))
+   return err(res,400,'Batch sequence must be between 1 and 6');
  try{
   let bytes=null,filename='',mime='';
   if(kind==='pdf'){
@@ -785,10 +788,12 @@ app.post('/api/orders/:id/mobile-file',auth,csrf,async(req,res)=>{
    // Exactly one PNG file is built on the server: no Canvas, base64 upload,
    // Blob URL, JS click or WebView storage permission required.
    const sharp=require('sharp');
-   const jpg=await require('./maker-compose.js').makerCollage(photos,{size:o.size,colour:o.colour});
+   const jpg=await require('./maker-compose.js').makerCollage(photos,{size:o.size,colour:o.colour,
+     orderLabel:kind==='batch-maker'?ref(o):'',sequence:kind==='batch-maker'?String(batchIndex).padStart(2,'0')+'/'+String(batchTotal).padStart(2,'0'):'',
+     quantity:kind==='batch-maker'?'QTY '+o.quantity:''});
    bytes=await sharp(jpg).png({compressionLevel:9}).toBuffer();
    if(bytes.length>12*1024*1024)throw Error('Combined image is too large for mobile download');
-   filename=ref(o)+'-MAKER-IMAGE.png';mime='image/png';
+   filename=(kind==='batch-maker'?String(batchIndex).padStart(2,'0')+'-OF-'+String(batchTotal).padStart(2,'0')+'-':'')+ref(o)+'-MAKER-IMAGE.png';mime='image/png';
   }
   cleanMobileFileTickets(true);
   const token=crypto.randomBytes(32).toString('hex');
