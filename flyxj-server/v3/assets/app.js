@@ -209,7 +209,7 @@ function renderOrders(){
     // The deadline is the customer-entered delivery date (expected_date).
     // Never substitute an invented date or expose the customer username here.
     const delivery=node('td','fx20-delivery-cell');
-    const due=typeof o.expected_date==='string'&&/^\\d{4}-\\d{2}-\\d{2}$/.test(o.expected_date)?o.expected_date:'';
+    const due=typeof o.expected_date==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(o.expected_date)?o.expected_date:'';
     if(due){
       const dateParts=due.split('-').map(Number);
       const valid=new Date(Date.UTC(dateParts[0],dateParts[1]-1,dateParts[2]));
