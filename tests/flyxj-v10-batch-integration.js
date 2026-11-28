@@ -12,7 +12,16 @@ assert.match(html,/Production Command Centre/);
 assert.match(html,/v10-batch-share\.js/);assert.match(html,/v10-professional\.css/);
 assert.match(html,/v11-orderwise-share\.js/, 'V11 order-wise script loads'); 
 const orderwise=fs.readFileSync(path.join(root,'assets/v11-orderwise-share.js'),'utf8');
+assert.match(html,/v14-exact-pdf/,'browser uses fresh exact sequence JS');
+assert.match(html,/v14-open-alert/,'app-open notifications cache is refreshed');
+const alerts=fs.readFileSync(path.join(root,'assets/two-way-notifications.js'),'utf8');
+assert.match(alerts,/function launchSummary/,'Android opens with one non-spam catch-up alert');
+
 assert.doesNotThrow(()=>new vm.Script(orderwise),'V11 order-wise JS parses');
+assert.match(orderwise,/Share ALL · Exact Sequence/,'exact sequence PDF is primary');
+assert.match(orderwise,/ordered-share-pdf/,'single PDF endpoint is used');
+assert.match(orderwise,/application\/pdf/,'native Android shares PDF MIME');
+
 assert.match(orderwise,/Share ALL Orders Together/,'bulk share button exists');
 assert.match(orderwise,/for\(const p of plans\)/,'order-wise bulk iterates in sequence');
 assert.match(orderwise,/tickets\.push\(await issue\(p\.o,\{kind:'photo'/,'each original photo is included');
@@ -67,6 +76,12 @@ async function send(p,cookie,csrf,method='GET',body){
 async function run(){
  const photo=await sharp({create:{width:120,height:120,channels:3,background:'#bb874c'}}).png().toBuffer();
  order.image='data:image/png;base64,'+photo.toString('base64');
+ const pdfMaker=require('../flyxj-server/v3/ordered-share-pdf.js');
+ const pack=await pdfMaker.make([{order,photos:[photo]},{order:{...order,id:2,reference:'FXJ-2'},photos:[photo]}]);
+ assert.match(pack.subarray(0,8).toString('ascii'),/^%PDF-1.4/);
+ assert.match(pack.toString('latin1'),/\/Count 2/,'two order pages retain order');
+ assert.match(pack.toString('latin1'),/\/DCTDecode/,'original photo pixels embedded');
+
  fs.writeFileSync(path.join(dataDir,'orders.json'),JSON.stringify([order]));
  await boot();
  let r=await send('/api/login',null,null,'POST',{username:'userb',password:'staff-test-password-12345'});
@@ -96,8 +111,26 @@ async function run(){
   assert.equal(prepared.response.status,200,'prepare bulk numbered photos');ticketUrls.push(prepared.data.url);
  }
  assert.equal((await fetch(base+ticketUrls[0])).status,200,'early image ticket remains valid during a bulk pack');
+
+ r=await send('/api/orders/ordered-share-pdf',cookie,csrf,'POST',{
+  orders:[{id:1,updatedAt:order.updated_at,photoIndexes:[0]}]
+ });
+ assert.equal(r.response.status,200,'staff generates one ordered PDF');
+ assert.match(r.data.filename,/IN-SEQUENCE\.pdf$/);
+ const exactPdf=await fetch(base+r.data.url);
+ assert.equal(exactPdf.status,200,'temporary exact sequence PDF can be downloaded');
+ assert.match(exactPdf.headers.get('content-type'),/application\/pdf/);
+ assert.match(Buffer.from(await exactPdf.arrayBuffer()).subarray(0,8).toString('ascii'),/^%PDF-1.4/);
+ const duplicate=await send('/api/orders/ordered-share-pdf',cookie,csrf,'POST',{
+  orders:[{id:1,photoIndexes:[0]},{id:1,photoIndexes:[0]}]
+ });
+ assert.equal(duplicate.response.status,400,'duplicate orders are rejected');
  const customer=await send('/api/login',null,null,'POST',{username:'usera',password:'customer-test-password-12345'});
  assert.equal(customer.response.status,200);
+ const customerCookie=customer.response.headers.get('set-cookie').split(';')[0];
+ assert.equal((await send('/api/orders/ordered-share-pdf',customerCookie,customer.data.csrf,'POST',{
+ orders:[{id:1,photoIndexes:[0]}]})).response.status,403,'customer cannot export internal packs');
+
  assert.equal((await send('/api/orders/1/mobile-file',customer.response.headers.get('set-cookie').split(';')[0],customer.data.csrf,'POST',{kind:'batch-maker',sequence:1,total:1})).response.status,403);
  await stop();
  await boot();

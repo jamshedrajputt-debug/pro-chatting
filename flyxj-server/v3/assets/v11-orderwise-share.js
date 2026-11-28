@@ -4,7 +4,7 @@
    sequence identifiers; detail card is appended after selected original photos. */
 (function(){
  const $=id=>document.getElementById(id),node=(tag,cls,text)=>{const x=document.createElement(tag);x.className=cls||'';if(text!==undefined)x.textContent=String(text);return x};
- const chosen=new Map();let step=0,ready=null,allReady=null,shared=new Set(),orders=[],pane=null;
+ const chosen=new Map();let step=0,ready=null,allReady=null,pdfReady=null,shared=new Set(),orders=[],pane=null;
  const current=()=>typeof state!=='undefined'&&state.me?.role==='staff';
  const live=()=>window.FlyxjBatch?.selected?.()||[];
  function photos(o){
@@ -18,7 +18,7 @@
    '\nReference: '+o.reference+'\nProduct: '+o.title+'\nSIZE: '+o.size+
    '\nCOLOUR: '+o.colour+'\nQuantity: '+o.quantity+'\nStatus: '+o.status;
  }
- function reset(){step=0;ready=null;allReady=null;shared.clear()}
+ function reset(){step=0;ready=null;allReady=null;pdfReady=null;shared.clear()}
  function mount(){
   const bar=$('fx10Toolbar');if(!bar||!current())return;
   const actions=bar.querySelector('.fx10-bar-actions');if(!actions||$('fx11OrderWiseButton'))return;
@@ -33,13 +33,14 @@
   const shell=node('section','fx10-pane fx11-shell');shell.setAttribute('role','dialog');shell.setAttribute('aria-modal','true');
   const heading=node('header','fx10-heading'),title=node('div');
   title.append(node('small','','FLYXJ · USER B WHATSAPP'),node('h2','','Order-wise WhatsApp Pack'),
-   node('p','','Each order: selected original photos, then its numbered info card. Share all at once or one order at a time.'));
+   node('p','','Choose Exact Sequence for a single PDF with photos and details together, or share original images separately.'));
   const close=node('button','fx10-close','×');close.type='button';close.setAttribute('aria-label','Close');
   close.onclick=()=>pane.remove();heading.append(title,close);
   const content=node('div','fx10-body'),rows=node('div','fx10-pack-rows'),status=node('p','fx10-feedback','Select the photos for each order.');
   status.setAttribute('aria-live','polite');
   const controls=node('div','fx11-step-buttons'),send=node('button','fx10-btn fx10-green','Prepare Order 1');
-  const shareAll=node('button','fx10-btn fx10-primary','Share ALL Orders Together');shareAll.type='button';
+  const shareAll=node('button','fx10-btn fx10-muted','Original Images (WhatsApp may mix)');shareAll.type='button';
+  const exact=node('button','fx10-btn fx10-green','Share ALL · Exact Sequence');exact.type='button';
   const next=node('button','fx10-btn fx10-primary','Next Order');send.type='button';next.type='button';next.disabled=true;
   const guide=node('p','fx10-warning','Share chooser: select WhatsApp, choose the recipient and send. Only then tap Next Order. WhatsApp may reorder images or omit captions; the info card and numbered filenames identify the order.');
   const progress=node('strong','fx11-progress','ORDER 01/'+String(orders.length).padStart(2,'0'));
@@ -138,6 +139,66 @@
    }catch(e){status.textContent='Share failed: '+e.message;}finally{send.disabled=false;update();}
   };
 
+
+  // Guaranteed sequence: one PDF, one WhatsApp file, one page per order.
+  // Each page shows ALL chosen original photos first and its matching details underneath.
+  exact.onclick=async()=>{
+   if(!current()||exact.disabled)return;
+   const liveOrders=live();
+   if(orders.length!==liveOrders.length||orders.some(o=>!liveOrders.some(x=>String(x.id)===String(o.id)&&JSON.stringify(x)===JSON.stringify(o)))){
+    status.textContent='Order data changed. Close and reopen sharing.';return;
+   }
+   const plans=orders.map(o=>({id:o.id,updatedAt:o.updatedAt,photoIndexes:photos(o)}));
+   if(plans.some(p=>p.photoIndexes.length===0)){status.textContent='Select at least one photo for every order.';return;}
+   const signature=JSON.stringify(plans);
+   const native=/FlyXJAndroid\/(?:10|1[1-9]|[2-9][0-9])/.test(navigator.userAgent)&&
+    typeof window.FlyxjShare?.shareFiles==='function';
+   if(!native&&pdfReady?.signature===signature&&Date.now()-pdfReady.at<5*60000){
+    try{
+     if(!navigator.share)throw Error('This browser does not support file sharing. Use FlyXJ Android.');
+     if(navigator.canShare&&!navigator.canShare({files:[pdfReady.file]}))
+      throw Error('This device cannot share PDF. Try Android app or save the PDF.');
+     await navigator.share({files:[pdfReady.file],title:'FLYXJ · exact ordered photo pack'});
+     status.textContent='Exact sequence PDF shared with chosen app. Verify WhatsApp recipient and delivery.';
+    }catch(e){status.textContent=e.name==='AbortError'?'Sharing cancelled':e.message;}
+    return;
+   }
+   exact.disabled=true;
+   try{
+    status.textContent='Building ordered photo-and-details PDF…';
+    const meR=await fetch('/api/me',{credentials:'same-origin',cache:'no-store'});
+    if(!meR.ok)throw Error('Please sign in again');
+    const me=await meR.json();if(me.role!=='staff')throw Error('User B only');
+    const resp=await fetch('/api/orders/ordered-share-pdf',{
+     method:'POST',credentials:'same-origin',headers:{'content-type':'application/json','x-csrf-token':me.csrf},
+     body:JSON.stringify({orders:plans})
+    });
+    const data=await resp.json().catch(()=>({}));
+    if(!resp.ok)throw Error(data.detail||'Could not create exact-sequence PDF');
+    const link=new URL(data.url,location.origin);
+    if(link.origin!==location.origin||!/^\/api\/mobile-file\/[a-f0-9]{64}$/.test(link.pathname)||link.search||link.hash)
+     throw Error('Invalid download link');
+    if(JSON.stringify(orders.map(o=>({id:o.id,updatedAt:o.updatedAt,photoIndexes:photos(o)})))!==signature||
+      orders.some(o=>!live().some(x=>String(x.id)===String(o.id)&&JSON.stringify(x)===JSON.stringify(o))))
+     throw Error('Selection changed while preparing. Prepare again.');
+    if(native){
+     window.FlyxjShare.shareFiles(JSON.stringify({files:[link.href],types:['application/pdf'],
+      title:'FLYXJ · '+orders.length+' orders in exact sequence',
+      text:'FLYXJ production pack. Every page shows one order photos followed by SIZE, COLOUR and QUANTITY.'}));
+     status.textContent='One PDF with '+orders.length+' order pages and '+data.photos+' photos opened in Android share menu. Choose WhatsApp.';
+    }else{
+     const result=await fetch(link.href,{credentials:'same-origin',cache:'no-store'});
+     if(!result.ok)throw Error('PDF download expired. Prepare again.');
+     const blob=await result.blob();if(blob.size>29*1024*1024)throw Error('PDF too large for WhatsApp.');
+     if(typeof File==='undefined')throw Error('File sharing unavailable. Use Android app.');
+     const file=new File([blob],data.filename,{type:'application/pdf'});
+     pdfReady={signature,file,at:Date.now()};
+     status.textContent='Exact sequence PDF ready: '+orders.length+' orders and '+data.photos+' original photos. Tap Share ALL · Exact Sequence again.';
+    }
+   }catch(e){status.textContent='Exact sequence share failed: '+e.message;}
+   finally{exact.disabled=false;}
+  };
+
   // One native WhatsApp share action containing all chosen originals, ordered by
   // order index, followed by each order's individually numbered details card.
   // WhatsApp itself may reorder visual media; filenames preserve the sequence.
@@ -210,8 +271,8 @@
    if(step+1<orders.length){step++;ready=null;status.textContent='Now prepare '+orders[step].reference+'.';update();}
    else{status.textContent='All '+orders.length+' orders opened for WhatsApp sharing. Verify messages inside WhatsApp.';pane.remove();}
   };
-  const combinedTip=node('p','fx10-warning','ONE SHARE: all selected photos and each order details card in order 01, 02, 03… WhatsApp may rearrange photos; for guaranteed separated groups use individual Next Order sharing.');
-  const bulkActions=node('div','fx11-step-buttons');bulkActions.append(shareAll);
+  const combinedTip=node('p','fx10-warning','RECOMMENDED: Exact Sequence sends ONE PDF with each order\'s original photos and SIZE, COLOUR, QTY immediately below on its own page. WhatsApp cannot rearrange PDF pages. Original Images mode remains optional but WhatsApp may mix images and text.');
+  const bulkActions=node('div','fx11-step-buttons');bulkActions.append(exact,shareAll);
   controls.append(send,next);content.append(rows,combinedTip,bulkActions,guide,progress,controls,status);shell.append(heading,content);pane.append(shell);
   pane.onclick=e=>{if(e.target===pane)pane.remove()};document.body.append(pane);refresh();update();close.focus();
  }

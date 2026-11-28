@@ -838,6 +838,53 @@ app.post('/api/orders/:id/mobile-file',auth,csrf,async(req,res)=>{
   return err(res,503,'Could not prepare the file. Check reference files and retry.');
  }
 });
+// One secure PDF preserves exact order-by-order photo + details grouping.
+// Multi-file WhatsApp intents cannot interleave captions between photos.
+app.post('/api/orders/ordered-share-pdf',auth,csrf,async(req,res)=>{
+ if(req.user.role!=='staff')return err(res,403,'Staff only');
+ const rows=req.body?.orders;
+ if(!Array.isArray(rows)||rows.length<1||rows.length>6)return err(res,400,'Select 1 to 6 orders');
+ const ids=new Set(),plans=[];let total=0;
+ try{
+  for(const row of rows){
+   const id=Number(row?.id),indexes=row?.photoIndexes;
+   if(!Number.isInteger(id)||id<1||ids.has(id)||!Array.isArray(indexes)||indexes.length<1||indexes.length>8)
+    return err(res,400,'Invalid or repeated order/photo selection');
+   ids.add(id);
+   const o=orders.find(v=>v.id===id&&!v.deleted_at);
+   if(!o)return err(res,404,'An order is no longer available');
+   if(typeof row.updatedAt==='string'&&row.updatedAt!==o.updated_at)
+    return err(res,409,'Order changed: reopen sharing for current details');
+   const names=Array.isArray(o.image_files)?o.image_files:[];
+   const imageCount=names.length||(typeof o.image==='string'?1:0);
+   const photos=[];const used=new Set();
+   for(const idx of indexes){
+    if(!Number.isInteger(idx)||idx<0||idx>=imageCount||used.has(idx))
+     return err(res,400,'Invalid photo selection');
+    used.add(idx);let bytes=null;
+    const file=names[idx];
+    if(file&&/^[a-f0-9-]{36}\.(jpg|png|webp)$/.test(file))
+     bytes=await persistent.retrieveOrLocal(PHOTO_DIR,file,'photos');
+    else if(idx===0&&!names.length&&typeof o.image==='string')bytes=imageData(o.image)?.bytes;
+    if(!bytes)return err(res,404,'Original photo unavailable: '+ref(o));
+    photos.push(bytes);
+   }
+   total+=photos.length;
+   plans.push({order:o,photos});
+  }
+  if(total>48)return err(res,400,'Maximum 48 original photos');
+  const pdf=await require('./ordered-share-pdf.js').make(plans);
+  cleanMobileFileTickets(true);
+  const token=crypto.randomBytes(32).toString('hex');
+  mobileFileTickets.set(token,{orderId:plans[0].order.id,orderIds:plans.map(x=>x.order.id),kind:'ordered-share-pdf',
+   filename:'FLYXJ-'+plans.length+'-ORDERS-IN-SEQUENCE.pdf',
+   mime:'application/pdf',bytes:pdf,expires:Date.now()+10*60*1000});
+  res.set('Cache-Control','private, no-store');
+  return res.json({url:'/api/mobile-file/'+token,filename:'FLYXJ-'+plans.length+'-ORDERS-IN-SEQUENCE.pdf',
+   mime:'application/pdf',orders:plans.length,photos:total,expires_in_seconds:600});
+ }catch(e){console.warn('Ordered sharing failed:',e.message);return err(res,503,'Could not prepare ordered PDF. Check files and retry.')}
+});
+
 app.get('/api/mobile-file/:ticket',async(req,res)=>{
  const token=req.params.ticket;
  if(!/^[a-f0-9]{64}$/.test(token))return err(res,404,'Download expired');
@@ -845,7 +892,7 @@ app.get('/api/mobile-file/:ticket',async(req,res)=>{
  const ticket=mobileFileTickets.get(token);
  if(!ticket||ticket.expires<=Date.now())return err(res,404,'Download link expired. Reopen the order and try again.');
  const o=orders.find(o=>o.id===ticket.orderId&&!o.deleted_at);
- if(!o)return err(res,404,'This order is no longer available');
+ if(!o||ticket.orderIds?.some(id=>!orders.some(x=>x.id===id&&!x.deleted_at)))return err(res,404,'An order in this pack is no longer available');
  try{
   const bytes=ticket.kind!=='pdf'?ticket.bytes:
    await persistent.retrieveOrLocal(PDF_DIR,ticket.pdfFile,'pdfs');

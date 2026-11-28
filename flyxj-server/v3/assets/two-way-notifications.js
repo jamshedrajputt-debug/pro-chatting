@@ -74,7 +74,7 @@
    // in-app overview of recent activity instead. Persisted accounts get
    // only events that arrived since their previous visit.
    if(!old){const recent=feed.filter(x=>Date.now()-Date.parse(x.at)<24*3600000);
-     if(recent.length)window.FlyxjPro?.onNotifications?.({count:recent.length,initial:true});
+     if(recent.length){window.FlyxjPro?.onNotifications?.({count:recent.length,initial:true});launchSummary(recent);}
    }else if(fresh.length){
      if(fresh.length>5)unread+=fresh.length-5;
      renderBadge();window.FlyxjPro?.onNotifications?.({count:fresh.length,initial:false});
@@ -83,6 +83,27 @@
   }catch(err){if(navigator.onLine===false)return;console.warn('FLYXJ notification feed retry',err.message)}
   finally{polling=false}
  }
+
+ function launchSummary(recent){
+  if(!recent.length||!native()||!account)return;
+  // On first app opening, show ONE catch-up notification instead of flooding
+  // Android with dozens of historical order and chat alerts.
+  const key='flyxj-v14-launch-'+encodeURIComponent(account);
+  const mostRecent=recent.map(x=>x.id).filter(Boolean).sort().join('|');
+  let old='';
+  try{old=localStorage.getItem(key)||''}catch{}
+  if(old===mostRecent)return;
+  try{localStorage.setItem(key,mostRecent)}catch{}
+  try{
+   window.FlyxjAlerts.notify(JSON.stringify({
+    id:'launch-summary-'+account+'-'+recent.length,
+    title:'FLYXJ · Your recent updates',
+    body:recent.length+' order, chat or tracking update'+(recent.length===1?'':'s')+' to review. Open your inbox.',
+    url:'/','at':new Date().toISOString()
+   }));
+  }catch{}
+ }
+
  function startPoll(){
   if(pollTimer)clearInterval(pollTimer);
   poll();pollTimer=setInterval(poll,18000);

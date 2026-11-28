@@ -1,7 +1,7 @@
 name: FLYXJ V10 ordered batch sharing and notification safety
 on:
   push:
-    branches: [flyxj-v10-batch-sharing-notifications-20261128, flyxj-v10-batch-fresh-details-fix, flyxj-v11-order-wise-whatsapp, flyxj-v12-all-orders-one-share, flyxj-v13-professional-notifications]
+    branches: [flyxj-v10-batch-sharing-notifications-20261128, flyxj-v10-batch-fresh-details-fix, flyxj-v11-order-wise-whatsapp, flyxj-v12-all-orders-one-share, flyxj-v13-professional-notifications, flyxj-v14-sequence-notify-polish]
   workflow_dispatch:
 jobs:
   regression:
