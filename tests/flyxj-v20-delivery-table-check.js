@@ -13,7 +13,7 @@ assert.match(app,/const delivery=node\('td','fx20-delivery-cell'\)/);
 assert.match(app,/tr\.append\(first,delivery,date,st,tracking,arrow\)/,'delivery column is rendered in former customer position');
 assert.doesNotMatch(app,/const customer=node\('td','',moneyless\(o\.customer\)\)/);
 assert.match(app,/new Intl\.DateTimeFormat\('en-GB',\{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'\}\)/);
-assert.match(app,/fx20-delivery-unset','missing dates shown honestly');
+assert.match(app,/fx20-delivery-unset/,'missing dates shown honestly');
 assert.match(app,/getUTCFullYear\(\)===dateParts\[0\]/,'invalid dates rejected');
 assert.match(app,/fx20-delivery-overdue/,'overdue delivery highlighted');
 assert.match(server,/expected_date:o\.expected_date\|\|''/,'server preserves delivery date in order payload');
