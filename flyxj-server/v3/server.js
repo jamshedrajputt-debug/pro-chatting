@@ -773,7 +773,7 @@ function cleanMobileFileTickets(forInsert=false){
  const current=Date.now();
  for(const [ticket,entry] of mobileFileTickets)
   if(entry.expires<=current)mobileFileTickets.delete(ticket);
- while(mobileFileTickets.size>(forInsert?7:8))mobileFileTickets.delete(mobileFileTickets.keys().next().value);
+ while(mobileFileTickets.size>(forInsert?15:16))mobileFileTickets.delete(mobileFileTickets.keys().next().value);
 }
 app.post('/api/orders/:id/mobile-file',auth,csrf,async(req,res)=>{
  const o=loadOrder(req,res);if(!o)return;
@@ -781,7 +781,7 @@ app.post('/api/orders/:id/mobile-file',auth,csrf,async(req,res)=>{
  if(!['pdf','maker','batch-maker','photo'].includes(kind))return err(res,400,'Choose PDF, reference photo or Maker Image');
  if(['maker','batch-maker'].includes(kind)&&req.user.role!=='staff')return err(res,403,'Maker Image download is User B only');
  const batchIndex=Number(req.body?.sequence),batchTotal=Number(req.body?.total);
- if(kind==='batch-maker'&&(!Number.isInteger(batchIndex)||batchIndex<1||batchIndex>6||!Number.isInteger(batchTotal)||batchTotal<1||batchTotal>6||batchIndex>batchTotal))
+ if((kind==='batch-maker'||(kind==='photo'&&(req.body?.sequence!==undefined||req.body?.total!==undefined)))&&(!Number.isInteger(batchIndex)||batchIndex<1||batchIndex>6||!Number.isInteger(batchTotal)||batchTotal<1||batchTotal>6||batchIndex>batchTotal))
    return err(res,400,'Batch sequence must be between 1 and 6');
  try{
   let bytes=null,filename='',mime='';
@@ -800,7 +800,7 @@ app.post('/api/orders/:id/mobile-file',auth,csrf,async(req,res)=>{
    else if(index===0&&typeof o.image==='string')photo=imageData(o.image)?.bytes;
    if(!photo)return err(res,404,'Reference photo unavailable');
    const ext=name?.split('.').pop()||'jpg';
-   bytes=photo;filename=ref(o)+'-PHOTO-'+(index+1)+'.'+ext;
+   bytes=photo;filename=(Number.isInteger(batchIndex)&&Number.isInteger(batchTotal)&&batchTotal>=batchIndex&&batchIndex>=1&&batchTotal<=6?String(batchIndex).padStart(2,'0')+'-OF-'+String(batchTotal).padStart(2,'0')+'-'+String(index+1).padStart(2,'0')+'-':'')+ref(o)+'-PHOTO-'+(index+1)+'.'+ext;
    mime=ext==='jpg'?'image/jpeg':'image/'+ext;
   }else{
    const names=Array.isArray(o.image_files)?o.image_files.slice(0,4):[];
@@ -823,7 +823,7 @@ app.post('/api/orders/:id/mobile-file',auth,csrf,async(req,res)=>{
      quantity:kind==='batch-maker'?'QTY '+o.quantity:''});
    bytes=await sharp(jpg).png({compressionLevel:9}).toBuffer();
    if(bytes.length>12*1024*1024)throw Error('Combined image is too large for mobile download');
-   filename=(kind==='batch-maker'?String(batchIndex).padStart(2,'0')+'-OF-'+String(batchTotal).padStart(2,'0')+'-':'')+ref(o)+'-MAKER-IMAGE.png';mime='image/png';
+   filename=(kind==='batch-maker'?String(batchIndex).padStart(2,'0')+'-OF-'+String(batchTotal).padStart(2,'0')+'-'+(req.body?.cardLast===true?'99-':''):'')+ref(o)+(kind==='batch-maker'&&req.body?.cardLast===true?'-ORDER-DETAILS':'-MAKER-IMAGE')+'.png';mime='image/png';
   }
   cleanMobileFileTickets(true);
   const token=crypto.randomBytes(32).toString('hex');

@@ -4,9 +4,10 @@
  let prepared=null;
  const E=(tag,cls,value)=>{const e=document.createElement(tag);e.className=cls||'';if(value!==undefined)e.textContent=String(value);return e};
  const staff=()=>typeof state!=='undefined'&&state.me?.role==='staff';
- const all=()=>[...selected.values()].filter(o=>state.orders.some(x=>x.id===o.id));
+ const all=()=>[...selected.keys()].map(id=>state.orders.find(o=>String(o.id)===String(id))).filter(Boolean).map(record);
  const record=o=>({id:o.id,reference:o.reference||'FXJ-'+o.id,title:o.title||'Order',
-    size:o.size||'Not set',colour:o.colour||'Not set',quantity:o.quantity||1,status:o.status||'pending'});
+    size:o.size||'Not set',colour:o.colour||'Not set',quantity:o.quantity||1,status:o.status||'pending',
+    photoCount:Array.isArray(o.photos)?o.photos.length:0,updatedAt:o.updated_at||''});
  function summary(items){
   return 'FLYXJ · NUMBERED PRODUCTION ORDER PACK\n'+items.length+' orders · Check SIZE, COLOUR & quantity for EACH reference.\n\n'+
     items.map((o,i)=>'ORDER '+String(i+1).padStart(2,'0')+'/'+String(items.length).padStart(2,'0')+
@@ -99,7 +100,7 @@
  }
  async function shareImages(button,status){
   if(!staff()||button.disabled)return;
-  const items=all(),key=items.map(o=>o.id).join(':');
+  const items=all(),key=JSON.stringify(items);
   if(prepared?.key===key&&Date.now()-prepared.at<6*60000){
    try{if(!navigator.share)throw Error('Web sharing unavailable. Use Android app or WhatsApp text pack.');
     await navigator.share({files:prepared.files,text:summary(items),title:'FLYXJ sequential order pack'});
@@ -131,8 +132,9 @@
    for(const t of tickets){const r=await fetch(t.url,{credentials:'same-origin'});if(!r.ok)throw Error('Order photo expired');
     files.push(new File([await r.blob()],t.filename,{type:'image/png'}));}
    if(navigator.canShare&&!navigator.canShare({files}))throw Error('Browser cannot share this many images.');
-   prepared={key,files,at:Date.now()};status.textContent='Pack ready. Tap Share numbered images again.';
+   if(JSON.stringify(all())!==key)throw Error('Order details changed while preparing photos. Please share again.');
+   prepared={key,files,at:Date.now()};status.textContent='Pack ready with current sizes, colours and quantities. Tap Share numbered images again.';
   }catch(e){status.textContent='Share failed: '+e.message}finally{button.disabled=false}
  }
- window.FlyxjBatch={sync,clear:()=>{selected.clear();prepared=null;sync()},summary};
+ window.FlyxjBatch={sync,clear:()=>{selected.clear();prepared=null;sync()},summary,selected:()=>all()};
 })();
