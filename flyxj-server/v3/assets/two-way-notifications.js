@@ -3,7 +3,7 @@
    notifications when permitted; browser notifications are opt-in. */
 (function(){
  const desktopSeen=new Set();
- let account='',initialised=false,pollTimer=null,polling=false,unread=0;
+ let account='',initialised=false,pollTimer=null,polling=false,unread=0,lastChecked=null;
  const isTrusted=()=>location.origin==='https://flyxj-order-manager-free.onrender.com';
  const native=()=>isTrusted()&&typeof window.FlyxjAlerts?.notify==='function';
  const idOf=(kind,p)=>kind+':'+String(p.order_id||p.id||'')+':'+String(p.updated_at||p.at||'');
@@ -53,20 +53,33 @@
       window.FlyxjAlerts.sessionExpired();return;}
    const data=await r.json();if(data.account!==target||account!==target)return;
    const feed=data.notifications||[],old=readSeen(),known=new Set(old||[]);
-   const next=new Set(old||[]);
-   for(const x of feed.slice().reverse()){
+   const next=new Set(old||[]),fresh=[];
+   for(const x of feed.slice().reverse()){ 
     if(!x||typeof x.id!=='string')continue;
-    if(old&&!known.has(x.id)){
+    if(!known.has(x.id)){
+      fresh.push(x);
+     if(old&&fresh.length<=5){
       const kind=x.type==='created'?'order':x.type;
       const payload={id:x.id.replace(/^(?:order:|chat:)/,''),activity_id:x.id.replace(/^order:/,''),
         order_id:x.order_id,reference:x.body,description:x.body,
         from:undefined,to:target,at:x.at};
       if(kind==='chat')payload.id=x.id.replace(/^chat:/,'');
       show(kind,payload);
+     }
     }
     next.add(x.id);
    }
    persistSeen([...next]);
+   // Never fire a flood of OS notifications on a first login; show a quiet
+   // in-app overview of recent activity instead. Persisted accounts get
+   // only events that arrived since their previous visit.
+   if(!old){const recent=feed.filter(x=>Date.now()-Date.parse(x.at)<24*3600000);
+     if(recent.length)window.FlyxjPro?.onNotifications?.({count:recent.length,initial:true});
+   }else if(fresh.length){
+     if(fresh.length>5)unread+=fresh.length-5;
+     renderBadge();window.FlyxjPro?.onNotifications?.({count:fresh.length,initial:false});
+   }
+   lastChecked=new Date().toISOString();window.FlyxjPro?.onChecked?.(lastChecked);
   }catch(err){if(navigator.onLine===false)return;console.warn('FLYXJ notification feed retry',err.message)}
   finally{polling=false}
  }
@@ -75,6 +88,7 @@
   poll();pollTimer=setInterval(poll,18000);
  }
  document.addEventListener('visibilitychange',()=>{if(!document.hidden)poll()});
+ window.addEventListener('pageshow',()=>{if(account)poll()});
  window.addEventListener('online',()=>poll());
  function attach(me){
   if(!me||!me.username)return;
@@ -86,10 +100,10 @@
   if(!initialised||changed){
    initialised=true;unread=0;renderBadge();
    startPoll();
-  }
+  }else poll();
  }
  function clear(){
-  account='';window.FlyxjCurrentRole=null;desktopSeen.clear();unread=0;initialised=false;renderBadge();
+  account='';window.FlyxjCurrentRole=null;desktopSeen.clear();unread=0;initialised=false;lastChecked=null;renderBadge();
   if(pollTimer){clearInterval(pollTimer);pollTimer=null}
   if(native()&&typeof window.FlyxjAlerts.unregister==='function')try{window.FlyxjAlerts.unregister()}catch{}
  }
@@ -135,5 +149,5 @@
   const status=await Notification.requestPermission();
   alert(status==='granted'?'FLYXJ notifications enabled':'Please allow notifications in your browser settings');
  }
- window.FlyxjNotifications={attach,clear,show,permission,inbox,poll};
+ window.FlyxjNotifications={attach,clear,show,permission,inbox,poll,checked:()=>lastChecked,unread:()=>unread};
 })();
