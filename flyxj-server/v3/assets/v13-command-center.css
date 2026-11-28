@@ -62,3 +62,22 @@ body{color:var(--fx13-ink)}
  .fx10-pane{padding-bottom:env(safe-area-inset-bottom,0)}
 }
 @media(prefers-reduced-motion:reduce){.stat-card,.v6-ops-card{transition:none}}
+
+/* V14 final polish: consistent midnight navy / emerald across web and Android WebView */
+:root{--fx13-teal:#087d72;--fx13-border:#d9e5ec}
+.fx10-toolbar .fx10-green,.fx11-step-buttons .fx10-green{background:linear-gradient(130deg,#117f71,#07645d);border-color:#096e64;color:#fff;box-shadow:0 5px 15px #087e7630}
+.fx11-shell .fx10-body{background:linear-gradient(#fff,#f9fcfd)}
+.fx11-shell .fx11-step-buttons{margin:9px 0 12px}
+.fx11-shell .fx11-step-buttons .fx10-btn{min-height:48px;border-radius:11px}
+.fx11-shell .fx11-photo-picker{padding-top:5px}
+.fx11-shell .fx11-photo-choice:has(input:checked){background:#ecf9f4;border-color:#6ac6a9;color:#12594e}
+.fx11-shell .fx10-pack-row{box-shadow:0 4px 14px #143e4f09}
+.fx13-command,.stat-card,.order-table-wrap,.fx10-pane{box-shadow:0 10px 30px #1536490d}
+.nav-link:focus-visible,.fx13-action:focus-visible,.fx10-btn:focus-visible{outline:3px solid #3ecbad;outline-offset:2px}
+@media(max-width:650px){
+ .fx11-shell .fx11-step-buttons{grid-template-columns:1fr}
+ .fx11-shell .fx10-pack-row{flex-wrap:wrap}
+ .fx11-shell .fx10-pack-move{margin-left:auto}
+ .fx11-shell .fx11-photo-choice{min-height:39px}
+ .fx13-live-pill{white-space:normal}
+}
