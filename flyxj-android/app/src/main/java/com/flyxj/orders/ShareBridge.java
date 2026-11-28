@@ -36,6 +36,19 @@ public final class ShareBridge {
         this.webView=webView;
     }
 
+    @JavascriptInterface public void shareText(String message) {
+        main.post(() -> {
+            if(message==null||message.length()<1||message.length()>9000)return;
+            Uri current=Uri.parse(webView.getUrl()==null?"":webView.getUrl());
+            if(!"https".equals(current.getScheme())||!DOMAIN.equals(current.getHost())||current.getPort()!=-1)return;
+            Intent intent=new Intent(Intent.ACTION_SEND);
+            intent.setType("text/plain");
+            intent.putExtra(Intent.EXTRA_TEXT,message);
+            try{activity.startActivity(Intent.createChooser(intent,"FLYXJ · Send numbered order pack"));}
+            catch(Exception e){notifyUser("Share menu unavailable");}
+        });
+    }
+
     @JavascriptInterface public void shareFiles(String json) {
         main.post(() -> handleShare(json));
     }
@@ -46,6 +59,7 @@ public final class ShareBridge {
         final Uri[] links;
         final String[] types;
         final String title;
+        final String message;
         try {
             Uri current=Uri.parse(webView.getUrl());
             if(!"https".equals(current.getScheme())||!DOMAIN.equals(current.getHost())||
@@ -70,6 +84,8 @@ public final class ShareBridge {
                 types[i]=mime;
             }
             title=payload.optString("title","Share FLYXJ order files");
+            message=payload.optString("text","");
+            if(message.length()>9000)throw new Exception("Order message too long");
         } catch(Exception e) {
             notifyUser("Share cancelled: "+e.getMessage());return;
         }
@@ -104,6 +120,10 @@ public final class ShareBridge {
                         String mime=images?"image/*":allPdf?"application/pdf":"*/*";
                         Intent share=new Intent(shareUris.size()==1?Intent.ACTION_SEND:Intent.ACTION_SEND_MULTIPLE);
                         share.setType(mime);
+                        if(!message.isEmpty()){
+                            share.putExtra(Intent.EXTRA_TEXT,message);
+                            share.putExtra(Intent.EXTRA_SUBJECT,title);
+                        }
                         if(shareUris.size()==1)share.putExtra(Intent.EXTRA_STREAM,shareUris.get(0));
                         else share.putParcelableArrayListExtra(Intent.EXTRA_STREAM,shareUris);
                         ClipData clip=ClipData.newUri(activity.getContentResolver(),"FLYXJ order",shareUris.get(0));
