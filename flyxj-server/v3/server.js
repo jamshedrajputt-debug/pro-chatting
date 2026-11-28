@@ -876,7 +876,7 @@ app.post('/api/orders/ordered-share-pdf',auth,csrf,async(req,res)=>{
   const pdf=await require('./ordered-share-pdf.js').make(plans);
   cleanMobileFileTickets(true);
   const token=crypto.randomBytes(32).toString('hex');
-  mobileFileTickets.set(token,{orderId:plans[0].order.id,kind:'ordered-share-pdf',
+  mobileFileTickets.set(token,{orderId:plans[0].order.id,orderIds:plans.map(x=>x.order.id),kind:'ordered-share-pdf',
    filename:'FLYXJ-'+plans.length+'-ORDERS-IN-SEQUENCE.pdf',
    mime:'application/pdf',bytes:pdf,expires:Date.now()+10*60*1000});
   res.set('Cache-Control','private, no-store');
@@ -892,7 +892,7 @@ app.get('/api/mobile-file/:ticket',async(req,res)=>{
  const ticket=mobileFileTickets.get(token);
  if(!ticket||ticket.expires<=Date.now())return err(res,404,'Download link expired. Reopen the order and try again.');
  const o=orders.find(o=>o.id===ticket.orderId&&!o.deleted_at);
- if(!o)return err(res,404,'This order is no longer available');
+ if(!o||ticket.orderIds?.some(id=>!orders.some(x=>x.id===id&&!x.deleted_at)))return err(res,404,'An order in this pack is no longer available');
  try{
   const bytes=ticket.kind!=='pdf'?ticket.bytes:
    await persistent.retrieveOrLocal(PDF_DIR,ticket.pdfFile,'pdfs');
