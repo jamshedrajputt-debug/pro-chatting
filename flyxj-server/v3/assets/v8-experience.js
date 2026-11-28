@@ -47,7 +47,7 @@ async function health(){
  const account=healthValue(grid,'Signed-in role',state.me.role+' · '+state.me.username);
  const sync=healthValue(grid,'Last check','Checking…');
  const app=healthValue(grid,'Android app version',(/FlyXJAndroid\/(\d+)/.exec(navigator.userAgent)||[])[1]||'Web / earlier app');
- healthValue(grid,'Dashboard version','V8');
+ healthValue(grid,'Dashboard version','V10');
  const release=healthValue(grid,'Latest release','Checking…');
  const connection=healthValue(grid,'Internet',navigator.onLine?'Connected':'Offline');
  const status=el('div','fx8-status');ui.body.append(status);

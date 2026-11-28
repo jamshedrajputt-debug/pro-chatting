@@ -52,7 +52,34 @@ if(users.some(u=>u.password.length<12)||users[0].name.toLowerCase()===users[1].n
   console.error('Set separate secure FLYXJ_CUSTOMER_PASSWORD and FLYXJ_STAFF_PASSWORD (12+ characters).');
   process.exit(1);
 }
-const sessions=new Map();
+const sessions=new Map(); // Transitional V9 sessions until the next service restart.
+const revokedSessions=new Map();
+// V10 login cookies are authenticated by a secret derived from configured
+// server-side passwords, so sleeping/restarting a free Render instance does
+// not erase valid logins. The key rotates whenever either main password changes.
+const sessionKey=crypto.scryptSync(users.map(u=>u.password).join('\0'),'flyxj-v10-session-cookie-key',32);
+function signSession(session){
+ const body=Buffer.from(JSON.stringify({...session,version:10})).toString('base64url');
+ const mac=crypto.createHmac('sha256',sessionKey).update(body).digest('base64url');
+ return body+'.'+mac;
+}
+function verifySession(token){
+ if(typeof token!=='string'||token.length>1400)return null;
+ const bits=token.split('.');if(bits.length!==2)return null;
+ const expected=crypto.createHmac('sha256',sessionKey).update(bits[0]).digest();
+ let received;try{received=Buffer.from(bits[1],'base64url')}catch{return null}
+ if(received.length!==expected.length||!crypto.timingSafeEqual(received,expected))return null;
+ let value;try{value=JSON.parse(Buffer.from(bits[0],'base64url').toString())}catch{return null}
+ if(value.version!==10||typeof value.username!=='string'||typeof value.role!=='string'||
+    !/^[a-f0-9]{48}$/.test(value.csrf||'')||
+    !Number.isSafeInteger(value.expires)||value.expires<Date.now()||
+    typeof value.nonce!=='string'||! /^[a-f0-9]{32}$/.test(value.nonce))return null;
+ if(revokedSessions.has(token))return null;
+ const user=users.find(u=>u.name===value.username&&u.role===value.role)||
+   additionalStaff.find(u=>u.name===value.username&&u.role===value.role&&u.active!==false);
+ return user?{username:value.username,role:value.role,csrf:value.csrf,expires:value.expires}:null;
+}
+
 const loginTries=new Map();
 // Live tracking events are visible only to the order's authenticated customer.
 const trackingClients=new Set();
@@ -199,7 +226,7 @@ function publicOrder(o) {
 }
 function cookieToken(req){const m=/(?:^|;\s*)flyxj_session=([^;]+)/.exec(req.headers.cookie||'');return m?m[1]:null}
 function auth(req,res,next){
-  const token=cookieToken(req),session=token&&sessions.get(token);
+  const token=cookieToken(req),session=token&&(sessions.get(token)||verifySession(token));
   if(!session||session.expires<Date.now()){if(token)sessions.delete(token);return err(res,401,'Login required');}
   req.user=session;req.token=token;next();
 }
@@ -225,7 +252,7 @@ function slimStats(list) {
   return {total:list.length,active,shipped,shipped_units,completed:by_status.completed+by_status.delivered,this_week,by_status};
 }
 
-app.get('/api/health',(req,res)=>res.json({ok:true,version:'8.0-web',storage:persistent.enabled?'supabase-private':'ephemeral',orders:orders.filter(o=>!o.deleted_at).length}));
+app.get('/api/health',(req,res)=>res.json({ok:true,version:'10.0-web',storage:persistent.enabled?'supabase-private':'ephemeral',orders:orders.filter(o=>!o.deleted_at).length}));
 app.post('/api/login',(req,res)=>{
   const username=text(req.body&&req.body.username,100);
   const password=req.body&&req.body.password;
@@ -244,15 +271,18 @@ app.post('/api/login',(req,res)=>{
     return err(res,401,'Incorrect username or password');
   }
   loginTries.delete(key);
-  const token=crypto.randomBytes(32).toString('hex');
-  const session={username:account.name,role:account.role,csrf:crypto.randomBytes(24).toString('hex'),expires:Date.now()+30*86400000};
-  sessions.set(token,session);
+  const session={username:account.name,role:account.role,csrf:crypto.randomBytes(24).toString('hex'),expires:Date.now()+30*86400000,nonce:crypto.randomBytes(16).toString('hex')};
+  const token=signSession(session);
   res.set('Set-Cookie','flyxj_session='+token+'; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=2592000');
   res.json({username:session.username,role:session.role,csrf:session.csrf});
 });
 app.get('/api/me',auth,(req,res)=>res.json({username:req.user.username,role:req.user.role,csrf:req.user.csrf}));
 app.post('/api/logout',auth,csrf,(req,res)=>{
   sessions.delete(req.token);
+  // Explicit logout invalidates this token immediately on this running server;
+  // browser cookie is also removed. Rotating account passwords revokes all tokens.
+  revokedSessions.set(req.token,req.user.expires);
+  if(revokedSessions.size>2000)for(const [key,expiry] of revokedSessions)if(expiry<Date.now())revokedSessions.delete(key);
   res.set('Set-Cookie','flyxj_session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0');
   res.json({ok:true});
 });
@@ -748,8 +778,11 @@ function cleanMobileFileTickets(forInsert=false){
 app.post('/api/orders/:id/mobile-file',auth,csrf,async(req,res)=>{
  const o=loadOrder(req,res);if(!o)return;
  const kind=req.body?.kind;
- if(kind!=='pdf'&&kind!=='maker'&&kind!=='photo')return err(res,400,'Choose PDF, reference photo or Maker Image');
- if(kind==='maker'&&req.user.role!=='staff')return err(res,403,'Maker Image download is User B only');
+ if(!['pdf','maker','batch-maker','photo'].includes(kind))return err(res,400,'Choose PDF, reference photo or Maker Image');
+ if(['maker','batch-maker'].includes(kind)&&req.user.role!=='staff')return err(res,403,'Maker Image download is User B only');
+ const batchIndex=Number(req.body?.sequence),batchTotal=Number(req.body?.total);
+ if(kind==='batch-maker'&&(!Number.isInteger(batchIndex)||batchIndex<1||batchIndex>6||!Number.isInteger(batchTotal)||batchTotal<1||batchTotal>6||batchIndex>batchTotal))
+   return err(res,400,'Batch sequence must be between 1 and 6');
  try{
   let bytes=null,filename='',mime='';
   if(kind==='pdf'){
@@ -785,10 +818,12 @@ app.post('/api/orders/:id/mobile-file',auth,csrf,async(req,res)=>{
    // Exactly one PNG file is built on the server: no Canvas, base64 upload,
    // Blob URL, JS click or WebView storage permission required.
    const sharp=require('sharp');
-   const jpg=await require('./maker-compose.js').makerCollage(photos,{size:o.size,colour:o.colour});
+   const jpg=await require('./maker-compose.js').makerCollage(photos,{size:o.size,colour:o.colour,
+     orderLabel:kind==='batch-maker'?ref(o):'',sequence:kind==='batch-maker'?String(batchIndex).padStart(2,'0')+'/'+String(batchTotal).padStart(2,'0'):'',
+     quantity:kind==='batch-maker'?'QTY '+o.quantity:''});
    bytes=await sharp(jpg).png({compressionLevel:9}).toBuffer();
    if(bytes.length>12*1024*1024)throw Error('Combined image is too large for mobile download');
-   filename=ref(o)+'-MAKER-IMAGE.png';mime='image/png';
+   filename=(kind==='batch-maker'?String(batchIndex).padStart(2,'0')+'-OF-'+String(batchTotal).padStart(2,'0')+'-':'')+ref(o)+'-MAKER-IMAGE.png';mime='image/png';
   }
   cleanMobileFileTickets(true);
   const token=crypto.randomBytes(32).toString('hex');
@@ -1204,7 +1239,7 @@ async function startFlyxj(){
   console.log('Supabase persistence ready: orders',orders.length,'chat',directChat.length);
  }
  console.log('User B WhatsApp Direct Media:',whatsapp.whatsappConfigured()?'configured':'not connected');
- app.listen(PORT,'0.0.0.0',()=>console.log('FlyXJ dashboard V8 listening on '+PORT));
+ app.listen(PORT,'0.0.0.0',()=>console.log('FlyXJ dashboard V10 listening on '+PORT));
  // Resume only already-queued media transfers after a safe startup.
  if(whatsapp.whatsappConfigured())setTimeout(()=>{
   for(const order of orders)if(!order.deleted_at&&
