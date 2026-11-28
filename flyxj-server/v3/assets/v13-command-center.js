@@ -52,26 +52,18 @@
    const heading=el('div','fx13-command-heading');
    const copy=el('div','fx13-heading-copy');
    copy.append(el('span','fx13-eyebrow','FLYXJ · OPERATIONS CENTRE'),el('h2','','Your production workspace'),
-    el('p','','Orders, dispatch and team activity — all in one place.'));
+    el('p','','Orders, dispatch and team activity — a single clean workspace.'));
    const live=el('span','fx13-live-pill','● Checking connection');live.id='fx13ServerStatus';live.dataset.status='warn';
    heading.append(copy,live);
-   const metrics=el('div','fx13-metrics');
-   const m1=el('div','fx13-mini-metric');m1.append(el('small','','Order records'),el('strong','','—'));m1.lastChild.id='fx13OrderTotal';
-   const m2=el('div','fx13-mini-metric');m2.append(el('small','','Awaiting action'),el('strong','','—'));m2.lastChild.id='fx13AttentionCount';
-   const m3=el('div','fx13-mini-metric');m3.append(el('small','','Latest alerts'),el('strong','','Check inbox'));m3.lastChild.id='fx13Alerts';
-   const m4=el('div','fx13-mini-metric');m4.append(el('small','','App & backup'),el('strong','',''+installedVersion()));m4.lastChild.id='fx13StorageStatus';
-   metrics.append(m1,m2,m3,m4);
    const actions=el('div','fx13-actions');
-   actions.append(button('↻ Sync now',()=>{if(typeof refresh==='function')refresh();window.FlyxjNotifications?.poll();verify()},true),
-    button('♧ Notifications',()=>window.FlyxjNotifications?.inbox()),
-    button('◎ Enable alerts',()=>window.FlyxjNotifications?.permission()),
+   actions.append(button('◎ Enable alerts',()=>window.FlyxjNotifications?.permission()),
     button('▤ All orders',()=>{if(typeof navigate==='function')navigate('orders')}));
    const notice=el('div','fx13-notice');notice.id='fx13Notice';notice.hidden=true;
    const noteText=el('span','','');noteText.id='fx13NoticeText';
    const view=button('Open inbox',()=>window.FlyxjNotifications?.inbox());view.className='fx13-notice-open';
    const dismiss=button('×',()=>{notice.hidden=true});dismiss.setAttribute('aria-label','Dismiss updates');dismiss.className='fx13-notice-close';
    notice.append(el('span','fx13-notice-icon','●'),noteText,view,dismiss);
-   strip.append(heading,metrics,actions,notice);
+   strip.append(heading,actions,notice);
   }
   if(strip.parentNode!==intro.parentNode)intro.after(strip);
   strip.classList.toggle('fx13-staff',state.me.role==='staff');

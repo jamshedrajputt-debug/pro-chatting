@@ -20,10 +20,9 @@
  }
  function reset(){step=0;ready=null;allReady=null;imageReady=null;shared.clear();const d=$('fx15ImageDownload');if(d)d.hidden=true;const p=$('fx15ImagePreview');if(p)p.hidden=true;}
  function mount(){
-  const bar=$('fx10Toolbar');if(!bar||!current())return;
-  const actions=bar.querySelector('.fx10-bar-actions');if(!actions||$('fx11OrderWiseButton'))return;
-  const btn=node('button','fx10-btn fx10-green','Order-wise Share');btn.id='fx11OrderWiseButton';
-  btn.type='button';btn.onclick=open;actions.append(btn);
+  // Single entry point is owned by FlyxjBatch: Share Orders.
+  // Retire the competing Order-wise Share toolbar button, keep all workflows.
+  $('fx11OrderWiseButton')?.remove();
  }
  function open(){
   orders=live().map(o=>({...o}));if(!orders.length)return alert('Select orders first.');
@@ -32,8 +31,8 @@
   pane=node('div','fx10-mask');pane.id='fx11OrderWiseDialog';
   const shell=node('section','fx10-pane fx11-shell');shell.setAttribute('role','dialog');shell.setAttribute('aria-modal','true');
   const heading=node('header','fx10-heading'),title=node('div');
-  title.append(node('small','','FLYXJ · USER B WHATSAPP'),node('h2','','Order-wise WhatsApp Pack'),
-   node('p','','Send one professional image: photos and matching details for each order. No PDF.'));
+  title.append(node('small','','FLYXJ · USER B WHATSAPP'),node('h2','','Share Orders'),
+   node('p','','Exact Image is recommended. All other sharing methods remain in Advanced.'));
   const close=node('button','fx10-close','×');close.type='button';close.setAttribute('aria-label','Close');
   close.onclick=()=>pane.remove();heading.append(title,close);
   const content=node('div','fx10-body'),rows=node('div','fx10-pack-rows'),status=node('p','fx10-feedback','Select the photos for each order.');
@@ -279,14 +278,26 @@
    else{status.textContent='All '+orders.length+' orders opened for WhatsApp sharing. Verify messages inside WhatsApp.';pane.remove();}
   };
   const combinedTip=node('p','fx10-warning','RECOMMENDED: Exact Image sends ONE professional JPG with the selected photos for every order and SIZE, COLOUR, QTY immediately underneath, in the correct sequence. No PDF. Original images mode may mix attachments.');
-  const bulkActions=node('div','fx11-step-buttons');bulkActions.append(exact,download,shareAll);
-  controls.append(send,next);content.append(rows,combinedTip,bulkActions,imagePreview,guide,progress,controls,status);shell.append(heading,content);pane.append(shell);
+  const bulkActions=node('div','fx11-step-buttons');bulkActions.append(exact,download);
+  const advanced=node('details','fx16-advanced');
+  const advancedTitle=node('summary','','Advanced sharing · original photos, numbered pack, text & one-by-one');
+  const advancedBody=node('div','fx16-advanced-body');
+  const quick=node('button','fx10-btn fx10-muted','Quick Numbered Pack / WhatsApp Text Only');
+  quick.type='button';quick.onclick=()=>{pane.remove();window.FlyxjBatch?.openLegacy?.()};
+  const oneByOne=node('div','fx16-advanced-sequence');
+  oneByOne.append(guide,progress);
+  controls.append(send,next);oneByOne.append(controls);
+  advancedBody.append(shareAll,quick,oneByOne);
+  advanced.append(advancedTitle,advancedBody);
+  content.append(rows,combinedTip,bulkActions,imagePreview,advanced,status);shell.append(heading,content);pane.append(shell);
   pane.onclick=e=>{if(e.target===pane)pane.remove()};document.body.append(pane);refresh();update();close.focus();
  }
  function activate(){
   if(!window.FlyxjBatch||window.FlyxjBatch.orderWiseInstalled)return;
   const old=window.FlyxjBatch.sync;window.FlyxjBatch.sync=function(){old();mount()};
-  window.FlyxjBatch.orderWiseInstalled=true;mount();
+  window.FlyxjBatch.orderWiseInstalled=true;
+  window.FlyxjOrderWise={open};
+  mount();
  }
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',activate);else activate();
 })();

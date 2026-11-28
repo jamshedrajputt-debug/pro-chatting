@@ -89,14 +89,12 @@ function moreMenu(){
  const ui=modal('FLYXJ Quick Menu','Tools for your daily work.');
  const buttons=el('div','fx8-button-row');ui.body.append(buttons);
  for(const [title,fn] of [
-  ['Notifications inbox',()=>window.FlyxjNotifications?.inbox()],
   ['Enable phone notifications',()=>window.FlyxjNotifications?.permission()],
   ['App Health Centre',health],
   ['Files Centre',filesCentre],
   ['Shipment Tracking',()=>navigate('tracking')],
   ['Finance & Profit',()=>navigate('finance')],
   ['Staff & Backup',()=>navigate('team')],
-  ['Refresh orders',()=>refresh()],
   ['Log out securely',()=>document.getElementById('logoutButton')?.click()]
  ]){
   if(title==='Staff & Backup'&&!isStaff())continue;

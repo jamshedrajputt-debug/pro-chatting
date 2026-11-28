@@ -5,7 +5,6 @@
  const n=(tag,cls,label)=>{const el=document.createElement(tag);if(cls)el.className=cls;if(label!==undefined)el.textContent=String(label);return el};
  const opts=(values)=>values.map(([value,label])=>{const e=n('option','',label);e.value=value;return e});
  const locked=['completed','delivered','cancelled'];
- const alerts=[];
  let cachedStaff=[],teamPromise=null,noticeReady=false,lastUser='',lastRefresh=0;
  window.flyxjV6Filters={priority:'all',due:'all',assignee:'all',sort:'recent'};
  const getUser=()=>typeof state==='object'?state.me:null;
@@ -31,7 +30,8 @@
  }
  function renderCommandCards(){
   const grid=$v('statsGrid');if(!grid||$v('v6Operations'))return;
-  const wrap=n('section','v6-operations');wrap.id='v6Operations';
+  const wrap=n('details','v6-operations fx16-insights');wrap.id='v6Operations';
+  const summary=n('summary','fx16-insights-toggle','Production insights · overdue, due soon, high priority and assignments');wrap.append(summary);
   const head=n('div','v6-ops-head');
   const title=n('div');title.append(n('span','v6-kicker','PRODUCTION PULSE'),n('h2','','Today’s priorities'));
   const actions=n('div','v6-quick-actions');
@@ -64,62 +64,6 @@
   info.append(health,seen);wrap.append(info);
   grid.insertAdjacentElement('afterend',wrap);
  }
- function notificationCenter(){
-  if($v('v6NotificationPanel')){
-    const existingButton=$v('notificationButton'),existingPanel=$v('v6NotificationPanel');
-    if(existingButton)existingButton.onclick=()=>{
-      existingPanel.classList.toggle('hidden');
-      state.notifications=0;
-      const badge=$v('notificationCount');if(badge){badge.textContent='0';badge.classList.add('hidden')}
-    };
-    return;
-  }
-  const panel=n('aside','v6-notification-panel hidden');panel.id='v6NotificationPanel';panel.setAttribute('aria-label','Recent FlyXJ notifications');
-  const header=n('div','v6-notification-head');header.append(n('h3','','Recent activity'));
-  const read=n('button','v6-close','×');read.type='button';read.setAttribute('aria-label','Close notifications');read.onclick=()=>panel.classList.add('hidden');
-  header.append(read);
-  const items=n('div','v6-notification-items');items.id='v6NotificationItems';items.append(n('p','v6-notification-empty','Updates will appear here while this dashboard is open.'));
-  const foot=n('div','v6-notification-foot');
-  const enable=n('button','v6-small-outline','Enable desktop alerts');enable.type='button';
-  enable.onclick=async()=>{
-   if(!('Notification' in window))return showToast('System notifications are not supported in this browser. In-app updates still work.',true);
-   const p=await Notification.requestPermission();
-   showToast(p==='granted'?'Desktop alerts enabled':'Desktop alerts not enabled',p!=='granted');
-  };
-  const clear=n('button','v6-small-outline','Clear');clear.type='button';clear.onclick=()=>{
-   alerts.splice(0);updateNotifications();
-  };
-  foot.append(enable,clear);panel.append(header,items,foot);document.body.append(panel);
-  const button=$v('notificationButton');
-  if(button){
-   button.onclick=()=>{
-    panel.classList.toggle('hidden');
-    state.notifications=0;
-    const badge=$v('notificationCount');if(badge){badge.textContent='0';badge.classList.add('hidden')}
-   };
-  }
- }
- function updateNotifications(){
-  const box=$v('v6NotificationItems');if(!box)return;box.replaceChildren();
-  if(!alerts.length)box.append(n('p','v6-notification-empty','No new activity yet.'));
-  for(const a of alerts){
-   const entry=n('div','v6-notification-entry');
-   entry.append(n('b','',a.title),n('small','',a.reference? a.reference+' · '+a.time:a.time));
-   box.append(entry);
-  }
- }
- window.flyxjV6Notify=(title,reference='',type='update')=>{
-  if(!getUser())return;
-  const now=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
-  const key=title+'|'+reference+'|'+type;
-  if(alerts[0]?.key===key)return;
-  alerts.unshift({key,title,reference,type,time:now});if(alerts.length>25)alerts.length=25;
-  updateNotifications();
-  // Browser notification permission is explicitly user-initiated, never requested automatically.
-  if('Notification' in window&&Notification.permission==='granted'&&document.visibilityState!=='visible'){
-   try{new Notification('FLYXJ · '+title,{body:reference||'Order Manager',tag:'flyxj-'+type})}catch{}
-  }
- };
  async function loadStaff(){
   if(getUser()?.role!=='staff')return [];
   if(teamPromise)return teamPromise;
@@ -251,11 +195,10 @@
  }
  function boot(){
   if(noticeReady)return;noticeReady=true;
-  renderControls();renderCommandCards();secureWhatsApp();printReport();notificationCenter();addKeyboardShortcuts();
+  renderControls();renderCommandCards();secureWhatsApp();printReport();addKeyboardShortcuts();
   if(getUser())window.flyxjV6Refresh();
-  // init-extra.js wires legacy bell button asynchronously, so reapply
-  // V6 handler after legacy module initialization.
-  setTimeout(notificationCenter,350);
+  // The original V6 notification panel is retired; the shared authenticated
+  // notification inbox is connected to the one bell in init-extra.js.
   setInterval(()=>{
    if(getUser()&&!$v('dashboardShell')?.classList.contains('hidden')){
     if(getUser().role==='staff'&&!cachedStaff.length)loadStaff();
