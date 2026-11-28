@@ -32,7 +32,7 @@ assert.match(server,/app\.post\('\/api\/restore',auth,csrf/);
 assert.match(server,/const canView=/);
 assert.match(server,/app\.post\('\/api\/orders\/:id\/mobile-file',auth,csrf/);
 assert.match(server,/app\.get\('\/api\/health'/);
-assert.match(server,/version:'8.0-web'/);
+assert.match(server,/version:'10.0-web'/);
 assert.match(read('order-sheet.html'),/v8-page-nav\.js/);
 assert.match(read('mobile-chat.html'),/v8-page-nav\.js/);
 assert.doesNotThrow(()=>new vm.Script(read('assets/v8-page-nav.js')));
